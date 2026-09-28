@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "932846129523",
+    "project_id": "haruchip-6a5aa",
+    "storage_bucket": "haruchip-6a5aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932846129523:android:99c4bd52d6086bee93f506",
+        "android_client_info": {
+          "package_name": "com.example.haruchip"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "932846129523-611us7h41cmmao0h07ma9kei2el46e2q.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.haruchip",
+            "certificate_hash": "6aa157e88272cf556e02db753b67dd05cd2dc7ad"
+          }
+        },
+        {
+          "client_id": "932846129523-thk0m57ug48ff3hbn5necvd78eqqpbu9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSnFXIZAXsqpsY_kmv2nTo5vHgHNcuZ-k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "932846129523-thk0m57ug48ff3hbn5necvd78eqqpbu9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "932846129523-ltb00kpjgot5s78a9n43iar45mt50ove.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.haruchip"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

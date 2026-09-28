@@ -1,0 +1,59 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# 시크릿 관리 (CLAUDE.md §3) — 절대 평문 커밋 금지.
+# google-services.json / GoogleService-Info.plist(클라이언트 설정 파일,
+# flutterfire configure로 생성)는 Firebase 공식 가이드상 커밋해도 안전하므로
+# 여기 포함하지 않는다 — 실제 보호는 Firestore 보안 규칙과 API 키 제한으로
+# 한다. 여기서 막는 건 "서버 관리자 자격증명"에 가까운 파일들이다.
+env/dev.json
+env/prod.json
+functions/.env
+**/*serviceAccountKey.json
+**/*service-account*.json
+
+# firebase-tools가 실패 시 남기는 디버그 로그 — 커밋 대상 아님.
+firebase-debug.log
