@@ -1,152 +1,264 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../models/schedule_room.dart';
 
-/// 방 목록의 방 카드 1개 — CLAUDE.md §7-5, §8(일정·정산방 화면).
-///
-/// haruchip_app.html 556~586줄 방 카드 마크업을 재현한다(§5/§6): 멤버
-/// 아바타 칩 + "탭해서 가능한 날짜 표시하기" 추천 박스. 원본에는 이
-/// 카드 안에 "정산하기" 버튼이 함께 있지만, 정산 화면은 이 담당자
-/// 범위 밖(`lib/features/settlement/`)이라 이 카드에는 넣지 않는다 —
-/// 방 상세로 진입한 뒤 정산으로 이어지는 연결은 리더가 통합한다.
+/// 모임 방 목록의 방 카드 컴포넌트
 class RoomCard extends StatelessWidget {
-  const RoomCard({super.key, required this.room, required this.onTap});
+  const RoomCard({
+    super.key,
+    required this.room,
+    required this.onTap,
+  });
 
   final ScheduleRoom room;
   final VoidCallback onTap;
 
+  Color _hexToColor(String hex) {
+    final clean = hex.replaceAll('#', '');
+    return Color(int.parse('FF$clean', radix: 16));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+
+    final todayEvents = room.events
+        .where((e) =>
+            e.date.year == now.year &&
+            e.date.month == now.month &&
+            e.date.day == now.day)
+        .toList();
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: AppColors.protoCardBg,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.protoCardBorder, width: 2),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header: Category Tag & Invite Code & Member Count
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.protoCardSelectedBg,
-                    borderRadius: BorderRadius.circular(14),
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('👥', style: TextStyle(fontSize: 16)),
+                  child: Text(
+                    room.categoryTag,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                InkWell(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: room.inviteCode));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('초대 코드 [${room.inviteCode}]가 복사되었습니다.')),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Row(
                     children: [
                       Text(
-                        room.name,
-                        style: AppTypography.cardLabel.copyWith(
-                          color: AppColors.protoHeading,
+                        '코드: ${room.inviteCode}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF94A3B8),
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '초대코드: ${room.inviteCode}',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.protoSubtitle,
-                        ),
-                      ),
+                      const SizedBox(width: 3),
+                      const Icon(Icons.copy_rounded, size: 12, color: Color(0xFF94A3B8)),
                     ],
                   ),
                 ),
+                const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.protoCardSelectedBg,
+                    color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    '멤버 ${room.members.length}명',
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.protoCardSelectedText,
-                      fontWeight: FontWeight.w700,
+                    '${room.members.length}명 참여 중',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
+
+            // Room Title
+            Text(
+              room.name,
+              style: AppTypography.cardLabel.copyWith(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Members Avatar Chips with their designated colors
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
                 for (final m in room.members)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceMuted,
+                      color: _hexToColor(m.colorHex).withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '${m.icon} ${m.name}',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.protoCardText,
+                      border: Border.all(
+                        color: _hexToColor(m.colorHex).withValues(alpha: 0.6),
+                        width: 1,
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.protoCardSelectedBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.protoCardSelectedBorder.withValues(
-                    alpha: 0.4,
-                  ),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          '📅 탭해서 가능한 날짜 표시하기',
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.protoCardSelectedText,
-                            fontWeight: FontWeight.w700,
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _hexToColor(m.colorHex),
+                            shape: BoxShape.circle,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(width: 5),
                         Text(
-                          '멤버들과 겹치는 시간을 자동으로 찾아드려요',
-                          style: AppTypography.caption.copyWith(
+                          '${m.icon} ${m.name}${m.isHost ? ' (방장)' : ''}',
+                          style: const TextStyle(
                             fontSize: 11,
-                            color: AppColors.protoStepLabel,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Today's Shared Schedule Box
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: todayEvents.isNotEmpty
+                    ? const Color(0xFFF0FDF4) // Light Mint Green
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: todayEvents.isNotEmpty
+                      ? const Color(0xFF86EFAC)
+                      : const Color(0xFFE2E8F0),
+                ),
               ),
+              child: todayEvents.isNotEmpty
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.stars_rounded, size: 16, color: Color(0xFF16A34A)),
+                            const SizedBox(width: 6),
+                            const Text(
+                              '오늘의 모임 일정',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF15803D),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        for (final ev in todayEvents) ...[
+                          Row(
+                            children: [
+                              Text(
+                                ev.isAllDay ? '종일' : (ev.time ?? ''),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF166534),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  ev.title,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (ev.location != null) ...[
+                                const SizedBox(width: 6),
+                                Text(
+                                  '📍 ${ev.location}',
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF475569)),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        const Icon(Icons.event_available_rounded, size: 16, color: Color(0xFF94A3B8)),
+                        const SizedBox(width: 6),
+                        const Text(
+                          '오늘 예정된 모임 일정이 없습니다',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Text(
+                          '탭하여 조율하기 >',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),

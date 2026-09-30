@@ -21,6 +21,8 @@ class MilitaryService {
     required this.dischargeDate,
     this.branch = MilitaryBranch.army,
     this.nextLeaveDate,
+    this.totalVacationDays = 24,
+    this.usedVacationDays = 0,
   });
 
   final DateTime enlistDate;
@@ -35,12 +37,23 @@ class MilitaryService {
   /// "휴가는 복무기간 제외 계산 안 하고 별도 '휴가까지 D-Day' 탭 분리").
   final DateTime? nextLeaveDate;
 
+  /// 총 부여받은 휴가 일수(개수)
+  final int totalVacationDays;
+
+  /// 사용/소진한 휴가 일수(개수)
+  final int usedVacationDays;
+
+  /// 잔여 휴가 일수
+  int get remainingVacationDays => (totalVacationDays - usedVacationDays).clamp(0, 999);
+
   MilitaryService copyWith({
     DateTime? enlistDate,
     DateTime? dischargeDate,
     MilitaryBranch? branch,
     DateTime? nextLeaveDate,
     bool clearNextLeaveDate = false,
+    int? totalVacationDays,
+    int? usedVacationDays,
   }) {
     return MilitaryService(
       enlistDate: enlistDate ?? this.enlistDate,
@@ -48,6 +61,8 @@ class MilitaryService {
       branch: branch ?? this.branch,
       nextLeaveDate:
           clearNextLeaveDate ? null : (nextLeaveDate ?? this.nextLeaveDate),
+      totalVacationDays: totalVacationDays ?? this.totalVacationDays,
+      usedVacationDays: usedVacationDays ?? this.usedVacationDays,
     );
   }
 }

@@ -281,6 +281,7 @@ class CategoryModel {
       ? background.colorValues.first
       : '#FFF0F5';
   String? get backgroundImageUrl => background.imageUrl;
+  bool get showVisualCard => metadata?['showVisualCard'] as bool? ?? true;
 
   CategoryModel copyWith({
     String? id,

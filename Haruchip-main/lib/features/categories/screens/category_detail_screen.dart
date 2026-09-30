@@ -6,12 +6,29 @@ import '../../../design_system/typography.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../../shared/widgets/add_event_bottom_sheet.dart';
+import '../models/birthday_profile.dart';
 import '../models/category.dart';
+import '../models/fandom_profile.dart';
+import '../models/pet_profile.dart';
 import '../providers/category_provider.dart';
 import '../widgets/baby_profile_card_widget.dart';
+import '../widgets/birthday_friend_modal.dart';
+import '../widgets/birthday_grid_card_widget.dart';
 import '../widgets/category_edit_modal.dart';
 import '../widgets/category_onboarding_sheets.dart';
-import '../widgets/pet_profile_card_widget.dart';
+import '../widgets/fandom_member_list_widget.dart';
+import '../widgets/fandom_topkku_card_widget.dart';
+import '../widgets/pet_family_card_carousel_widget.dart';
+import '../../professional/models/appointment_model.dart';
+import '../../professional/models/goal_model.dart';
+import '../../professional/models/routine_model.dart';
+import '../../professional/widgets/add_appointment_modal.dart';
+import '../../professional/widgets/add_goal_modal.dart';
+import '../../professional/widgets/add_routine_modal.dart';
+import '../../professional/widgets/appointment_category_view.dart';
+import '../../professional/widgets/goal_category_view.dart';
+import '../../professional/widgets/professional_archive_modal.dart';
+import '../../professional/widgets/routine_category_view.dart';
 
 /// 전체 카테고리 범용 상세 화면 (듀얼 리스트 & 카테고리 온보딩 & 꾸미기 에디터 연동)
 class CategoryDetailScreen extends ConsumerStatefulWidget {
@@ -74,6 +91,11 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           if (updated == true && mounted) _reloadCategory();
         });
         break;
+      case 'custom':
+        showCustomOnboardingSheet(context, category: _category, ref: ref).then((updated) {
+          if (updated == true && mounted) _reloadCategory();
+        });
+        break;
       default:
         // 생일, 시험/자격증, 계획/일정 등은 즉시 진입
         break;
@@ -121,10 +143,48 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       case 'pet':
         await showPetOnboardingSheet(context, category: _category, ref: ref);
         break;
+      case 'custom':
+        await showCustomOnboardingSheet(context, category: _category, ref: ref);
+        break;
       default:
         break;
     }
     if (mounted) _reloadCategory();
+  }
+
+  FandomTopkkuCard _getFandomTopkku() {
+    final meta = _category.metadata;
+    if (meta != null && meta['topkku'] != null) {
+      return FandomTopkkuCard.fromJson(Map<String, dynamic>.from(meta['topkku'] as Map));
+    }
+    return const FandomTopkkuCard();
+  }
+
+  List<FandomMember> _getFandomMembers() {
+    final meta = _category.metadata;
+    if (meta != null && meta['members'] != null) {
+      final list = meta['members'] as List<dynamic>;
+      return list
+          .map((m) => FandomMember.fromJson(Map<String, dynamic>.from(m as Map)))
+          .toList();
+    }
+    return const [];
+  }
+
+  void _saveFandomTopkku(FandomTopkkuCard topkku) {
+    final updatedMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    updatedMeta['topkku'] = topkku.toJson();
+    final updated = _category.copyWith(metadata: updatedMeta);
+    setState(() => _category = updated);
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
+  }
+
+  void _saveFandomMembers(List<FandomMember> members) {
+    final updatedMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    updatedMeta['members'] = members.map((m) => m.toJson()).toList();
+    final updated = _category.copyWith(metadata: updatedMeta);
+    setState(() => _category = updated);
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
   }
 
   String _formatDate(DateTime d) =>
@@ -148,6 +208,283 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     return 'D+${-diff}';
   }
 
+  List<BirthdayProfile> _getBirthdayFriends() {
+    final meta = _category.metadata;
+    final friendsRaw = meta?['friends'] as List<dynamic>?;
+    if (friendsRaw != null && friendsRaw.isNotEmpty) {
+      return friendsRaw
+          .map((e) => BirthdayProfile.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return kDefaultMockBirthdayFriends;
+  }
+
+  void _saveBirthdayFriends(List<BirthdayProfile> friends) {
+    final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    currentMeta['friends'] = friends.map((f) => f.toJson()).toList();
+    currentMeta['isInitialized'] = true;
+
+    final updated = _category.copyWith(metadata: currentMeta);
+    setState(() {
+      _category = updated;
+    });
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
+
+    // Sync with planListProvider so birthdays appear in calendar and notification
+    final planNotifier = ref.read(planListProvider.notifier);
+    final allPlanItems = ref.read(planListProvider);
+
+    for (final friend in friends) {
+      final existing = allPlanItems.where((p) => p.id == friend.id).toList();
+      if (existing.isNotEmpty) {
+        planNotifier.updateItem(
+          existing.first.copyWith(
+            title: '${friend.name} 생일',
+            date: friend.nextBirthdayDate(),
+            photoUrl: friend.photoUrl,
+          ),
+        );
+      } else {
+        planNotifier.addItem(
+          PlanItem(
+            id: friend.id,
+            title: '${friend.name} 생일',
+            date: friend.nextBirthdayDate(),
+            categoryKey: 'birthday',
+            categoryInstanceId: _category.id,
+            repeat: true,
+            photoUrl: friend.photoUrl,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openAddBirthdayFriend() async {
+    final newFriend = await showBirthdayFriendModal(context);
+    if (newFriend != null && mounted) {
+      final friends = _getBirthdayFriends();
+      final updated = [...friends, newFriend];
+      _saveBirthdayFriends(updated);
+    }
+  }
+
+  Future<void> _openEditBirthdayFriend(BirthdayProfile friend) async {
+    final updatedFriend = await showBirthdayFriendModal(
+      context,
+      existingFriend: friend,
+      allowDelete: true,
+      onDelete: () {
+        final friends = _getBirthdayFriends();
+        final updated = friends.where((f) => f.id != friend.id).toList();
+        _saveBirthdayFriends(updated);
+        ref.read(planListProvider.notifier).removeItem(friend.id);
+      },
+    );
+    if (updatedFriend != null && mounted) {
+      final friends = _getBirthdayFriends();
+      final updated = friends.map((f) => f.id == friend.id ? updatedFriend : f).toList();
+      _saveBirthdayFriends(updated);
+    }
+  }
+
+  // --- Professional Category (Goal / Appointment / Routine) Logic ---
+  bool get _isProfessionalCategory =>
+      ['plan', 'goal', 'routine'].contains(_category.categoryKey);
+
+  // 1. Goal methods
+  List<GoalItem> _getGoals() {
+    final meta = _category.metadata;
+    final raw = meta?['goals'] as List<dynamic>?;
+    if (raw != null && raw.isNotEmpty) {
+      return raw.map((e) => GoalItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    }
+    return kDefaultMockGoals;
+  }
+
+  void _saveGoals(List<GoalItem> goals) {
+    final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    currentMeta['goals'] = goals.map((g) => g.toJson()).toList();
+    currentMeta['isInitialized'] = true;
+
+    final updated = _category.copyWith(metadata: currentMeta);
+    setState(() {
+      _category = updated;
+    });
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
+
+    final planNotifier = ref.read(planListProvider.notifier);
+    final allPlanItems = ref.read(planListProvider);
+    for (final g in goals) {
+      if (g.showInCalendar && g.deadline != null) {
+        final existing = allPlanItems.where((p) => p.id == g.id).toList();
+        if (existing.isNotEmpty) {
+          planNotifier.updateItem(
+            existing.first.copyWith(
+              title: g.title,
+              date: g.deadline!,
+            ),
+          );
+        } else {
+          planNotifier.addItem(
+            PlanItem(
+              id: g.id,
+              title: g.title,
+              date: g.deadline!,
+              categoryKey: 'goal',
+              categoryInstanceId: _category.id,
+              repeat: false,
+            ),
+          );
+        }
+      } else {
+        ref.read(planListProvider.notifier).removeItem(g.id);
+      }
+    }
+  }
+
+  Future<void> _openAddGoalModal([GoalItem? existing]) async {
+    final result = await showAddGoalModal(context, existingGoal: existing);
+    if (result != null && mounted) {
+      final goals = _getGoals();
+      List<GoalItem> updated;
+      if (existing != null) {
+        updated = goals.map((g) => g.id == existing.id ? result : g).toList();
+      } else {
+        updated = [result, ...goals];
+      }
+      _saveGoals(updated);
+    }
+  }
+
+  // 2. Appointment methods
+  List<AppointmentItem> _getAppointments() {
+    final meta = _category.metadata;
+    final raw = meta?['appointments'] as List<dynamic>?;
+    if (raw != null && raw.isNotEmpty) {
+      return raw.map((e) => AppointmentItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    }
+    return kDefaultMockAppointments;
+  }
+
+  void _saveAppointments(List<AppointmentItem> appointments) {
+    final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    currentMeta['appointments'] = appointments.map((a) => a.toJson()).toList();
+    currentMeta['isInitialized'] = true;
+
+    final updated = _category.copyWith(metadata: currentMeta);
+    setState(() {
+      _category = updated;
+    });
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
+
+    final planNotifier = ref.read(planListProvider.notifier);
+    final allPlanItems = ref.read(planListProvider);
+    for (final a in appointments) {
+      final existing = allPlanItems.where((p) => p.id == a.id).toList();
+      if (existing.isNotEmpty) {
+        planNotifier.updateItem(
+          existing.first.copyWith(
+            title: a.title,
+            date: a.date,
+          ),
+        );
+      } else {
+        planNotifier.addItem(
+          PlanItem(
+            id: a.id,
+            title: a.title,
+            date: a.date,
+            categoryKey: 'plan',
+            categoryInstanceId: _category.id,
+            repeat: false,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openAddAppointmentModal([AppointmentItem? existing]) async {
+    final result = await showAddAppointmentModal(context, existingAppointment: existing);
+    if (result != null && mounted) {
+      final appointments = _getAppointments();
+      List<AppointmentItem> updated;
+      if (existing != null) {
+        updated = appointments.map((a) => a.id == existing.id ? result : a).toList();
+      } else {
+        updated = [result, ...appointments];
+      }
+      _saveAppointments(updated);
+    }
+  }
+
+  // 3. Routine methods
+  List<RoutineItem> _getRoutines() {
+    final meta = _category.metadata;
+    final raw = meta?['routines'] as List<dynamic>?;
+    if (raw != null && raw.isNotEmpty) {
+      return raw.map((e) => RoutineItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    }
+    return kDefaultMockRoutines;
+  }
+
+  void _saveRoutines(List<RoutineItem> routines) {
+    final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    currentMeta['routines'] = routines.map((r) => r.toJson()).toList();
+    currentMeta['isInitialized'] = true;
+
+    final updated = _category.copyWith(metadata: currentMeta);
+    setState(() {
+      _category = updated;
+    });
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
+  }
+
+  Future<void> _openAddRoutineModal([RoutineItem? existing]) async {
+    final result = await showAddRoutineModal(context, existingRoutine: existing);
+    if (result != null && mounted) {
+      final routines = _getRoutines();
+      List<RoutineItem> updated;
+      if (existing != null) {
+        updated = routines.map((r) => r.id == existing.id ? result : r).toList();
+      } else {
+        updated = [result, ...routines];
+      }
+      _saveRoutines(updated);
+    }
+  }
+
+  // 4. Archive modal
+  void _openProfessionalArchiveModal() {
+    showProfessionalArchiveModal(
+      context,
+      goals: _getGoals(),
+      appointments: _getAppointments(),
+      onGoalsChanged: (updated) => _saveGoals(updated),
+      onAppointmentsChanged: (updated) => _saveAppointments(updated),
+    );
+  }
+
+  List<PetProfile> _getPetProfiles() {
+    final meta = _category.metadata;
+    final petsRaw = meta?['pets'] as List<dynamic>?;
+    if (petsRaw != null && petsRaw.isNotEmpty) {
+      return petsRaw.map((e) => PetProfile.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    }
+    return [];
+  }
+
+  PetProfile? _findPetForItem(PlanItem item, List<PetProfile> pets) {
+    if (item.categoryInstanceId != null) {
+      final match = pets.where((p) => p.id == item.categoryInstanceId).toList();
+      if (match.isNotEmpty) return match.first;
+    }
+    for (final p in pets) {
+      if (item.title.contains(p.name)) return p;
+    }
+    return pets.isNotEmpty ? pets.first : null;
+  }
+
   List<PlanItem> _sortCountDownItems(List<PlanItem> items) {
     final now = DateTime.now();
     final todayOnly = DateTime(now.year, now.month, now.day);
@@ -156,7 +493,17 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     final pastItems = <PlanItem>[];
 
     for (final item in items) {
-      final targetOnly = DateTime(item.date.year, item.date.month, item.date.day);
+      DateTime targetDate = item.date;
+      if (_category.categoryKey == 'pet' && (item.title.contains('생일') || item.repeat)) {
+        final thisYear = DateTime(todayOnly.year, item.date.month, item.date.day);
+        if (thisYear.isBefore(todayOnly)) {
+          targetDate = DateTime(todayOnly.year + 1, item.date.month, item.date.day);
+        } else {
+          targetDate = thisYear;
+        }
+      }
+
+      final targetOnly = DateTime(targetDate.year, targetDate.month, targetDate.day);
       if (targetOnly.isBefore(todayOnly)) {
         pastItems.add(item);
       } else {
@@ -164,7 +511,22 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       }
     }
 
-    futureItems.sort((a, b) => a.date.compareTo(b.date));
+    futureItems.sort((a, b) {
+      DateTime dateA = a.date;
+      DateTime dateB = b.date;
+      if (_category.categoryKey == 'pet') {
+        if (a.title.contains('생일') || a.repeat) {
+          final tA = DateTime(todayOnly.year, a.date.month, a.date.day);
+          dateA = tA.isBefore(todayOnly) ? DateTime(todayOnly.year + 1, a.date.month, a.date.day) : tA;
+        }
+        if (b.title.contains('생일') || b.repeat) {
+          final tB = DateTime(todayOnly.year, b.date.month, b.date.day);
+          dateB = tB.isBefore(todayOnly) ? DateTime(todayOnly.year + 1, b.date.month, b.date.day) : tB;
+        }
+      }
+      return dateA.compareTo(dateB);
+    });
+
     pastItems.sort((a, b) => b.date.compareTo(a.date));
 
     return [...futureItems, ...pastItems];
@@ -177,6 +539,8 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     final countUpItems = rawItems.where((i) => i.displayMode == DdayDisplayMode.daysCount).toList();
     final countDownRaw = rawItems.where((i) => i.displayMode != DdayDisplayMode.daysCount).toList();
     final countDownItems = _sortCountDownItems(countDownRaw);
+
+    final petProfiles = _getPetProfiles();
 
     // Sync count up order
     if (_customCountUpOrder.length != countUpItems.length) {
@@ -201,6 +565,16 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.protoBackground,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.protoHeading),
+          onPressed: () {
+            if (_isReorderingMode) {
+              setState(() => _isReorderingMode = false);
+            } else {
+              Navigator.of(context).maybePop();
+            }
+          },
+        ),
         backgroundColor: AppColors.protoBackground,
         elevation: 0,
         title: Text(
@@ -208,33 +582,81 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           style: AppTypography.heading2.copyWith(color: AppColors.protoHeading),
         ),
         actions: [
-          TextButton.icon(
-            onPressed: _openEditModal,
-            icon: const Icon(Icons.palette_outlined, size: 17, color: AppColors.protoHeading),
-            label: Text(
-              '꾸미기',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.protoHeading,
-                fontWeight: FontWeight.bold,
+          if (_isProfessionalCategory) ...[
+            IconButton(
+              onPressed: _openProfessionalArchiveModal,
+              icon: const Icon(Icons.inventory_2_outlined, size: 20, color: Color(0xFF64748B)),
+              tooltip: '기록 (보관함)',
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: () {
+                  if (_category.categoryKey == 'goal') {
+                    _openAddGoalModal();
+                  } else if (_category.categoryKey == 'plan') {
+                    _openAddAppointmentModal();
+                  } else if (_category.categoryKey == 'routine') {
+                    _openAddRoutineModal();
+                  }
+                },
+                icon: const Icon(Icons.add, size: 17, color: Color(0xFF0F172A)),
+                label: const Text(
+                  '항목 추가',
+                  style: TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ),
-          ),
-          TextButton.icon(
-            onPressed: () => showAddEventBottomSheet(
-              context,
-              categoryKey: _category.categoryKey,
-            ),
-            icon: const Icon(Icons.add, size: 17, color: Color(0xFF007AFF)),
-            label: const Text(
-              '항목 추가',
-              style: TextStyle(
-                color: Color(0xFF007AFF),
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+          ] else if (_category.categoryKey == 'birthday')
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: _openAddBirthdayFriend,
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Color(0xFFDB2777)),
+                label: const Text(
+                  '+ 친구 추가',
+                  style: TextStyle(
+                    color: Color(0xFFDB2777),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            if (_category.categoryKey != 'pet')
+              TextButton.icon(
+                onPressed: _openEditModal,
+                icon: const Icon(Icons.palette_outlined, size: 17, color: AppColors.protoHeading),
+                label: Text(
+                  '꾸미기',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.protoHeading,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            TextButton.icon(
+              onPressed: () => showAddEventBottomSheet(
+                context,
+                categoryKey: _category.categoryKey,
+              ),
+              icon: const Icon(Icons.add, size: 17, color: Color(0xFF007AFF)),
+              label: const Text(
+                '항목 추가',
+                style: TextStyle(
+                  color: Color(0xFF007AFF),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 6),
+            const SizedBox(width: 6),
+          ],
         ],
       ),
       body: Stack(
@@ -242,166 +664,216 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. 카테고리 전용 헤더 카드 (꾸미기 커스텀 배경 + 스티커 실시간 반영)
-                  GestureDetector(
-                    onTap: _openCategorySpecificSettings,
-                    child: Container(
-                      width: double.infinity,
-                      height: 190,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: singleColor ?? AppColors.protoCardBg,
-                        gradient: gradientColors != null ? LinearGradient(colors: gradientColors) : null,
-                        image: hasImage
-                            ? DecorationImage(
-                                image: bgConfig.imageUrl!.startsWith('http')
-                                    ? NetworkImage(bgConfig.imageUrl!) as ImageProvider
-                                    : AssetImage(bgConfig.imageUrl!),
-                                fit: BoxFit.cover,
-                                colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.15), BlendMode.darken),
-                              )
-                            : null,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: AppColors.protoCardBorder, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, cardConstraints) {
-                          final cWidth = cardConstraints.maxWidth;
-                          final cHeight = cardConstraints.maxHeight;
+              child: _category.categoryKey == 'goal'
+                  ? GoalCategoryView(
+                      goals: _getGoals(),
+                      onGoalsChanged: (updated) => _saveGoals(updated),
+                      onOpenAddModal: () => _openAddGoalModal(),
+                    )
+                  : _category.categoryKey == 'plan'
+                      ? AppointmentCategoryView(
+                          appointments: _getAppointments(),
+                          onAppointmentsChanged: (updated) => _saveAppointments(updated),
+                          onOpenAddModal: () => _openAddAppointmentModal(),
+                        )
+                      : _category.categoryKey == 'routine'
+                          ? RoutineCategoryView(
+                              routines: _getRoutines(),
+                              onRoutinesChanged: (updated) => _saveRoutines(updated),
+                              onOpenAddModal: () => _openAddRoutineModal(),
+                            )
+                          : _category.categoryKey == 'birthday'
+                              ? _buildBirthdayBody()
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                  // 1. 상단 카드 영역 (Pet: 패밀리 카드 캐러셀 / 기타: 커스텀 꾸미기 카드)
+                  if (_category.categoryKey == 'pet') ...[
+                    PetFamilyCardCarouselWidget(
+                      pets: petProfiles,
+                      onEditPet: (pet) async {
+                        final updated = await showPetOnboardingSheet(
+                          context,
+                          category: _category,
+                          ref: ref,
+                          editPet: pet,
+                        );
+                        if (updated == true && mounted) _reloadCategory();
+                      },
+                      onAddNewPet: () async {
+                        final updated = await showPetOnboardingSheet(
+                          context,
+                          category: _category,
+                          ref: ref,
+                          isAddingNewPet: true,
+                        );
+                        if (updated == true && mounted) _reloadCategory();
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                  ] else if (_category.categoryKey == 'fandom') ...[
+                    FandomTopkkuCardWidget(
+                      topkkuCard: _getFandomTopkku(),
+                      artistName: _category.metadata?['starName'] as String? ?? _category.name,
+                      fandomName: _category.metadata?['fandomName'] as String? ?? '팬덤',
+                      debutDate: _category.metadata?['debutDate'] != null
+                          ? DateTime.parse(_category.metadata!['debutDate'] as String)
+                          : null,
+                      fandomStartDate: _category.metadata?['fandomStartDate'] != null
+                          ? DateTime.parse(_category.metadata!['fandomStartDate'] as String)
+                          : null,
+                      onTopkkuChanged: (topkku) => _saveFandomTopkku(topkku),
+                    ),
+                    const SizedBox(height: 10),
+                    FandomMemberListWidget(
+                      members: _getFandomMembers(),
+                      onMembersChanged: (members) => _saveFandomMembers(members),
+                    ),
+                    const SizedBox(height: 16),
+                  ] else if (_category.showVisualCard) ...[
+                    GestureDetector(
+                      onTap: _openCategorySpecificSettings,
+                      child: Container(
+                        width: double.infinity,
+                        height: 190,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          color: singleColor ?? AppColors.protoCardBg,
+                          gradient: gradientColors != null ? LinearGradient(colors: gradientColors) : null,
+                          image: hasImage
+                              ? DecorationImage(
+                                  image: bgConfig.imageUrl!.startsWith('http')
+                                      ? NetworkImage(bgConfig.imageUrl!) as ImageProvider
+                                      : AssetImage(bgConfig.imageUrl!),
+                                  fit: BoxFit.cover,
+                                  colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.15), BlendMode.darken),
+                                )
+                              : null,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: AppColors.protoCardBorder, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, cardConstraints) {
+                            final cWidth = cardConstraints.maxWidth;
+                            final cHeight = cardConstraints.maxHeight;
 
-                          return Stack(
-                            children: [
-                              Align(
-                                alignment: typoConfig.position.alignment,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20.0),
-                                  child: Opacity(
-                                    opacity: typoConfig.opacity,
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment: switch (typoConfig.position) {
-                                        TextPositionPreset.topLeft || TextPositionPreset.bottomLeft => CrossAxisAlignment.start,
-                                        TextPositionPreset.topRight || TextPositionPreset.bottomRight => CrossAxisAlignment.end,
-                                        _ => CrossAxisAlignment.center,
-                                      },
-                                      children: [
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(_category.icon, style: const TextStyle(fontSize: 28)),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              _category.name,
-                                              style: TextStyle(
-                                                fontFamily: typoConfig.fontFamily,
-                                                color: hasImage ? Colors.white : textColor,
-                                                fontSize: typoConfig.fontSize + 4,
-                                                fontWeight: FontWeight.bold,
-                                                shadows: hasImage
-                                                    ? const [Shadow(color: Colors.black54, blurRadius: 4)]
-                                                    : null,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.85),
-                                            borderRadius: BorderRadius.circular(999),
-                                          ),
-                                          child: Row(
+                            return Stack(
+                              children: [
+                                Align(
+                                  alignment: typoConfig.position.alignment,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(20.0),
+                                    child: Opacity(
+                                      opacity: typoConfig.opacity,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: switch (typoConfig.position) {
+                                          TextPositionPreset.topLeft || TextPositionPreset.bottomLeft => CrossAxisAlignment.start,
+                                          TextPositionPreset.topRight || TextPositionPreset.bottomRight => CrossAxisAlignment.end,
+                                          _ => CrossAxisAlignment.center,
+                                        },
+                                        children: [
+                                          Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
+                                              Text(_category.icon, style: const TextStyle(fontSize: 28)),
+                                              const SizedBox(width: 8),
                                               Text(
-                                                '등록된 디데이: ${rawItems.length}개',
-                                                style: AppTypography.caption.copyWith(
-                                                  color: AppColors.protoHeading,
+                                                _category.name,
+                                                style: TextStyle(
+                                                  fontFamily: typoConfig.fontFamily,
+                                                  color: hasImage ? Colors.white : textColor,
+                                                  fontSize: typoConfig.fontSize + 4,
                                                   fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
+                                                  shadows: hasImage
+                                                      ? const [Shadow(color: Colors.black54, blurRadius: 4)]
+                                                      : null,
                                                 ),
                                               ),
-                                              if (['military', 'baby', 'solo', 'fandom', 'pet'].contains(_category.categoryKey)) ...[
-                                                const SizedBox(width: 4),
-                                                const Icon(Icons.settings_rounded, size: 12, color: Color(0xFF007AFF)),
-                                              ],
                                             ],
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (bgConfig.decorations != null)
-                                for (final sticker in bgConfig.decorations!)
-                                  Positioned(
-                                    left: sticker.x * cWidth,
-                                    top: sticker.y * cHeight,
-                                    child: Transform.rotate(
-                                      angle: sticker.rotation,
-                                      child: Transform.scale(
-                                        scale: sticker.scale,
-                                        child: sticker.isText
-                                            ? Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white.withValues(alpha: 0.85),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  sticker.stickerType,
-                                                  style: TextStyle(
-                                                    fontSize: sticker.fontSize ?? 12,
-                                                    color: sticker.textColor != null ? colorFromHex(sticker.textColor!) : Colors.black87,
+                                          const SizedBox(height: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.85),
+                                              borderRadius: BorderRadius.circular(999),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  '등록된 디데이: ${rawItems.length}개',
+                                                  style: AppTypography.caption.copyWith(
+                                                    color: AppColors.protoHeading,
                                                     fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
                                                   ),
                                                 ),
-                                              )
-                                            : Text(sticker.stickerType, style: const TextStyle(fontSize: 28)),
+                                                if (['military', 'baby', 'solo', 'fandom', 'custom'].contains(_category.categoryKey)) ...[
+                                                  const SizedBox(width: 4),
+                                                  const Icon(Icons.settings_rounded, size: 12, color: Color(0xFF007AFF)),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                            ],
-                          );
-                        },
+                                ),
+                                if (bgConfig.decorations != null)
+                                  for (final sticker in bgConfig.decorations!)
+                                    Positioned(
+                                      left: sticker.x * cWidth,
+                                      top: sticker.y * cHeight,
+                                      child: Transform.rotate(
+                                        angle: sticker.rotation,
+                                        child: Transform.scale(
+                                          scale: sticker.scale,
+                                          child: sticker.isText
+                                              ? Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white.withValues(alpha: 0.85),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    sticker.stickerType,
+                                                    style: TextStyle(
+                                                      fontSize: sticker.fontSize ?? 12,
+                                                      color: sticker.textColor != null ? colorFromHex(sticker.textColor!) : Colors.black87,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                )
+                                              : Text(sticker.stickerType, style: const TextStyle(fontSize: 28)),
+                                        ),
+                                      ),
+                                    ),
+                              ],
+                            );
+                          },
+                        ),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // 2. 카테고리별 특화 상단 프로필 헤더 (Baby / Pet)
-                  if (_category.categoryKey == 'baby') ...[
-                    BabyProfileCardWidget(
-                      babyName: _category.metadata?['babyName'] as String? ?? '우리 아기 👶',
-                      birthDate: _category.metadata?['birthDate'] != null
-                          ? DateTime.parse(_category.metadata!['birthDate'] as String)
-                          : DateTime.now().subtract(const Duration(days: 100)),
-                    ),
                     const SizedBox(height: 16),
-                  ] else if (_category.categoryKey == 'pet') ...[
-                    PetProfileCardWidget(
-                      petName: (_category.metadata?['pets'] as List<dynamic>?)?.isNotEmpty == true
-                          ? (_category.metadata!['pets'][0]['name'] as String? ?? '댕댕이')
-                          : '댕댕이 🐶',
-                      birthOrAdoptionDate: (_category.metadata?['pets'] as List<dynamic>?)?.isNotEmpty == true &&
-                              _category.metadata!['pets'][0]['adoptionDate'] != null
-                          ? DateTime.parse(_category.metadata!['pets'][0]['adoptionDate'] as String)
-                          : DateTime.now().subtract(const Duration(days: 200)),
-                    ),
-                    const SizedBox(height: 16),
+                    if (_category.categoryKey == 'baby') ...[
+                      BabyProfileCardWidget(
+                        babyName: _category.metadata?['babyName'] as String? ?? '우리 아기 👶',
+                        birthDate: _category.metadata?['birthDate'] != null
+                            ? DateTime.parse(_category.metadata!['birthDate'] as String)
+                            : DateTime.now().subtract(const Duration(days: 100)),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                   ],
 
                   // 구분선
@@ -464,6 +936,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                     for (final item in _customCountUpOrder)
                       _buildCountUpCard(
                         item: item,
+                        pet: _findPetForItem(item, petProfiles),
                         onTap: () => showAddEventBottomSheet(
                           context,
                           categoryKey: _category.categoryKey,
@@ -509,11 +982,11 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: const Color(0xFFE5E5EA)),
                       ),
-                      child: Column(
+                      child: const Column(
                         children: [
-                          const Icon(Icons.event_available_rounded, size: 28, color: Colors.grey),
-                          const SizedBox(height: 6),
-                          const Text('예정된 D-Day 일정이 없어요', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          Icon(Icons.event_available_rounded, size: 28, color: Colors.grey),
+                          SizedBox(height: 6),
+                          Text('예정된 D-Day 일정이 없어요', style: TextStyle(color: Colors.grey, fontSize: 13)),
                         ],
                       ),
                     )
@@ -521,6 +994,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                     for (final item in countDownItems) ...[
                       _buildCountDownCard(
                         item: item,
+                        pet: _findPetForItem(item, petProfiles),
                         onTap: () => showAddEventBottomSheet(
                           context,
                           categoryKey: _category.categoryKey,
@@ -665,9 +1139,33 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
 
   Widget _buildCountUpCard({
     required PlanItem item,
+    PetProfile? pet,
     required VoidCallback onTap,
   }) {
     final dDayText = _calculateDaysCount(item.date);
+
+    Widget? avatarWidget;
+    if (_category.categoryKey == 'pet' && pet != null) {
+      final imgProvider = getPetAvatarImageProvider(pet.photoUrl);
+      if (imgProvider != null) {
+        avatarWidget = CircleAvatar(
+          radius: 17,
+          backgroundImage: imgProvider,
+        );
+      } else {
+        avatarWidget = Container(
+          width: 34,
+          height: 34,
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFECE8),
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(pet.icon, style: const TextStyle(fontSize: 17)),
+        );
+      }
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -687,17 +1185,47 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         ),
         child: Row(
           children: [
+            if (avatarWidget != null) ...[
+              avatarWidget,
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.title,
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.protoHeading,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
+                  Row(
+                    children: [
+                      if (_category.categoryKey == 'pet' && pet != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFECE8),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            pet.name,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFFF6B4A),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          style: AppTypography.body.copyWith(
+                            color: AppColors.protoHeading,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -707,6 +1235,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -730,10 +1259,68 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
 
   Widget _buildCountDownCard({
     required PlanItem item,
+    PetProfile? pet,
     required VoidCallback onTap,
   }) {
-    final dDayLabel = _calculateDDayLabel(item.date);
+    String dDayLabel = _calculateDDayLabel(item.date);
+    DateTime displayDate = item.date;
+
+    if ((_category.categoryKey == 'pet' || _category.categoryKey == 'fandom') &&
+        (item.title.contains('생일') || item.title.contains('데뷔') || item.repeat)) {
+      final now = DateTime.now();
+      final todayOnly = DateTime(now.year, now.month, now.day);
+      var nextDate = DateTime(todayOnly.year, item.date.month, item.date.day);
+      if (nextDate.isBefore(todayOnly)) {
+        nextDate = DateTime(todayOnly.year + 1, item.date.month, item.date.day);
+      }
+      final diff = nextDate.difference(todayOnly).inDays;
+      if (diff == 0) {
+        dDayLabel = 'D-Day';
+      } else {
+        dDayLabel = 'D-$diff';
+      }
+      displayDate = nextDate;
+    }
+
+    final isTicketing = item.title.contains('티켓팅');
+    if (isTicketing) {
+      final now = DateTime.now();
+      final diffDuration = item.date.difference(now);
+      if (!diffDuration.isNegative) {
+        final hours = diffDuration.inHours;
+        final mins = diffDuration.inMinutes % 60;
+        final secs = diffDuration.inSeconds % 60;
+        if (diffDuration.inDays == 0) {
+          dDayLabel = '${hours.toString().padLeft(2, '0')}:${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+        } else {
+          dDayLabel = 'D-${diffDuration.inDays} ${hours % 24}h';
+        }
+      }
+    }
+
     final isPast = dDayLabel.startsWith('D+');
+
+    Widget? avatarWidget;
+    if (_category.categoryKey == 'pet' && pet != null) {
+      final imgProvider = getPetAvatarImageProvider(pet.photoUrl);
+      if (imgProvider != null) {
+        avatarWidget = CircleAvatar(
+          radius: 17,
+          backgroundImage: imgProvider,
+        );
+      } else {
+        avatarWidget = Container(
+          width: 34,
+          height: 34,
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFECE8),
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(pet.icon, style: const TextStyle(fontSize: 17)),
+        );
+      }
+    }
 
     return GestureDetector(
       onTap: onTap,
@@ -753,26 +1340,57 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         ),
         child: Row(
           children: [
+            if (avatarWidget != null) ...[
+              avatarWidget,
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.title,
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.protoHeading,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
+                  Row(
+                    children: [
+                      if (_category.categoryKey == 'pet' && pet != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFECE8),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            pet.name,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFFF6B4A),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          style: AppTypography.body.copyWith(
+                            color: AppColors.protoHeading,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    _formatDate(item.date),
+                    _formatDate(displayDate),
                     style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -791,6 +1409,99 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBirthdayBody() {
+    final friends = _getBirthdayFriends();
+    friends.sort((a, b) => a.dDay().compareTo(b.dDay()));
+
+    if (friends.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE5E5EA)),
+        ),
+        child: Column(
+          children: [
+            const Text('🎂', style: TextStyle(fontSize: 44)),
+            const SizedBox(height: 12),
+            Text(
+              '등록된 친구 생일이 없습니다',
+              style: AppTypography.heading2.copyWith(color: AppColors.protoHeading),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '소중한 친구, 가족의 생일을 추가해보세요!',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              onPressed: _openAddBirthdayFriend,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('친구 생일 추가하기'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDB2777),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.cake_rounded, size: 18, color: Color(0xFFDB2777)),
+                const SizedBox(width: 6),
+                Text(
+                  '소중한 사람들의 생일',
+                  style: AppTypography.cardLabel.copyWith(
+                    color: AppColors.protoHeading,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              '총 ${friends.length}명',
+              style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: friends.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.88,
+          ),
+          itemBuilder: (context, index) {
+            final friend = friends[index];
+            return BirthdayGridCardWidget(
+              friend: friend,
+              onTap: () => _openEditBirthdayFriend(friend),
+            );
+          },
+        ),
+      ],
     );
   }
 }

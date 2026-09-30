@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../calendar/providers/schedule_room_provider.dart';
 import '../../categories/logic/repeat_rule.dart';
+import '../../categories/models/pet_profile.dart';
+import '../../categories/providers/category_provider.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../../../services/calendar/external_calendar_push_service.dart';
@@ -21,18 +23,19 @@ const Color _kChipSelected = Color(0xFF007AFF);
 const Map<String, List<String>> _kPresets = {
   'couple': ['데이트', '기념일', '여행', '처음 만난 날', '100일'],
   'baby': ['예방접종', '첫걸음마', '첫말하기', '병원 방문', '백일', '돌잔치'],
-  'pet': ['병원', '미용', '사료 구매', '산책', '예방접종'],
+  'pet': ['병원', '미용', '사료구매', '산책', '예방접종', '생일'],
   'exam': ['필기시험', '실기시험', '원서접수', '합격발표', '중간고사', '기말고사', '토익'],
   'birthday': ['생일', '선물 준비', '파티', '케이크 예약'],
   'plan': ['미팅', '마감', '약속', '기획안', '클라이언트'],
   'military': ['입대', '전역', '면회', '외박'],
   'solo': ['혼자 여행', '자기개발', '취미 생활', '힐링 데이'],
-  'fandom': ['최애 생일', '컴백일', '콘서트', '팬미팅', '앨범 발매', '티켓팅'],
+  'fandom': ['컴백', '음방', '콘서트/팬미팅', '티켓팅', '생일', '팬싸', '자체컨텐츠'],
   'group': ['정기 모임', '동창회', '회비 정산', '번개 모임', '스터디'],
 };
 
 const List<({RepeatType type, String label})> _kRepeatOptions = [
   (type: RepeatType.none, label: '반복 안 함'),
+  (type: RepeatType.daily, label: '매일'),
   (type: RepeatType.weekly, label: '매주'),
   (type: RepeatType.monthly, label: '매월'),
   (type: RepeatType.yearly, label: '매년'),
@@ -54,13 +57,23 @@ List<DateTime> _generateRecurringDates({
           ? DateTime(start.year + 5, start.month, start.day)
           : (repeatConfig.type == RepeatType.monthly
               ? DateTime(start.year + 2, start.month, start.day)
-              : DateTime(start.year + 1, start.month, start.day)));
+              : (repeatConfig.type == RepeatType.daily
+                  ? DateTime(start.year, start.month + 3, start.day)
+                  : DateTime(start.year + 1, start.month, start.day))));
 
   final results = <DateTime>[];
 
   switch (repeatConfig.type) {
     case RepeatType.none:
       results.add(start);
+      break;
+
+    case RepeatType.daily:
+      var cur = start;
+      while (!cur.isAfter(end)) {
+        results.add(cur);
+        cur = cur.add(const Duration(days: 1));
+      }
       break;
 
     case RepeatType.weekly:
@@ -174,6 +187,11 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
   final _titleCtrl = TextEditingController();
   final List<String> _customTags = [];
 
+  // Pet Target Selection
+  String? _selectedPetId;
+  String? _selectedPetIcon;
+  String? _selectedPetPhotoUrl;
+
   // Display Mode
   DdayDisplayMode _displayMode = DdayDisplayMode.dday;
 
@@ -214,6 +232,8 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
     if (widget.existingItem != null) {
       final item = widget.existingItem!;
       _selectedCategoryKey = item.categoryKey;
+      _selectedPetId = item.categoryInstanceId;
+      _selectedPetPhotoUrl = item.photoUrl;
       _titleCtrl.text = item.title;
       _startDate = item.date;
       _displayMode = item.displayMode;
@@ -232,6 +252,9 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
     } else {
       if (widget.initialRoomId != null) {
         _selectedRoomIds.add(widget.initialRoomId!);
+      }
+      if (widget.categoryInstanceId != null) {
+        _selectedPetId = widget.categoryInstanceId;
       }
     }
   }
@@ -269,11 +292,36 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
     }
 
     // Preset auto-behaviors
-    if (tag == '데이트' || tag == '여행') {
+    if (_selectedCategoryKey == 'pet') {
+      _displayMode = DdayDisplayMode.dday;
+      if (tag == '산책') {
+        _repeatType = RepeatType.daily;
+      } else if (tag == '사료구매' || tag == '사료 구매') {
+        _repeatType = RepeatType.monthly;
+      } else if (tag == '미용') {
+        _repeatType = RepeatType.monthly;
+      } else if (tag == '예방접종' || tag == '접종') {
+        _repeatType = RepeatType.yearly;
+      } else if (tag == '생일') {
+        _repeatType = RepeatType.yearly;
+      } else if (tag == '병원') {
+        _repeatType = RepeatType.none;
+      }
+    } else if (tag == '데이트' || tag == '여행') {
       _displayMode = DdayDisplayMode.dday;
     } else if (tag == '기념일') {
       _displayMode = DdayDisplayMode.dday;
       _repeatType = RepeatType.yearly;
+    } else if (_selectedCategoryKey == 'fandom') {
+      _displayMode = DdayDisplayMode.dday;
+      if (tag == '티켓팅') {
+        _isAllDay = false;
+        _syncGoogle = true;
+      } else if (tag == '컴백' || tag == '음방' || tag == '콘서트/팬미팅') {
+        _syncGoogle = true;
+      } else if (tag == '생일') {
+        _repeatType = RepeatType.yearly;
+      }
     }
     setState(() {});
   }
@@ -332,13 +380,22 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
       daysOfYear: _repeatType == RepeatType.yearly ? _selectedDaysOfYear : [],
     );
 
+    final effectiveInstanceId = _selectedCategoryKey == 'pet'
+        ? (_selectedPetId ?? widget.categoryInstanceId)
+        : widget.categoryInstanceId;
+
+    final effectivePhotoUrl = _selectedCategoryKey == 'pet'
+        ? (_selectedPetPhotoUrl ?? (_selectedPetIcon != null ? 'emoji:$_selectedPetIcon' : null))
+        : widget.existingItem?.photoUrl;
+
     if (widget.existingItem != null) {
       // Edit mode: update single or base item
       final item = widget.existingItem!.copyWith(
         title: title,
         date: _startDate,
         categoryKey: _selectedCategoryKey,
-        categoryInstanceId: widget.categoryInstanceId,
+        categoryInstanceId: effectiveInstanceId,
+        photoUrl: effectivePhotoUrl,
         displayMode: _displayMode,
         repeatConfig: config,
         calendarSync: CalendarSyncFlags(google: _syncGoogle, naver: _syncNaver, haruchip: true),
@@ -371,7 +428,8 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
           final it = PlanItem(
             id: '${nowMs}_$i',
             categoryKey: _selectedCategoryKey,
-            categoryInstanceId: widget.categoryInstanceId,
+            categoryInstanceId: effectiveInstanceId,
+            photoUrl: effectivePhotoUrl,
             title: title,
             date: dates[i],
             displayMode: _displayMode,
@@ -398,7 +456,8 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
         final item = PlanItem(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           categoryKey: _selectedCategoryKey,
-          categoryInstanceId: widget.categoryInstanceId,
+          categoryInstanceId: effectiveInstanceId,
+          photoUrl: effectivePhotoUrl,
           title: title,
           date: _startDate,
           displayMode: _displayMode,
@@ -497,6 +556,9 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
                 // 0. Category Target Selector (내 일정 / 커플 / 솔로 / 덕질 / 모임 등)
                 _buildCategoryTargetSection(),
                 const SizedBox(height: 14),
+
+                // 0-1. Pet Target Selector (반려동물 카테고리 선택 시 노출)
+                _buildPetTargetSection(),
 
                 // 1. Title & Quick Tags
                 _buildTitleSection(),
@@ -645,6 +707,126 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPetTargetSection() {
+    if (_selectedCategoryKey != 'pet') return const SizedBox.shrink();
+
+    final categories = ref.watch(categoryListProvider);
+    final petCategories = categories.where((c) => c.categoryKey == 'pet').toList();
+    List<PetProfile> pets = [];
+    if (petCategories.isNotEmpty) {
+      final petListJson = petCategories.first.metadata?['pets'] as List<dynamic>?;
+      if (petListJson != null) {
+        pets = petListJson.map((e) => PetProfile.fromJson(e as Map<String, dynamic>)).toList();
+      }
+    }
+
+    if (pets.isEmpty) return const SizedBox.shrink();
+
+    if (_selectedPetId == null && pets.isNotEmpty) {
+      _selectedPetId = pets.first.id;
+      _selectedPetIcon = pets.first.icon;
+      _selectedPetPhotoUrl = pets.first.photoUrl;
+    }
+
+    return Column(
+      children: [
+        _buildGroupCard(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.pets_rounded, size: 16, color: Color(0xFFD97706)),
+                    SizedBox(width: 6),
+                    Text(
+                      '대상 반려동물 선택',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _kLabel),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final pet in pets)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _selectedPetId = pet.id;
+                                _selectedPetIcon = pet.icon;
+                                _selectedPetPhotoUrl = pet.photoUrl;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _selectedPetId == pet.id
+                                    ? const Color(0xFFFEF3C7)
+                                    : _kChipBg,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: _selectedPetId == pet.id
+                                      ? const Color(0xFFD97706)
+                                      : Colors.transparent,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (pet.photoUrl != null && pet.photoUrl!.isNotEmpty)
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      margin: const EdgeInsets.only(right: 6),
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: ClipOval(
+                                        child: Image(
+                                          image: getPetAvatarImageProvider(pet.photoUrl)!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Center(
+                                            child: Text(pet.icon, style: const TextStyle(fontSize: 12)),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  else ...[
+                                    Text(pet.icon, style: const TextStyle(fontSize: 16)),
+                                    const SizedBox(width: 6),
+                                  ],
+                                  Text(
+                                    pet.name,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: _selectedPetId == pet.id ? FontWeight.bold : FontWeight.w600,
+                                      color: _selectedPetId == pet.id ? const Color(0xFFB45309) : _kLabel,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+      ],
     );
   }
 

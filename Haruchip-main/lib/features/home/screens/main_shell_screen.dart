@@ -16,10 +16,10 @@ class MainShellScreen extends ConsumerWidget {
   const MainShellScreen({super.key});
 
   static const List<_TabSpec> _tabs = [
-    _TabSpec(icon: Icons.grid_view_rounded, label: '홈/대시보드'),
-    _TabSpec(icon: Icons.calendar_month_rounded, label: '캘린더'),
-    _TabSpec(icon: Icons.people_alt_rounded, label: '모임'),
-    _TabSpec(icon: Icons.auto_awesome_rounded, label: '하루칩 다이어리'),
+    _TabSpec(icon: Icons.grid_view_rounded, label: '칩 데이'),
+    _TabSpec(icon: Icons.calendar_month_rounded, label: '칩 캘린더'),
+    _TabSpec(icon: Icons.people_alt_rounded, label: '칩 모임'),
+    _TabSpec(icon: Icons.auto_awesome_rounded, label: '칩 다이어리'),
   ];
 
   @override

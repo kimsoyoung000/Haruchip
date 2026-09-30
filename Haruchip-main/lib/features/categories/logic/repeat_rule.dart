@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 /// 디데이 항목의 반복 종류. 명세 §1 `DdayItem.repeat.type`
 /// (none/weekly/yearly/monthly)을 그대로 옮겼다.
-enum RepeatType { none, weekly, monthly, yearly }
+enum RepeatType { none, daily, weekly, monthly, yearly }
 
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -63,6 +63,9 @@ DateTime nextOccurrence(
   switch (config.type) {
     case RepeatType.none:
       return base;
+
+    case RepeatType.daily:
+      return base.isAfter(today) ? base : today;
 
     case RepeatType.yearly:
       if (config.daysOfYear.isEmpty) {

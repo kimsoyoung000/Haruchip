@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../plan/providers/plan_provider.dart' show dDayLabel;
+import '../../plan/providers/plan_provider.dart' show dDayLabel, planItemsByCategoryProvider;
 import '../data/military_mock_data.dart';
 import '../models/military_rank.dart';
 import '../models/military_service.dart';
@@ -19,11 +19,15 @@ class MilitaryServiceNotifier extends Notifier<MilitaryService> {
     required DateTime enlistDate,
     required DateTime dischargeDate,
     MilitaryBranch? branch,
+    int? totalVacationDays,
+    int? usedVacationDays,
   }) {
     state = state.copyWith(
       enlistDate: enlistDate,
       dischargeDate: dischargeDate,
       branch: branch,
+      totalVacationDays: totalVacationDays,
+      usedVacationDays: usedVacationDays,
     );
   }
 
@@ -35,6 +39,13 @@ class MilitaryServiceNotifier extends Notifier<MilitaryService> {
     state = state.copyWith(
       nextLeaveDate: date,
       clearNextLeaveDate: date == null,
+    );
+  }
+
+  void setVacationDays({required int total, required int used}) {
+    state = state.copyWith(
+      totalVacationDays: total,
+      usedVacationDays: used,
     );
   }
 }
@@ -64,11 +75,54 @@ final militaryDischargeDdayProvider = Provider<String>((ref) {
   return dDayLabel(service.dischargeDate);
 });
 
+/// 가장 가까운 다음 휴가 날짜(DateTime?) — 등록된 군대 플랜 항목 및 service.nextLeaveDate 통합
+final militaryNextLeaveDateProvider = Provider<DateTime?>((ref) {
+  final service = ref.watch(militaryServiceProvider);
+  final militaryItems = ref.watch(planItemsByCategoryProvider('military'));
+  final today = _dateOnly(DateTime.now());
+
+  // 군대 플랜 항목 중 '휴가', '외박', '외출', '포상', '정기' 포함 항목 검색
+  final leaveItems = militaryItems.where((i) {
+    final title = i.title.toLowerCase();
+    final isLeave = title.contains('휴가') ||
+        title.contains('외박') ||
+        title.contains('외출') ||
+        title.contains('포상') ||
+        title.contains('정기');
+    final itemDate = _dateOnly(i.date);
+    return isLeave && !itemDate.isBefore(today);
+  }).toList();
+
+  leaveItems.sort((a, b) => a.date.compareTo(b.date));
+
+  if (leaveItems.isNotEmpty) {
+    return leaveItems.first.date;
+  }
+
+  if (service.nextLeaveDate != null && !_dateOnly(service.nextLeaveDate!).isBefore(today)) {
+    return service.nextLeaveDate;
+  }
+
+  return service.nextLeaveDate;
+});
+
 /// 다음 휴가 D-day — 설정 안 했으면 null.
 final militaryLeaveDdayProvider = Provider<String?>((ref) {
-  final date = ref.watch(militaryServiceProvider).nextLeaveDate;
-  if (date == null) return null;
-  return dDayLabel(date);
+  final nextDate = ref.watch(militaryNextLeaveDateProvider);
+  if (nextDate == null) return null;
+  return dDayLabel(nextDate);
+});
+
+/// 잔여 휴가 일수 (남은 총 휴가 개수)
+final militaryRemainingVacationDaysProvider = Provider<int>((ref) {
+  final service = ref.watch(militaryServiceProvider);
+  final militaryItems = ref.watch(planItemsByCategoryProvider('military'));
+  
+  // 플랜 아이템에 명시된 휴가 항목이 있으면 합산 계산
+  final scheduledVacations = militaryItems.where((i) => i.title.contains('휴가') || i.title.contains('외박')).length;
+  final effectiveUsed = service.usedVacationDays > 0 ? service.usedVacationDays : scheduledVacations;
+  
+  return (service.totalVacationDays - effectiveUsed).clamp(0, 999).toInt();
 });
 
 /// 현재 계급 — §5.3 규정(이병→일병 2개월/상병 8개월/병장 14개월)을

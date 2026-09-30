@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +8,24 @@ import 'design_system/colors.dart';
 import 'features/onboarding/screens/category_selection_screen.dart';
 import 'features/onboarding/screens/splash_screen.dart';
 import 'firebase_options.dart';
+
+/// 전역 스크롤 및 마우스/터치 드래그 제스처 인에이블러
+class HaruAppScrollBehavior extends MaterialScrollBehavior {
+  const HaruAppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+  }
+}
 
 /// Firebase 프로젝트: `haruchip-6a5aa` (flutterfire configure로 생성된
 /// `firebase_options.dart` 사용). 앱 위젯 트리를 그리기 전에 Firebase를
@@ -28,6 +47,7 @@ class HaruChipApp extends StatelessWidget {
     return MaterialApp(
       title: '하루칩',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const HaruAppScrollBehavior(),
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: AppColors.background,
@@ -37,12 +57,6 @@ class HaruChipApp extends StatelessWidget {
           surface: AppColors.surface,
         ),
       ),
-      // 온보딩 순서(CLAUDE.md §8, reference/haruchip_app.html 기준 재배선):
-      // 스플래시 → 로그인 → 카테고리 선택 → 대시보드 뷰모드 → 완료 →
-      // 메인 셸(대시보드/캘린더/일정·정산방/우리의방 4탭). 권한요청 단계는
-      // 네이티브 권한 다이얼로그가 필요해 이번 범위 밖이라 스플래시가
-      // 곧바로 로그인으로 넘어간다. 로그인 세션 유지 여부는 [AuthGate]가
-      // 판단한다.
       home: const AuthGate(),
     );
   }

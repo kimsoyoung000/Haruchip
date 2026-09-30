@@ -11,14 +11,16 @@ import '../../onboarding/models/onboarding_category.dart';
 /// 미리 마련해 둔다. `solo`는 명세 §4에 없던 값이라 프로토타입 톤에 맞춰
 /// 새로 하나 지었다 — 확정 카피는 아니다.
 const Map<String, String> ddayTitlePlaceholder = {
-  'custom': '제목을 입력하세요',
+  'custom': '예: 우리 가족 기념일, 버킷리스트, 여행',
   'couple': '예: 우리 100일, 여행 기념일',
   'birthday': '예: 엄마 생신, ○○이 생일',
   'military': '예: 전역까지, 첫 휴가',
   'exam': '예: 정보처리기사 필기, 토익',
   'baby': '예: 첫 뒤집기, 백일 사진',
   'pet': '예: 병원 예약, 산책',
-  'plan': '예: 기획안 마감, 클라이언트 미팅',
+  'plan': '예: 클라이언트 미팅, 친구와의 약속',
+  'goal': '예: 올해 토익 900점, 유럽 배낭여행',
+  'routine': '예: 매주 월/수 필라테스, 매일 독서 30분',
   'solo': '예: 혼자만의 힐링 여행, 취미 시작',
   'fandom': '예: 최애 컴백일, 콘서트 티켓팅, 팬미팅',
   'group': '예: 동창회, 정기 모임, 스터디',
@@ -44,6 +46,8 @@ const List<OnboardingCategory> kCategoryTypes = [
 const Map<String, bool> kDefaultGoogleCalendarSync = {
   'exam': true,
   'plan': true,
+  'goal': true,
+  'routine': true,
   'couple': false,
   'birthday': false,
 };

@@ -64,8 +64,26 @@ const List<OnboardingCategory> kOnboardingCategories = [
   ),
   OnboardingCategory(
     key: 'plan',
-    labelKo: '계획 / 일정',
+    labelKo: '일정 / 약속',
     group: CategoryGroup.practical,
-    emoji: '📝',
+    emoji: '📅',
+  ),
+  OnboardingCategory(
+    key: 'goal',
+    labelKo: '목표 / 버킷리스트',
+    group: CategoryGroup.practical,
+    emoji: '🎯',
+  ),
+  OnboardingCategory(
+    key: 'routine',
+    labelKo: '루틴 / 주간 계획표',
+    group: CategoryGroup.practical,
+    emoji: '⏱️',
+  ),
+  OnboardingCategory(
+    key: 'custom',
+    labelKo: '직접 설정하기',
+    group: CategoryGroup.practical,
+    emoji: '✨',
   ),
 ];

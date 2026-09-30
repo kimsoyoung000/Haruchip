@@ -31,6 +31,7 @@ Future<void> showAddCategoryDashboardModal(BuildContext context) {
 /// STEP B에서 기본 이모지 외에 고를 수 있는 대체 이모지 chip 목록.
 /// 특정 카테고리 타입에 종속되지 않는 범용 세트다.
 const List<String> _alternateEmojis = [
+  '✨',
   '🎯',
   '⭐',
   '🔥',
@@ -38,7 +39,18 @@ const List<String> _alternateEmojis = [
   '📌',
   '🎨',
   '🌈',
-  '✨',
+  '🚀',
+  '💎',
+  '🍀',
+  '🌻',
+  '🎮',
+  '✈️',
+  '🎵',
+  '🎈',
+  '🏠',
+  '📖',
+  '🏆',
+  '☕',
 ];
 
 class _AddCategoryDashboardModal extends ConsumerStatefulWidget {
@@ -300,7 +312,9 @@ class _AddCategoryDashboardModalState
           controller: _nameController,
           style: AppTypography.body.copyWith(color: AppColors.protoHeading),
           decoration: InputDecoration(
-            hintText: type.labelKo,
+            hintText: type.key == 'custom'
+                ? '예: 우리 가족, 나만의 디데이, 버킷리스트'
+                : type.labelKo,
             filled: true,
             fillColor: AppColors.surfaceMuted,
             contentPadding: const EdgeInsets.symmetric(
