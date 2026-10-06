@@ -47,6 +47,11 @@ class PlanListNotifier extends Notifier<List<PlanItem>> {
         if (item.id == id) item.copyWith(kanbanStatus: status) else item,
     ];
   }
+
+  /// 백업 복원 시 전체 일정 교체
+  void replaceAll(List<PlanItem> items) {
+    state = _sortedByDate(items);
+  }
 }
 
 final planListProvider =

@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import '../../features/categories/logic/repeat_rule.dart';
 import '../../features/plan/models/plan_item.dart';
 
 /// 구글 캘린더 대상 목록 모델
@@ -27,6 +28,17 @@ class NaverCalendarTarget {
   final bool isDefault;
 }
 
+/// 동기화 주기 옵션
+enum SyncInterval {
+  realtime('실시간'),
+  hourly('1시간마다'),
+  onAppLaunch('앱 실행 시'),
+  manual('수동');
+
+  const SyncInterval(this.labelKo);
+  final String labelKo;
+}
+
 /// 단방향 푸시 결과 모델
 class CalendarPushResult {
   const CalendarPushResult({
@@ -34,20 +46,28 @@ class CalendarPushResult {
     required this.targetService,
     required this.message,
     this.pushedEventId,
+    this.requiresReauth = false,
   });
 
   final bool isSuccess;
   final String targetService; // 'google' | 'naver'
   final String message;
   final String? pushedEventId;
+  final bool requiresReauth;
 }
 
-/// 하루칩 -> 외부 캘린더 (구글 / 네이버) 단방향 자동 내보내기(Push) 엔진
+/// 하루칩 -> 외부 캘린더 (구글 / 네이버) 단방향 자동 동기화 & 푸시 엔진
 class ExternalCalendarPushService {
   ExternalCalendarPushService._();
 
   static final ExternalCalendarPushService instance =
       ExternalCalendarPushService._();
+
+  bool isGoogleConnected = true;
+  bool isNaverConnected = true;
+  String selectedGoogleCalendarId = 'primary';
+  String selectedNaverCalendarId = 'default';
+  SyncInterval syncInterval = SyncInterval.realtime;
 
   /// 구글 캘린더 지원 목록
   List<GoogleCalendarTarget> get googleCalendars => const [
@@ -62,6 +82,72 @@ class ExternalCalendarPushService {
         NaverCalendarTarget(id: 'personal', name: '개인'),
         NaverCalendarTarget(id: 'family', name: '가족 / 모임'),
       ];
+
+  /// 한국 표준시(KST, UTC+9) 기준 날짜/시간 포맷 변환
+  /// 종일 일정: YYYY-MM-DD
+  /// 시간 일정: YYYY-MM-DDTHH:mm:ss+09:00
+  String formatKstDate(DateTime date, {bool isAllDay = true}) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+
+    if (isAllDay) {
+      return '$y-$m-$d';
+    }
+
+    final hh = date.hour.toString().padLeft(2, '0');
+    final mm = date.minute.toString().padLeft(2, '0');
+    final ss = date.second.toString().padLeft(2, '0');
+    return '$y-$m-${d}T$hh:$mm:$ss+09:00';
+  }
+
+  /// iCalendar 표준 RRULE 반복 규칙 문자열 생성
+  String? buildRRule(RepeatConfig config, {DateTime? repeatEndDate}) {
+    if (!config.isRepeating) return null;
+
+    final buffer = StringBuffer('RRULE:');
+    switch (config.type) {
+      case RepeatType.daily:
+        buffer.write('FREQ=DAILY');
+        break;
+      case RepeatType.weekly:
+        buffer.write('FREQ=WEEKLY');
+        if (config.weekdays.isNotEmpty) {
+          const daysMap = {
+            DateTime.monday: 'MO',
+            DateTime.tuesday: 'TU',
+            DateTime.wednesday: 'WE',
+            DateTime.thursday: 'TH',
+            DateTime.friday: 'FR',
+            DateTime.saturday: 'SA',
+            DateTime.sunday: 'SU',
+          };
+          final daysStr = config.weekdays.map((d) => daysMap[d] ?? 'MO').join(',');
+          buffer.write(';BYDAY=$daysStr');
+        }
+        break;
+      case RepeatType.monthly:
+        buffer.write('FREQ=MONTHLY');
+        if (config.daysOfMonth.isNotEmpty) {
+          buffer.write(';BYMONTHDAY=${config.daysOfMonth.join(',')}');
+        }
+        break;
+      case RepeatType.yearly:
+        buffer.write('FREQ=YEARLY');
+        break;
+      case RepeatType.none:
+        return null;
+    }
+
+    if (repeatEndDate != null) {
+      final y = repeatEndDate.year.toString().padLeft(4, '0');
+      final m = repeatEndDate.month.toString().padLeft(2, '0');
+      final d = repeatEndDate.day.toString().padLeft(2, '0');
+      buffer.write(';UNTIL=$y$m${d}T235959Z');
+    }
+
+    return buffer.toString();
+  }
 
   /// 하루칩 카테고리에 맞는 최적의 구글 캘린더 컬러 ID 매핑 (1~11)
   String mapCategoryToGoogleColorId(String categoryKey) {
@@ -80,7 +166,7 @@ class ExternalCalendarPushService {
     };
   }
 
-  /// 구글 캘린더 단방향 Push (일정 등록)
+  /// 구글 캘린더 단방향 Push (일정 등록 및 사전 알림/반복 연동)
   Future<CalendarPushResult> pushToGoogleCalendar({
     required String calendarId,
     required String title,
@@ -89,14 +175,44 @@ class ExternalCalendarPushService {
     bool isAllDay = true,
     String? categoryKey,
     String? description,
+    EventReminder reminder = EventReminder.none,
+    RepeatConfig? repeatConfig,
   }) async {
     try {
+      if (!isGoogleConnected) {
+        return const CalendarPushResult(
+          isSuccess: false,
+          targetService: 'google',
+          requiresReauth: true,
+          message: '구글 캘린더 OAuth 토큰이 만료되어 재인증이 필요합니다. 하루칩 로컬에 안전하게 우선 저장되었습니다.',
+        );
+      }
+
       final colorId = mapCategoryToGoogleColorId(categoryKey ?? 'plan');
       final eventId = 'google_ev_${DateTime.now().microsecondsSinceEpoch}';
+      final formattedStart = formatKstDate(startDate, isAllDay: isAllDay);
+      final formattedEnd = formatKstDate(endDate ?? startDate, isAllDay: isAllDay);
+      final rrule = repeatConfig != null ? buildRRule(repeatConfig) : null;
 
-      // 실제 구글 캘린더 API v3 Event Insert 명세에 맞춘 페이로드 구성 및 전송
+      // Google Calendar v3 API Payload Mapping
+      final payload = {
+        'summary': title,
+        'description': description ?? '하루칩 D-Day 앱에서 자동 동기화된 일정',
+        'colorId': colorId,
+        'start': isAllDay ? {'date': formattedStart} : {'dateTime': formattedStart, 'timeZone': 'Asia/Seoul'},
+        'end': isAllDay ? {'date': formattedEnd} : {'dateTime': formattedEnd, 'timeZone': 'Asia/Seoul'},
+        if (rrule != null) 'recurrence': [rrule],
+        if (reminder != EventReminder.none)
+          'reminders': {
+            'useDefault': false,
+            'overrides': [
+              {'method': 'popup', 'minutes': reminder.minutesBefore},
+            ],
+          },
+      };
+
       developer.log(
-        '[Google Calendar Push] Target: $calendarId, Title: $title, Date: $startDate, ColorId: $colorId',
+        '[Google Calendar Push] Target: $calendarId, Payload: $payload',
         name: 'Haruchip.CalendarSync',
       );
 
@@ -115,7 +231,7 @@ class ExternalCalendarPushService {
     }
   }
 
-  /// 네이버 캘린더 단방향 Push (일정 등록)
+  /// 네이버 캘린더 단방향 Push (일정 등록 및 사전 알림 연동)
   Future<CalendarPushResult> pushToNaverCalendar({
     required String calendarId,
     required String title,
@@ -123,13 +239,37 @@ class ExternalCalendarPushService {
     DateTime? endDate,
     bool isAllDay = true,
     String? description,
+    EventReminder reminder = EventReminder.none,
+    RepeatConfig? repeatConfig,
   }) async {
     try {
-      final eventId = 'naver_ev_${DateTime.now().microsecondsSinceEpoch}';
+      if (!isNaverConnected) {
+        return const CalendarPushResult(
+          isSuccess: false,
+          targetService: 'naver',
+          requiresReauth: true,
+          message: '네이버 캘린더 연동이 해제되어 재인증이 필요합니다. 하루칩 로컬에 안전하게 우선 저장되었습니다.',
+        );
+      }
 
-      // 네이버 캘린더 Open API 명세에 맞춘 일정 등록 처리
+      final eventId = 'naver_ev_${DateTime.now().microsecondsSinceEpoch}';
+      final formattedStart = formatKstDate(startDate, isAllDay: isAllDay);
+      final formattedEnd = formatKstDate(endDate ?? startDate, isAllDay: isAllDay);
+      final rrule = repeatConfig != null ? buildRRule(repeatConfig) : null;
+
+      final payload = {
+        'calendarId': calendarId,
+        'title': title,
+        'start': formattedStart,
+        'end': formattedEnd,
+        'isAllDay': isAllDay,
+        'description': description ?? '하루칩 D-Day 앱에서 자동 동기화된 일정',
+        if (rrule != null) 'rrule': rrule,
+        if (reminder != EventReminder.none) 'reminderMinutes': reminder.minutesBefore,
+      };
+
       developer.log(
-        '[Naver Calendar Push] Target: $calendarId, Title: $title, Date: $startDate',
+        '[Naver Calendar Push] Target: $calendarId, Payload: $payload',
         name: 'Haruchip.CalendarSync',
       );
 
@@ -158,23 +298,27 @@ class ExternalCalendarPushService {
 
     if (item.calendarSync.google) {
       final gResult = await pushToGoogleCalendar(
-        calendarId: googleCalendarId ?? 'primary',
+        calendarId: googleCalendarId ?? selectedGoogleCalendarId,
         title: item.title,
         startDate: item.date,
         endDate: item.endDate,
         isAllDay: item.isAllDay,
         categoryKey: item.categoryKey,
+        reminder: item.reminder,
+        repeatConfig: item.repeatConfig,
       );
       results.add(gResult);
     }
 
     if (item.calendarSync.naver) {
       final nResult = await pushToNaverCalendar(
-        calendarId: naverCalendarId ?? 'default',
+        calendarId: naverCalendarId ?? selectedNaverCalendarId,
         title: item.title,
         startDate: item.date,
         endDate: item.endDate,
         isAllDay: item.isAllDay,
+        reminder: item.reminder,
+        repeatConfig: item.repeatConfig,
       );
       results.add(nResult);
     }

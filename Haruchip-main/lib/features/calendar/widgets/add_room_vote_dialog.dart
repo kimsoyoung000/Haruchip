@@ -1,26 +1,33 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/colors.dart';
-import '../../../design_system/typography.dart';
+import '../../shared/widgets/haru_calendar_picker.dart';
 import '../models/schedule_room.dart';
 
-/// 모임 투표 생성 다이얼로그
+/// 모임 투표 생성 및 수정 다이얼로그 (마감 기한, 복수 선택, 익명 투표 지원)
 Future<RoomVote?> showAddRoomVoteDialog(
   BuildContext context, {
   required String authorUid,
+  RoomVote? existingVote,
 }) {
   return showModalBottomSheet<RoomVote>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => _AddRoomVoteDialog(authorUid: authorUid),
+    builder: (ctx) => _AddRoomVoteDialog(
+      authorUid: authorUid,
+      existingVote: existingVote,
+    ),
   );
 }
 
 class _AddRoomVoteDialog extends StatefulWidget {
-  const _AddRoomVoteDialog({required this.authorUid});
+  const _AddRoomVoteDialog({
+    required this.authorUid,
+    this.existingVote,
+  });
 
   final String authorUid;
+  final RoomVote? existingVote;
 
   @override
   State<_AddRoomVoteDialog> createState() => _AddRoomVoteDialogState();
@@ -31,14 +38,37 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
   late TextEditingController _descriptionController;
   final List<TextEditingController> _optionControllers = [];
   bool _allowMultiple = false;
+  bool _isAnonymous = false;
+  bool _hasDeadline = false;
+  DateTime? _deadlineDate;
+  TimeOfDay _deadlineTime = const TimeOfDay(hour: 23, minute: 59);
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController();
-    _descriptionController = TextEditingController();
-    _optionControllers.add(TextEditingController());
-    _optionControllers.add(TextEditingController());
+    final ev = widget.existingVote;
+    _titleController = TextEditingController(text: ev?.title ?? '');
+    _descriptionController = TextEditingController(text: ev?.description ?? '');
+    _allowMultiple = ev?.allowMultiple ?? false;
+    _isAnonymous = ev?.isAnonymous ?? false;
+
+    if (ev?.deadline != null) {
+      _hasDeadline = true;
+      _deadlineDate = ev!.deadline;
+      _deadlineTime = TimeOfDay(hour: ev.deadline!.hour, minute: ev.deadline!.minute);
+    } else {
+      _hasDeadline = false;
+      _deadlineDate = DateTime.now().add(const Duration(days: 1));
+    }
+
+    if (ev != null && ev.options.isNotEmpty) {
+      for (final opt in ev.options) {
+        _optionControllers.add(TextEditingController(text: opt.text));
+      }
+    } else {
+      _optionControllers.add(TextEditingController());
+      _optionControllers.add(TextEditingController());
+    }
   }
 
   @override
@@ -76,6 +106,32 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
     });
   }
 
+  Future<void> _pickDeadlineDate() async {
+    final picked = await showHaruDatePicker(
+      context,
+      initialDate: _deadlineDate ?? DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() {
+        _deadlineDate = picked;
+      });
+    }
+  }
+
+  Future<void> _pickDeadlineTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _deadlineTime,
+    );
+    if (picked != null) {
+      setState(() {
+        _deadlineTime = picked;
+      });
+    }
+  }
+
   void _save() {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
@@ -86,14 +142,16 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
     }
 
     final options = <VoteOption>[];
+    final ev = widget.existingVote;
     for (int i = 0; i < _optionControllers.length; i++) {
       final text = _optionControllers[i].text.trim();
       if (text.isNotEmpty) {
+        final existingOpt = (ev != null && i < ev.options.length) ? ev.options[i] : null;
         options.add(
           VoteOption(
-            id: 'opt-$i-${DateTime.now().microsecondsSinceEpoch}',
+            id: existingOpt?.id ?? 'opt-$i-${DateTime.now().microsecondsSinceEpoch}',
             text: text,
-            voterUids: const [],
+            voterUids: existingOpt?.voterUids ?? const [],
           ),
         );
       }
@@ -101,22 +159,35 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
 
     if (options.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ 유효한 선택지를 최소 2개 이상 입력해주세요.')),
+        const SnackBar(content: Text('⚠️ 최소 2개 이상의 유효한 선택지를 입력해주세요.')),
       );
       return;
     }
 
+    DateTime? finalDeadline;
+    if (_hasDeadline && _deadlineDate != null) {
+      finalDeadline = DateTime(
+        _deadlineDate!.year,
+        _deadlineDate!.month,
+        _deadlineDate!.day,
+        _deadlineTime.hour,
+        _deadlineTime.minute,
+      );
+    }
+
     final vote = RoomVote(
-      id: 'vote-${DateTime.now().microsecondsSinceEpoch}',
+      id: widget.existingVote?.id ?? 'vote-${DateTime.now().microsecondsSinceEpoch}',
       title: title,
       description: _descriptionController.text.trim().isNotEmpty
           ? _descriptionController.text.trim()
           : null,
-      authorUid: widget.authorUid,
-      createdAt: DateTime.now(),
-      options: options,
+      authorUid: widget.existingVote?.authorUid ?? widget.authorUid,
       allowMultiple: _allowMultiple,
-      isClosed: false,
+      isAnonymous: _isAnonymous,
+      options: options,
+      createdAt: widget.existingVote?.createdAt ?? DateTime.now(),
+      deadline: finalDeadline,
+      isClosed: widget.existingVote?.isClosed ?? false,
     );
 
     Navigator.of(context).pop(vote);
@@ -124,9 +195,11 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.existingVote != null;
+
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
+        maxHeight: MediaQuery.of(context).size.height * 0.90,
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -136,7 +209,6 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
         top: false,
         child: Column(
           children: [
-            // Handle
             Center(
               child: Container(
                 margin: const EdgeInsets.only(top: 10, bottom: 8),
@@ -148,19 +220,14 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
                 ),
               ),
             ),
-            // Top Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '🗳️ 모임 투표 만들기',
-                    style: AppTypography.cardLabel.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.protoHeading,
-                    ),
+                    isEditing ? '🗳️ 투표 수정하기' : '🗳️ 새 투표 만들기',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -176,166 +243,194 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '투표 제목',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.protoSubtitle,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    const Text('투표 제목', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
                     const SizedBox(height: 6),
                     TextField(
                       controller: _titleController,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                       decoration: InputDecoration(
-                        hintText: '예: 회식 장소 투표, 날짜 후보 선택',
+                        hintText: '예: 2차 장소 어디로 갈까요?',
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                    Text(
-                      '설명 / 안내 (선택)',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.protoSubtitle,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    const Text('설명 / 메모 (선택)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
                     const SizedBox(height: 6),
                     TextField(
                       controller: _descriptionController,
-                      style: const TextStyle(fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: '투표 관련 추가 안내사항 입력',
+                        hintText: '투표 관련 추가 설명이나 안내 사항',
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 20),
 
+                    // 옵션 선택지 리스트
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '선택지 목록 (${_optionControllers.length}개)',
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.protoSubtitle,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        const Text('선택 항목', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
                         TextButton.icon(
                           onPressed: _addOption,
-                          icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF0F172A)),
-                          label: const Text(
-                            '항목 추가',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                          ),
+                          icon: const Icon(Icons.add, size: 14),
+                          label: const Text('항목 추가', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
+
                     for (int i = 0; i < _optionControllers.length; i++) ...[
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           children: [
                             Container(
-                              width: 26,
-                              height: 26,
+                              width: 24,
+                              height: 24,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE2E8F0),
-                                borderRadius: BorderRadius.circular(8),
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text(
-                                '${i + 1}',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
-                              ),
+                              child: Text('${i + 1}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: TextField(
                                 controller: _optionControllers[i],
-                                style: const TextStyle(fontSize: 14),
                                 decoration: InputDecoration(
-                                  hintText: '선택지 ${i + 1} 입력',
+                                  hintText: '선택지 ${i + 1}',
                                   filled: true,
                                   fillColor: const Color(0xFFF8FAFC),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                  ),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
                               ),
                             ),
-                            if (_optionControllers.length > 2)
-                              IconButton(
-                                onPressed: () => _removeOption(i),
-                                icon: const Icon(Icons.remove_circle_outline_rounded, size: 20, color: Colors.redAccent),
-                                padding: const EdgeInsets.only(left: 4),
-                                constraints: const BoxConstraints(),
-                              ),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, color: Colors.grey, size: 20),
+                              onPressed: () => _removeOption(i),
+                            ),
                           ],
                         ),
                       ),
                     ],
-                    const SizedBox(height: 14),
 
-                    // Multiple choices toggle
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '복수 선택 허용',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                              ),
-                              Text(
-                                '멤버들이 여러 항목을 동시에 투표할 수 있습니다',
-                                style: TextStyle(fontSize: 11, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                          Switch(
-                            value: _allowMultiple,
-                            onChanged: (v) => setState(() => _allowMultiple = v),
-                            activeTrackColor: const Color(0xFF0F172A),
-                          ),
-                        ],
-                      ),
+                    const SizedBox(height: 16),
+                    const Divider(color: Color(0xFFF1F5F9)),
+                    const SizedBox(height: 10),
+
+                    // 투표 설정 옵션
+                    const Text('투표 설정 및 마감 기한', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                    const SizedBox(height: 8),
+
+                    // 복수 선택 허용
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('복수 선택 허용', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: const Text('멤버들이 여러 개의 선택지를 동시에 고를 수 있습니다.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                      value: _allowMultiple,
+                      onChanged: (val) => setState(() => _allowMultiple = val ?? false),
                     ),
+
+                    // 익명 투표
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('익명 투표', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: const Text('투표자 명단을 숨기고 득표 수 및 비율 막대만 표시합니다.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                      value: _isAnonymous,
+                      onChanged: (val) => setState(() => _isAnonymous = val ?? false),
+                    ),
+
+                    // 마감 기한 설정
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('마감 기한 설정', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: const Text('설정한 일시가 지나면 자동으로 투표가 종료됩니다.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                      value: _hasDeadline,
+                      onChanged: (val) => setState(() => _hasDeadline = val ?? false),
+                    ),
+
+                    if (_hasDeadline) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: _pickDeadlineDate,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF64748B)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        _deadlineDate != null
+                                            ? '${_deadlineDate!.year}.${_deadlineDate!.month.toString().padLeft(2, '0')}.${_deadlineDate!.day.toString().padLeft(2, '0')}'
+                                            : '날짜 선택',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: InkWell(
+                                onTap: _pickDeadlineTime,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF64748B)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '${_deadlineTime.hour.toString().padLeft(2, '0')}:${_deadlineTime.minute.toString().padLeft(2, '0')}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
-            // Bottom Action
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
-              ),
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -344,10 +439,13 @@ class _AddRoomVoteDialogState extends State<_AddRoomVoteDialog> {
                     backgroundColor: const Color(0xFF0F172A),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
-                  child: const Text('투표 등록하기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    isEditing ? '투표 수정 완료' : '투표 등록하기',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ),

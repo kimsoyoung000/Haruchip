@@ -6,12 +6,19 @@ import '../../../design_system/typography.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../../shared/widgets/add_event_bottom_sheet.dart';
+import '../data/baby_health_database.dart';
+import '../models/baby_profile.dart';
 import '../models/birthday_profile.dart';
 import '../models/category.dart';
 import '../models/fandom_profile.dart';
 import '../models/pet_profile.dart';
 import '../providers/category_provider.dart';
-import '../widgets/baby_profile_card_widget.dart';
+import '../widgets/baby_care_history_modal.dart';
+import '../widgets/baby_care_quick_bar_widget.dart';
+import '../widgets/baby_growth_card_widget.dart';
+import '../widgets/baby_growth_record_modal.dart';
+import '../widgets/baby_health_checkup_widget.dart';
+import '../widgets/baby_vaccine_timeline_widget.dart';
 import '../widgets/birthday_friend_modal.dart';
 import '../widgets/birthday_grid_card_widget.dart';
 import '../widgets/category_edit_modal.dart';
@@ -29,6 +36,13 @@ import '../../professional/widgets/appointment_category_view.dart';
 import '../../professional/widgets/goal_category_view.dart';
 import '../../professional/widgets/professional_archive_modal.dart';
 import '../../professional/widgets/routine_category_view.dart';
+import '../controllers/exam_category_controller.dart';
+import '../models/exam_model.dart';
+import '../models/solo_profile.dart';
+import '../widgets/add_exam_modal.dart';
+import '../widgets/exam_card_widget.dart';
+import '../widgets/exam_official_db_modal.dart';
+import '../widgets/solo_top_card_widget.dart';
 
 /// 전체 카테고리 범용 상세 화면 (듀얼 리스트 & 카테고리 온보딩 & 꾸미기 에디터 연동)
 class CategoryDetailScreen extends ConsumerStatefulWidget {
@@ -185,6 +199,83 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     final updated = _category.copyWith(metadata: updatedMeta);
     setState(() => _category = updated);
     ref.read(categoryListProvider.notifier).updateCategory(updated);
+  }
+
+  SoloProfile _getSoloProfile() {
+    final meta = _category.metadata;
+    final now = DateTime.now();
+    if (meta?['soloProfile'] != null) {
+      try {
+        return SoloProfile.fromJson(Map<String, dynamic>.from(meta!['soloProfile'] as Map));
+      } catch (_) {}
+    }
+    final legacySoloStart = meta?['soloStartDate'] != null
+        ? DateTime.parse(meta!['soloStartDate'] as String)
+        : null;
+
+    return SoloProfile(
+      mode: SoloMode.selfCare,
+      selfCareStartDate: legacySoloStart ?? now.subtract(const Duration(days: 30)),
+      crushStartDate: now.subtract(const Duration(days: 7)),
+      showTopCard: true,
+    );
+  }
+
+  void _saveSoloProfile(SoloProfile profile) {
+    final updatedMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    updatedMeta['soloProfile'] = profile.toJson();
+    updatedMeta['soloStartDate'] = profile.activeStartDate.toIso8601String();
+    updatedMeta['isInitialized'] = true;
+
+    final updated = _category.copyWith(metadata: updatedMeta);
+    setState(() => _category = updated);
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
+
+    // Sync primary count-up item
+    final planNotifier = ref.read(planListProvider.notifier);
+    final allPlanItems = ref.read(planListProvider);
+    final soloItems = allPlanItems.where((p) => p.categoryKey == 'solo').toList();
+
+    final primaryTitle = profile.mode == SoloMode.selfCare ? '나에게 집중하기 시작한 날' : '마음이 설레기 시작한 날';
+
+    if (soloItems.isNotEmpty) {
+      final first = soloItems.first;
+      planNotifier.updateItem(
+        first.copyWith(
+          title: primaryTitle,
+          date: profile.activeStartDate,
+          displayMode: DdayDisplayMode.daysCount,
+        ),
+      );
+    } else {
+      planNotifier.addItem(
+        PlanItem(
+          id: 'plan-solo-${DateTime.now().microsecondsSinceEpoch}',
+          title: primaryTitle,
+          date: profile.activeStartDate,
+          categoryKey: 'solo',
+          categoryInstanceId: _category.id,
+          isAllDay: true,
+          displayMode: DdayDisplayMode.daysCount,
+        ),
+      );
+    }
+  }
+
+  void _addSoloTag(String newTag) {
+    final profile = _getSoloProfile();
+    if (!profile.tags.contains(newTag)) {
+      final updatedTags = [...profile.tags, newTag];
+      _saveSoloProfile(profile.copyWith(tags: updatedTags));
+    }
+  }
+
+  void _openAddEventWithTag(String tag) {
+    showAddEventBottomSheet(
+      context,
+      categoryKey: 'solo',
+      initialTitle: tag,
+    );
   }
 
   String _formatDate(DateTime d) =>
@@ -465,6 +556,298 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     );
   }
 
+  // 5. Baby category methods
+  BabyProfile _getBabyProfile() {
+    final meta = _category.metadata;
+    if (meta?['babyProfile'] != null) {
+      try {
+        return BabyProfile.fromJson(Map<String, dynamic>.from(meta!['babyProfile'] as Map));
+      } catch (_) {}
+    }
+    return BabyProfile(
+      name: meta?['babyName'] as String? ?? '우리 아기 👶',
+      birthDate: meta?['birthDate'] != null
+          ? DateTime.parse(meta!['birthDate'] as String)
+          : DateTime.now().subtract(const Duration(days: 100)),
+      birthTime: meta?['birthTime'] as String?,
+      gender: BabyGender.fromJson(meta?['gender'] as String?),
+      bloodType: meta?['bloodType'] as String?,
+      photoUrl: meta?['photoUrl'] as String?,
+      feedingIntervalHours: meta?['feedingIntervalHours'] as int? ?? 3,
+      vaccineDoses: kDefaultVaccineDoses,
+      checkupDoses: kDefaultHealthCheckupDoses,
+      careLogs: const [],
+      growthRecords: const [],
+    );
+  }
+
+  void _saveBabyProfile(BabyProfile profile) {
+    final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    currentMeta['babyProfile'] = profile.toJson();
+    currentMeta['babyName'] = profile.name;
+    currentMeta['birthDate'] = profile.birthDate.toIso8601String();
+    currentMeta['photoUrl'] = profile.photoUrl;
+    currentMeta['gender'] = profile.gender.toJson();
+    currentMeta['bloodType'] = profile.bloodType;
+    currentMeta['feedingIntervalHours'] = profile.feedingIntervalHours;
+    currentMeta['isInitialized'] = true;
+
+    final updated = _category.copyWith(metadata: currentMeta);
+    setState(() {
+      _category = updated;
+    });
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
+  }
+
+  void _handleQuickCareLog(BabyCareLogType type) {
+    final profile = _getBabyProfile();
+    final newLog = BabyCareLogItem(
+      id: 'log-${DateTime.now().microsecondsSinceEpoch}',
+      type: type,
+      timestamp: DateTime.now(),
+    );
+    final updatedLogs = [...profile.careLogs, newLog];
+    final updatedProfile = profile.copyWith(careLogs: updatedLogs);
+    _saveBabyProfile(updatedProfile);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${type.emoji} ${type.label} 기록 완료 (${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')})'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _handleDetailedCareLog(BabyCareLogItem item) {
+    final profile = _getBabyProfile();
+    final updatedLogs = [...profile.careLogs, item];
+    final updatedProfile = profile.copyWith(careLogs: updatedLogs);
+    _saveBabyProfile(updatedProfile);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${item.type.emoji} ${item.type.label} 상세 기록 완료'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _handleOpenCareHistory() async {
+    final profile = _getBabyProfile();
+    final result = await showBabyCareHistoryModal(context, careLogs: profile.careLogs);
+    if (result != null && mounted) {
+      final updatedProfile = profile.copyWith(careLogs: result);
+      _saveBabyProfile(updatedProfile);
+    }
+  }
+
+  void _handleToggleVaccine(VaccineDose dose) {
+    final profile = _getBabyProfile();
+    final doses = profile.vaccineDoses.isNotEmpty ? profile.vaccineDoses : kDefaultVaccineDoses;
+    final updatedDoses = doses.map((d) {
+      if (d.id == dose.id) {
+        final willComplete = !d.isCompleted;
+        return d.copyWith(
+          isCompleted: willComplete,
+          completedDate: willComplete ? DateTime.now() : null,
+        );
+      }
+      return d;
+    }).toList();
+    final updatedProfile = profile.copyWith(vaccineDoses: updatedDoses);
+    _saveBabyProfile(updatedProfile);
+  }
+
+  void _handleToggleCheckup(HealthCheckupDose dose) {
+    final profile = _getBabyProfile();
+    final doses = profile.checkupDoses.isNotEmpty ? profile.checkupDoses : kDefaultHealthCheckupDoses;
+    final updatedDoses = doses.map((d) {
+      if (d.stage == dose.stage) {
+        final willComplete = !d.isCompleted;
+        return d.copyWith(
+          isCompleted: willComplete,
+          completedDate: willComplete ? DateTime.now() : null,
+        );
+      }
+      return d;
+    }).toList();
+    final updatedProfile = profile.copyWith(checkupDoses: updatedDoses);
+    _saveBabyProfile(updatedProfile);
+  }
+
+  Future<void> _handleOpenAddGrowthRecord() async {
+    final record = await showBabyGrowthRecordModal(context);
+    if (record != null && mounted) {
+      final profile = _getBabyProfile();
+      final updatedRecords = [...profile.growthRecords, record];
+      final updatedProfile = profile.copyWith(growthRecords: updatedRecords);
+      _saveBabyProfile(updatedProfile);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📏 신체 성장 기록이 저장되었습니다.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  // 6. Exam category methods
+  List<ExamProfile> _getExams() {
+    final meta = _category.metadata;
+    final raw = meta?['exams'] as List<dynamic>?;
+    if (raw != null && raw.isNotEmpty) {
+      return raw.map((e) => ExamProfile.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    }
+    // Default preset if not initialized
+    final now = DateTime.now();
+    return [
+      ExamProfile(
+        id: 'default-exam-1',
+        title: '정보처리기사 (2026년 정기 기사 2회차)',
+        type: ExamType.qualification,
+        categoryName: '국가기술자격',
+        colorHex: '#4F46E5',
+        targetScore: '동차 합격',
+        showInMainCalendar: true,
+        stages: [
+          ExamStageItem(
+            id: 'st-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 마감',
+            startDate: DateTime(now.year, 4, 15),
+            endDate: DateTime(now.year, 4, 18),
+            isCompleted: true,
+          ),
+          ExamStageItem(
+            id: 'st-2',
+            stageType: ExamStageType.writtenTest,
+            name: '필기 시험 (CBT)',
+            startDate: now.add(const Duration(days: 14)),
+            testTime: '09:20 입실완료',
+            location: '서울공업고등학교 CBT 2실',
+            checklist: const ['신분증', '수험표', '컴싸'],
+          ),
+          ExamStageItem(
+            id: 'st-3',
+            stageType: ExamStageType.writtenResult,
+            name: '필기 합격자 발표',
+            startDate: now.add(const Duration(days: 35)),
+            testTime: '오전 09:00',
+          ),
+          ExamStageItem(
+            id: 'st-4',
+            stageType: ExamStageType.practicalTest,
+            name: '실기 시험 (필답형)',
+            startDate: now.add(const Duration(days: 60)),
+            testTime: '09:00 입실완료',
+            checklist: const ['검정 볼펜', '신분증'],
+          ),
+          ExamStageItem(
+            id: 'st-5',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: now.add(const Duration(days: 90)),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  void _saveExams(List<ExamProfile> exams) {
+    final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+    currentMeta['exams'] = exams.map((e) => e.toJson()).toList();
+    currentMeta['isInitialized'] = true;
+
+    final updated = _category.copyWith(metadata: currentMeta);
+    setState(() {
+      _category = updated;
+    });
+    ref.read(categoryListProvider.notifier).updateCategory(updated);
+
+    // Sync with planListProvider
+    final planNotifier = ref.read(planListProvider.notifier);
+    final allPlanItems = ref.read(planListProvider);
+
+    // Remove previous exam plans for this category
+    final existingExamPlans = allPlanItems
+        .where((p) => p.categoryKey == 'exam' && p.categoryInstanceId == _category.id)
+        .toList();
+    for (final oldP in existingExamPlans) {
+      planNotifier.removeItem(oldP.id);
+    }
+
+    // Add updated plans
+    for (final exam in exams) {
+      if (!exam.showInMainCalendar) continue;
+
+      if (exam.type == ExamType.midterm || exam.type == ExamType.finalExam) {
+        for (final sub in exam.subjects) {
+          planNotifier.addItem(
+            PlanItem(
+              id: 'exam-plan-${sub.id}',
+              title: '[${exam.title}] ${sub.period}교시 ${sub.subjectName}',
+              date: sub.examDate,
+              categoryKey: 'exam',
+              categoryInstanceId: _category.id,
+              repeat: false,
+            ),
+          );
+        }
+      } else {
+        for (final stage in exam.stages) {
+          if (!stage.isEnded() || stage.stageType.isExamDay) {
+            planNotifier.addItem(
+              PlanItem(
+                id: 'exam-plan-${stage.id}',
+                title: '[${exam.title}] ${stage.name}',
+                date: stage.startDate,
+                categoryKey: 'exam',
+                categoryInstanceId: _category.id,
+                repeat: false,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _openAddExamModal([ExamProfile? existing]) async {
+    final result = await showAddExamModal(
+      context,
+      existingExam: existing,
+      allowDelete: existing != null,
+      onDelete: existing != null
+          ? () {
+              final exams = _getExams();
+              final updated = exams.where((e) => e.id != existing.id).toList();
+              _saveExams(updated);
+            }
+          : null,
+    );
+
+    if (result != null && mounted) {
+      final exams = _getExams();
+      List<ExamProfile> updated;
+      if (existing != null) {
+        updated = exams.map((e) => e.id == existing.id ? result : e).toList();
+      } else {
+        updated = [result, ...exams];
+      }
+      _saveExams(updated);
+    }
+  }
+
+  Future<void> _openExamOfficialDbModal() async {
+    final result = await showExamOfficialDbModal(context);
+    if (result != null && mounted) {
+      final exams = _getExams();
+      final updated = [result, ...exams];
+      _saveExams(updated);
+    }
+  }
+
   List<PetProfile> _getPetProfiles() {
     final meta = _category.metadata;
     final petsRaw = meta?['pets'] as List<dynamic>?;
@@ -627,6 +1010,38 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                 ),
               ),
             )
+          else if (_category.categoryKey == 'exam')
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: _openExamOfficialDbModal,
+                  icon: const Icon(Icons.menu_book_rounded, size: 16, color: Color(0xFF2563EB)),
+                  label: const Text(
+                    '공식 DB',
+                    style: TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: TextButton.icon(
+                    onPressed: () => _openAddExamModal(),
+                    icon: const Icon(Icons.add_rounded, size: 17, color: Color(0xFF0F172A)),
+                    label: const Text(
+                      '+ 시험 추가',
+                      style: TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
           else ...[
             if (_category.categoryKey != 'pet')
               TextButton.icon(
@@ -684,7 +1099,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                             )
                           : _category.categoryKey == 'birthday'
                               ? _buildBirthdayBody()
-                              : Column(
+                              : _category.categoryKey == 'exam'
+                                  ? _buildExamBody()
+                                  : Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                   // 1. 상단 카드 영역 (Pet: 패밀리 카드 캐러셀 / 기타: 커스텀 꾸미기 카드)
@@ -728,6 +1145,46 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                     FandomMemberListWidget(
                       members: _getFandomMembers(),
                       onMembersChanged: (members) => _saveFandomMembers(members),
+                    ),
+                  ] else if (_category.categoryKey == 'baby') ...[
+                    BabyGrowthCardWidget(
+                      profile: _getBabyProfile(),
+                      onTapEdit: () async {
+                        final updated = await showBabyOnboardingSheet(
+                          context,
+                          category: _category,
+                          ref: ref,
+                          editProfile: _getBabyProfile(),
+                        );
+                        if (updated == true && mounted) _reloadCategory();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    BabyCareQuickBarWidget(
+                      profile: _getBabyProfile(),
+                      onLogQuickCare: _handleQuickCareLog,
+                      onLogDetailedCare: _handleDetailedCareLog,
+                      onOpenCareHistory: _handleOpenCareHistory,
+                    ),
+                    const SizedBox(height: 16),
+                    BabyVaccineTimelineWidget(
+                      profile: _getBabyProfile(),
+                      onToggleVaccine: _handleToggleVaccine,
+                      onUpdateVaccine: (v) {},
+                    ),
+                    const SizedBox(height: 16),
+                    BabyHealthCheckupWidget(
+                      profile: _getBabyProfile(),
+                      onToggleCheckup: _handleToggleCheckup,
+                      onOpenAddGrowthRecord: _handleOpenAddGrowthRecord,
+                    ),
+                    const SizedBox(height: 20),
+                  ] else if (_category.categoryKey == 'solo') ...[
+                    SoloTopCardWidget(
+                      profile: _getSoloProfile(),
+                      onProfileChanged: (updated) => _saveSoloProfile(updated),
+                      onSelectTag: (tag) => _openAddEventWithTag(tag),
+                      onAddNewTag: (tag) => _addSoloTag(tag),
                     ),
                     const SizedBox(height: 16),
                   ] else if (_category.showVisualCard) ...[
@@ -865,15 +1322,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    if (_category.categoryKey == 'baby') ...[
-                      BabyProfileCardWidget(
-                        babyName: _category.metadata?['babyName'] as String? ?? '우리 아기 👶',
-                        birthDate: _category.metadata?['birthDate'] != null
-                            ? DateTime.parse(_category.metadata!['birthDate'] as String)
-                            : DateTime.now().subtract(const Duration(days: 100)),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
                   ],
 
                   // 구분선
@@ -1501,6 +1949,195 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             );
           },
         ),
+      ],
+    );
+  }
+
+  Widget _buildExamBody() {
+    final exams = _getExams();
+    final sortedExams = const ExamCategoryController().sortExamsByUrgency(exams);
+
+    if (exams.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE5E5EA)),
+        ),
+        child: Column(
+          children: [
+            const Text('📝', style: TextStyle(fontSize: 44)),
+            const SizedBox(height: 12),
+            Text(
+              '등록된 시험 일정이 없습니다',
+              style: AppTypography.heading2.copyWith(color: AppColors.protoHeading),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '원클릭으로 공식 시험 일정을 불러오거나 직접 추가해보세요!',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _openExamOfficialDbModal,
+                  icon: const Icon(Icons.menu_book_rounded, size: 18),
+                  label: const Text('공식 DB 불러오기'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2563EB),
+                    side: const BorderSide(color: Color(0xFF2563EB)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: () => _openAddExamModal(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('직접 시험 추가'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 상단 요약 & 빠른 액션 바
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.school_rounded, size: 18, color: Color(0xFF2563EB)),
+                  const SizedBox(width: 8),
+                  Text(
+                    '시험 파이프라인 관리',
+                    style: AppTypography.cardLabel.copyWith(
+                      color: AppColors.protoHeading,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '총 ${exams.length}개',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2563EB),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  InkWell(
+                    onTap: _openExamOfficialDbModal,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('📚', style: TextStyle(fontSize: 12)),
+                          SizedBox(width: 4),
+                          Text(
+                            '공식 DB',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2563EB),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () => _openAddExamModal(),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, size: 14, color: Colors.white),
+                          SizedBox(width: 2),
+                          Text(
+                            '추가',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 시험 카드 목록 (가장 임박한 세부 일정순으로 정렬)
+        ...sortedExams.map((exam) {
+          return ExamCardWidget(
+            key: ValueKey(exam.id),
+            exam: exam,
+            onEdit: () => _openAddExamModal(exam),
+            onDelete: () {
+              final updated = exams.where((e) => e.id != exam.id).toList();
+              _saveExams(updated);
+            },
+            onExamChanged: (updatedExam) {
+              final updated = exams.map((e) => e.id == updatedExam.id ? updatedExam : e).toList();
+              _saveExams(updated);
+            },
+          );
+        }),
       ],
     );
   }

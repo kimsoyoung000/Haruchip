@@ -174,12 +174,14 @@ void main() {
     const controller = BabyCategoryController();
     final relativeTo = DateTime(2026, 9, 23);
 
-    test('Formats baby age as N일째 (X개월 Y일째)', () {
+    test('Formats baby age and days count accurately', () {
       final birthDate = DateTime(2026, 5, 20); // 약 4개월 전
-      final formatted = controller.formatBabyAgeDetailed(birthDate, relativeTo);
+      final daysCount = controller.formatBabyDaysCount(birthDate, relativeTo);
+      final formattedAge = controller.formatBabyAgeDetailed(birthDate, relativeTo);
 
-      expect(formatted, contains('126일째'));
-      expect(formatted, contains('4개월 3일째'));
+      expect(daysCount, contains('127일째'));
+      expect(formattedAge, contains('4개월 3일차'));
+      expect(formattedAge, contains('18주 0일'));
     });
   });
 

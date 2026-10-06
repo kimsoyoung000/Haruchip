@@ -3,7 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../../categories/controllers/baby_category_controller.dart';
+import '../../categories/logic/repeat_rule.dart';
+import '../../categories/models/baby_profile.dart';
 import '../../categories/models/category_model.dart';
+import '../../categories/models/solo_profile.dart';
+import '../../couple/providers/couple_provider.dart';
 import '../../military/providers/military_provider.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart' show dDayLabel;
@@ -91,14 +96,6 @@ class CategoryThemePalette {
           primary: Color(0xFFDB2777),
           text: Color(0xFF831843),
         );
-      case 'custom':
-        return const CategoryThemePalette(
-          bg: Color(0xFFF0FDFA),
-          border: Color(0xFFCCFBF1),
-          chipBg: Color(0xFFCCFBF1),
-          primary: Color(0xFF0D9488),
-          text: Color(0xFF115E59),
-        );
       case 'goal':
         return const CategoryThemePalette(
           bg: Color(0xFFF0FDF4),
@@ -116,13 +113,6 @@ class CategoryThemePalette {
           text: Color(0xFF075985),
         );
       case 'plan':
-        return const CategoryThemePalette(
-          bg: Color(0xFFF8FAFC),
-          border: Color(0xFFE2E8F0),
-          chipBg: Color(0xFFE2E8F0),
-          primary: Color(0xFF334155),
-          text: Color(0xFF0F172A),
-        );
       default:
         return const CategoryThemePalette(
           bg: Color(0xFFF8FAFC),
@@ -136,8 +126,6 @@ class CategoryThemePalette {
 }
 
 /// 홈/대시보드 메인 표준 카테고리 요약 카드
-/// - 정보 구조: [우선순위 상단 N일째 최대 2개] + [가장 임박한 세부 D-Day 최대 2개]
-/// - 군더더기 버튼(+, 추가, 연동 등) 없이 카드 탭 시 해당 상세 화면으로 라우팅
 class CategorySummaryDashboardCard extends ConsumerWidget {
   const CategorySummaryDashboardCard({
     super.key,
@@ -146,6 +134,10 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     required this.countDownItems,
     this.customCountUpText,
     this.onTap,
+    this.onLongPress,
+    this.onHide,
+    this.isEditMode = false,
+    this.isWideList = false,
   });
 
   final CategoryModel category;
@@ -153,6 +145,10 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
   final List<PlanItem> countDownItems;
   final String? customCountUpText;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onHide;
+  final bool isEditMode;
+  final bool isWideList;
 
   String _formatDaysCount(DateTime date) {
     final now = DateTime.now();
@@ -165,29 +161,35 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = CategoryThemePalette.forCategoryKey(category.categoryKey);
-    final isMilitary = category.categoryKey == 'military';
+    final key = category.categoryKey;
 
     return InkWell(
-      onTap: onTap,
+      onTap: isEditMode ? null : onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: palette.bg,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: palette.border, width: 1.5),
+          border: Border.all(
+            color: isEditMode ? palette.primary : palette.border,
+            width: isEditMode ? 2.0 : 1.5,
+          ),
           boxShadow: [
             BoxShadow(
-              color: palette.primary.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              color: palette.primary.withValues(alpha: isEditMode ? 0.12 : 0.04),
+              blurRadius: isEditMode ? 14 : 10,
+              offset: isEditMode ? const Offset(0, 4) : const Offset(0, 3),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // 1. 헤더: 아이콘 + 카테고리 이름 + 바로가기 화살표
+            // 1. 헤더: 아이콘 + 카테고리 이름 + 바로가기 화살표 / 편집 모드 숨김 & 핸들
             Row(
               children: [
                 Container(
@@ -213,18 +215,41 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: palette.primary.withValues(alpha: 0.7),
-                ),
+                if (isEditMode) ...[
+                  if (onHide != null)
+                    IconButton(
+                      icon: const Icon(Icons.visibility_off_outlined, size: 20, color: Color(0xFF6B7280)),
+                      tooltip: '대시보드에서 숨기기',
+                      onPressed: onHide,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.drag_handle_rounded, size: 22, color: Color(0xFF9CA3AF)),
+                ] else ...[
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: palette.primary.withValues(alpha: 0.7),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 12),
 
-            // 2. 군대 카테고리 전용 요약 UI
-            if (isMilitary)
+            // 2. 카테고리별 특화 맞춤 요약 UI
+            if (key == 'military')
               _buildMilitaryBody(context, ref, palette)
+            else if (key == 'couple')
+              _buildCoupleBody(context, ref, palette)
+            else if (key == 'baby')
+              _buildBabyBody(context, ref, palette)
+            else if (key == 'exam' || key == 'study')
+              _buildExamBody(context, ref, palette)
+            else if (key == 'solo')
+              _buildSoloBody(context, ref, palette)
+            else if (key == 'routine')
+              _buildRoutineBody(context, ref, palette)
             else
               _buildStandardBody(palette),
           ],
@@ -233,6 +258,49 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     );
   }
 
+  /// 1. 커플 카테고리 특화 요약 (함께한 지 N일째 + 가장 임박한 기념일 D-Day 2개)
+  Widget _buildCoupleBody(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryThemePalette palette,
+  ) {
+    final totalDays = ref.watch(totalDaysTogetherProvider);
+    final countUpLabel = '함께한 지 D+$totalDays일째';
+    final topDdays = countDownItems.take(2).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: palette.chipBg,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            countUpLabel,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: palette.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (topDdays.isNotEmpty)
+          for (final item in topDdays) ...[
+            _buildDdayRow(item.title, dDayLabel(item.date), palette),
+          ]
+        else
+          Text(
+            '등록된 기념일 일정이 없어요',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+          ),
+      ],
+    );
+  }
+
+  /// 2. 군대 카테고리 특화 요약
   Widget _buildMilitaryBody(
     BuildContext context,
     WidgetRef ref,
@@ -250,31 +318,20 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 복무율 및 전역일
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               '복무율 $progressPercent%',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: palette.primary,
-              ),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: palette.primary),
             ),
             Text(
               '전역 $dischargeDday',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: palette.text,
-              ),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: palette.text),
             ),
           ],
         ),
         const SizedBox(height: 6),
-
-        // 프로그레스 바
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
@@ -285,85 +342,15 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 10),
-
-        // [다음 진급일 D-Day] + [다음 휴가 D-Day] + [남은 총 휴가 개수]
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: palette.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('🎖️', style: TextStyle(fontSize: 11)),
-                    const SizedBox(width: 4),
-                    Text(
-                      nextRankMilestone == null
-                          ? '${currentRank.labelKo} (진급 완료)'
-                          : '${nextRankMilestone.rank.labelKo} $nextRankDday',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: palette.text,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildMiniTag('🎖️', nextRankMilestone == null ? '${currentRank.labelKo} (진급 완료)' : '${nextRankMilestone.rank.labelKo} $nextRankDday', palette),
               const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: palette.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('🏖️', style: TextStyle(fontSize: 11)),
-                    const SizedBox(width: 4),
-                    Text(
-                      leaveDday != null ? '휴가 $leaveDday' : '휴가 미설정',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: palette.text,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildMiniTag('🏖️', leaveDday != null ? '휴가 $leaveDday' : '휴가 미설정', palette),
               const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: palette.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('⏳', style: TextStyle(fontSize: 11)),
-                    const SizedBox(width: 4),
-                    Text(
-                      '남은 휴가 $remainingVacationDays일',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: palette.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildMiniTag('⏳', '남은 휴가 $remainingVacationDays일', palette),
             ],
           ),
         ),
@@ -371,8 +358,333 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     );
   }
 
+  /// 3. 아기 카테고리 특화 요약 (태어난 지 N일째 / 개월수 롤링 + 다음 예방접종/검진 D-Day 2개)
+  Widget _buildBabyBody(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryThemePalette palette,
+  ) {
+    BabyProfile? babyProfile;
+    if (category.metadata?['babyProfile'] != null) {
+      try {
+        babyProfile = BabyProfile.fromJson(Map<String, dynamic>.from(category.metadata!['babyProfile'] as Map));
+      } catch (_) {}
+    }
+    final topDdays = countDownItems.take(2).toList();
+    const babyController = BabyCategoryController();
+
+    String daysCountText = '태어난 지 1일째';
+    String detailedAge = '생후 1개월차';
+    if (babyProfile != null) {
+      daysCountText = babyController.formatBabyDaysCount(babyProfile.birthDate);
+      detailedAge = babyController.formatBabyAgeDetailed(babyProfile.birthDate);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: palette.chipBg,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                daysCountText,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: palette.border),
+              ),
+              child: Text(
+                detailedAge,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: palette.text),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (topDdays.isNotEmpty)
+          for (final item in topDdays) ...[
+            _buildDdayRow(item.title, dDayLabel(item.date), palette),
+          ]
+        else
+          Text(
+            '등록된 접종/검진 일정이 없어요',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+          ),
+      ],
+    );
+  }
+
+  /// 4. 시험/자격증 카테고리 특화 요약 (가장 먼저 닥쳐오는 세부 단계 2개)
+  Widget _buildExamBody(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryThemePalette palette,
+  ) {
+    final topDdays = countDownItems.take(2).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (countDownItems.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: palette.chipBg,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '준비 중인 시험 일정 ${countDownItems.length}개',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (topDdays.isNotEmpty)
+          for (final item in topDdays) ...[
+            _buildDdayRow(item.title, dDayLabel(item.date), palette),
+          ]
+        else
+          Text(
+            '등록된 시험 일정이 없어요',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+          ),
+      ],
+    );
+  }
+
+  /// 5. 솔로 카테고리 특화 요약 (나에게 집중한 지 N일째 + 자기계발/설렘 D-Day 2개)
+  Widget _buildSoloBody(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryThemePalette palette,
+  ) {
+    SoloProfile? soloProfile;
+    if (category.metadata?['soloProfile'] != null) {
+      try {
+        soloProfile = SoloProfile.fromJson(Map<String, dynamic>.from(category.metadata!['soloProfile'] as Map));
+      } catch (_) {}
+    }
+    final daysSinceStart = soloProfile?.daysCount() ?? (countUpItems.isNotEmpty ? DateTime.now().difference(countUpItems.first.date).inDays : 1);
+    final countUpLabel = '나에게 집중한 지 D+$daysSinceStart일째';
+    final topDdays = countDownItems.take(2).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: palette.chipBg,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            countUpLabel,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (topDdays.isNotEmpty)
+          for (final item in topDdays) ...[
+            _buildDdayRow(item.title, dDayLabel(item.date), palette),
+          ]
+        else
+          Text(
+            '등록된 플랜이 없어요',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+          ),
+      ],
+    );
+  }
+
+  /// 6. 루틴 / 주간 계획표 특화 요약 (다가오는 루틴 일정 스마트 계산 및 뱃지)
+  Widget _buildRoutineBody(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryThemePalette palette,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final allItems = [...countDownItems, ...countUpItems];
+
+    // Calculate upcoming occurrences for each routine item
+    final upcomingList = <({PlanItem item, DateTime targetDateTime, String timeLabel, String badgeText})>[];
+
+    for (final item in allItems) {
+      final hour = item.deadlineTime?.hour ?? 0;
+      final minute = item.deadlineTime?.minute ?? 0;
+      final timeStr = item.deadlineTime != null
+          ? '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}'
+          : '';
+
+      DateTime? nextDate;
+      if (item.repeatConfig.type == RepeatType.daily) {
+        final candidate = DateTime(today.year, today.month, today.day, hour, minute);
+        if (candidate.isAfter(now) || (hour == 0 && minute == 0 && !candidate.isBefore(today))) {
+          nextDate = candidate;
+        } else {
+          nextDate = candidate.add(const Duration(days: 1));
+        }
+      } else if (item.repeatConfig.type == RepeatType.weekly && item.repeatConfig.weekdays.isNotEmpty) {
+        for (int i = 0; i <= 7; i++) {
+          final checkDate = today.add(Duration(days: i));
+          final checkWd = checkDate.weekday % 7; // 0 for Sunday
+          if (item.repeatConfig.weekdays.contains(checkWd) || item.repeatConfig.weekdays.contains(checkDate.weekday)) {
+            final cand = DateTime(checkDate.year, checkDate.month, checkDate.day, hour, minute);
+            if (cand.isAfter(now) || i > 0) {
+              nextDate = cand;
+              break;
+            }
+          }
+        }
+      }
+
+      nextDate ??= DateTime(item.date.year, item.date.month, item.date.day, hour, minute);
+
+      final diffDays = DateTime(nextDate.year, nextDate.month, nextDate.day).difference(today).inDays;
+      String timeLabel;
+      String badgeText;
+
+      const weekdaysKo = ['일', '월', '화', '수', '목', '금', '토'];
+      final weekdayKo = weekdaysKo[nextDate.weekday % 7];
+
+      if (diffDays == 0) {
+        timeLabel = timeStr.isNotEmpty ? '오늘 $timeStr' : '오늘';
+        final diffMinutes = nextDate.difference(now).inMinutes;
+        if (diffMinutes > 0 && diffMinutes < 60) {
+          badgeText = '$diffMinutes분 전';
+        } else if (diffMinutes >= 60 && diffMinutes <= 1440) {
+          final diffHours = (diffMinutes / 60).floor();
+          badgeText = '$diffHours시간 전';
+        } else {
+          badgeText = '오늘';
+        }
+      } else if (diffDays == 1) {
+        timeLabel = timeStr.isNotEmpty ? '내일 $timeStr' : '내일';
+        badgeText = '내일';
+      } else {
+        timeLabel = timeStr.isNotEmpty ? '$weekdayKo요일 $timeStr' : '$weekdayKo요일';
+        badgeText = diffDays > 0 ? 'D-$diffDays' : dDayLabel(item.date);
+      }
+
+      upcomingList.add((
+        item: item,
+        targetDateTime: nextDate,
+        timeLabel: timeLabel,
+        badgeText: badgeText,
+      ));
+    }
+
+    upcomingList.sort((a, b) => a.targetDateTime.compareTo(b.targetDateTime));
+
+    final displayList = upcomingList.take(2).toList();
+    final todayCount = upcomingList.where((e) {
+      return DateTime(e.targetDateTime.year, e.targetDateTime.month, e.targetDateTime.day) == today;
+    }).length;
+
+    final topPillText = todayCount > 0 ? '오늘 예정된 루틴 $todayCount개' : '다가오는 루틴 일정';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: palette.chipBg,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            topPillText,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: palette.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (displayList.isNotEmpty)
+          for (final entry in displayList) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: palette.border.withValues(alpha: 0.8)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          entry.item.title,
+                          style: AppTypography.caption.copyWith(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.protoHeading,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (entry.timeLabel.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            entry.timeLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: palette.text.withValues(alpha: 0.8),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: palette.primary,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      entry.badgeText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ]
+        else
+          Text(
+            '등록된 루틴 일정이 없어요',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+          ),
+      ],
+    );
+  }
+
+  /// 공통 표준 바디 (덕질, 반려동물, 목표, 일정 등)
   Widget _buildStandardBody(CategoryThemePalette palette) {
-    // 1. 상단 N일째 항목들 (최대 2개)
     final topCountUpPills = <Widget>[];
 
     if (customCountUpText != null && customCountUpText!.isNotEmpty) {
@@ -385,11 +697,7 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
           ),
           child: Text(
             customCountUpText!,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: palette.primary,
-            ),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
           ),
         ),
       );
@@ -406,26 +714,19 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
           ),
           child: Text(
             '${item.title} ${_formatDaysCount(item.date)}',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: palette.primary,
-            ),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
           ),
         ),
       );
       if (topCountUpPills.length >= 2) break;
     }
 
-    // 2. 세부 D-Day 항목들 (최대 2개)
     final topDDayItems = countDownItems.take(2).toList();
-
     final hasNoData = topCountUpPills.isEmpty && topDDayItems.isEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 상단 N일째 배지 (최대 2개)
         if (topCountUpPills.isNotEmpty) ...[
           Wrap(
             spacing: 6,
@@ -434,66 +735,86 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
           ),
           if (topDDayItems.isNotEmpty) const SizedBox(height: 10),
         ],
-
-        // 하단 세부 D-Day 리스트 (최대 2개)
         if (topDDayItems.isNotEmpty) ...[
           for (final item in topDDayItems) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: palette.border.withValues(alpha: 0.8)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      style: AppTypography.caption.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.protoHeading,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                    decoration: BoxDecoration(
-                      color: palette.primary,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      dDayLabel(item.date),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildDdayRow(item.title, dDayLabel(item.date), palette),
           ],
         ] else if (hasNoData) ...[
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
               '등록된 디데이 일정이 없어요',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade500,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
             ),
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildDdayRow(String title, String dDayText, CategoryThemePalette palette) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.border.withValues(alpha: 0.8)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: AppTypography.caption.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.protoHeading,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+            decoration: BoxDecoration(
+              color: palette.primary,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              dDayText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniTag(String emoji, String text, CategoryThemePalette palette) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 11)),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: palette.text),
+          ),
+        ],
+      ),
     );
   }
 }

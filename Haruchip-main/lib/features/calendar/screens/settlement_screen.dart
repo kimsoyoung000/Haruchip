@@ -718,6 +718,57 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
                       ],
                     ),
                   ),
+
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    final totalAmt = room.rounds.fold<int>(0, (sum, r) => sum + r.totalAmount);
+                    final perMemberAmounts = <String, int>{};
+                    final transferStatus = <String, bool>{};
+
+                    for (final d in multiResult.memberDetails) {
+                      if (d.netBalance < 0) {
+                        perMemberAmounts[d.member.uid] = -d.netBalance;
+                        transferStatus[d.member.uid] = false;
+                      } else {
+                        transferStatus[d.member.uid] = true;
+                      }
+                    }
+
+                    final newRecord = SettlementRecord(
+                      id: 'settle-rec-${DateTime.now().microsecondsSinceEpoch}',
+                      roomId: room.id,
+                      title: '${DateTime.now().month}/${DateTime.now().day} ${room.name} ${room.rounds.length}차 정산',
+                      date: DateTime.now(),
+                      totalAmount: totalAmt,
+                      rounds: room.rounds,
+                      payerUid: room.members.isNotEmpty ? room.members.first.uid : null,
+                      attendeeUids: room.members.map((m) => m.uid).toList(),
+                      perMemberAmounts: perMemberAmounts,
+                      transferStatus: transferStatus,
+                      createdAt: DateTime.now(),
+                    );
+
+                    ref.read(scheduleRoomsProvider.notifier).addSettlementRecord(room.id, newRecord);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('🧾 정산 영수증이 모임 장부에 성공적으로 저장되었습니다!')),
+                    );
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                  label: const Text('정산 완료 및 영수증 장부에 저장', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
             ],
           ),
         ),

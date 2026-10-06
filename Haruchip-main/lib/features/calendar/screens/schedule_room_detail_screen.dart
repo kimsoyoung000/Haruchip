@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design_system/colors.dart';
-import '../../../design_system/typography.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
+import '../../trash/models/trash_item.dart';
+import '../../trash/providers/trash_provider.dart';
+import '../data/calendar_mock_data.dart';
 import '../models/schedule_room.dart';
 import '../providers/schedule_room_provider.dart';
 import '../widgets/add_room_event_dialog.dart';
@@ -32,6 +35,9 @@ class _ScheduleRoomDetailScreenState
   late TabController _tabController;
   late DateTime _focusedMonth;
   late DateTime _selectedCalendarDate;
+  Timer? _countdownTimer;
+  final Map<String, TextEditingController> _commentControllers = {};
+  final Set<String> _expandedSettlementAccordions = {};
 
   @override
   void initState() {
@@ -40,11 +46,20 @@ class _ScheduleRoomDetailScreenState
     final today = DateTime.now();
     _focusedMonth = DateTime(today.year, today.month, 1);
     _selectedCalendarDate = DateTime(today.year, today.month, today.day);
+
+    // 1초 주기로 투표 마감 카운트다운 갱신
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _tabController.dispose();
+    for (final c in _commentControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -119,133 +134,39 @@ class _ScheduleRoomDetailScreenState
   void _editMyProfile(ScheduleRoom room, RoomMember myMember) async {
     final takenColors = room.members
         .where((m) => m.uid != myMember.uid)
-        .map((m) => m.colorHex)
+        .map((m) => m.colorHex.toUpperCase())
         .toList();
 
-    final nameController = TextEditingController(text: myMember.name);
-    String currentIcon = myMember.icon;
-    String currentColor = myMember.colorHex;
+    final pickedHex = await showMemberColorPickerDialog(
+      context,
+      currentColorHex: myMember.colorHex,
+      takenColorHexList: takenColors,
+    );
 
-    await showDialog<void>(
-      context: context,
-      builder: (dlgCtx) => StatefulBuilder(
-        builder: (context, setDlgState) {
-          return Dialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '🎨 내 프로필 & 컬러 칩 수정',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: '닉네임',
-                      filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('대표 이모티콘', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    children: ['👤', '😎', '🐶', '🐱', '🐰', '🐼', '🦊', '🐻', '🐥', '🦄'].map((emo) {
-                      final isSelected = emo == currentIcon;
-                      return GestureDetector(
-                        onTap: () => setDlgState(() => currentIcon = emo),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(emo, style: const TextStyle(fontSize: 18)),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('내 컬러 칩 (50색 파스텔)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                  const SizedBox(height: 6),
-                  InkWell(
-                    onTap: () async {
-                      final pickedHex = await showMemberColorPickerDialog(
-                        context,
-                        currentColorHex: currentColor,
-                        takenColorHexList: takenColors,
-                      );
-                      if (pickedHex != null) {
-                        setDlgState(() => currentColor = pickedHex);
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: _hexToColor(currentColor),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(currentColor, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          const Text('색상 변경 >', style: TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (nameController.text.trim().isNotEmpty) {
-                          ref.read(scheduleRoomsProvider.notifier).updateMemberCustomization(
-                                roomId: room.id,
-                                uid: myMember.uid,
-                                name: nameController.text.trim(),
-                                icon: currentIcon,
-                                colorHex: currentColor,
-                              );
-                          Navigator.of(dlgCtx).pop();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F172A),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('수정 저장'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    if (pickedHex != null) {
+      ref.read(scheduleRoomsProvider.notifier).updateMemberCustomization(
+            roomId: room.id,
+            uid: myMember.uid,
+            colorHex: pickedHex,
           );
-        },
+    }
+  }
+
+  void _copyInviteCode(String code) {
+    Clipboard.setData(ClipboardData(text: code));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('📋 모임 초대코드 [$code] 복사 완료!'),
+        behavior: SnackBarBehavior.floating,
       ),
+    );
+  }
+
+  void _handleSend(BuildContext context, String provider, String toName, int amount) {
+    final label = provider == 'kakao' ? '카카오페이' : '토스';
+    Clipboard.setData(ClipboardData(text: '$toName $amount원'));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('💸 $label 송금 정보 복사 완료 — $toName에게 $amount원')),
     );
   }
 
@@ -254,107 +175,162 @@ class _ScheduleRoomDetailScreenState
     final rooms = ref.watch(scheduleRoomsProvider);
     final room = rooms.firstWhere(
       (r) => r.id == widget.roomId,
-      orElse: () => ScheduleRoom(
-        id: widget.roomId,
-        name: '모임',
-        inviteCode: '-',
-        members: const [],
-        dates: const {},
-      ),
+      orElse: () => mockScheduleRooms.first,
     );
 
-    final myUid = room.members.isNotEmpty ? room.members.first.uid : '';
+    final myProfile = ref.watch(currentUserProfileProvider);
     final myMember = room.members.firstWhere(
-      (m) => m.uid == myUid,
-      orElse: () => RoomMember(uid: myUid, name: '나', icon: '👤', colorHex: '#A7F3D0'),
+      (m) => m.uid == myProfile.uid || m.name == myProfile.name,
+      orElse: () => room.members.isNotEmpty
+          ? room.members.first
+          : RoomMember(uid: myProfile.uid, name: myProfile.name, icon: myProfile.icon),
     );
+
+    final pinnedNotices = room.notices.where((n) => n.isPinned).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.protoBackground,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        foregroundColor: const Color(0xFF0F172A),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.protoHeading),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
+                Text(
+                  room.name,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     room.categoryTag,
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    room.name,
-                    style: AppTypography.cardLabel.copyWith(
-                      color: const Color(0xFF0F172A),
-                      fontSize: 16,
+                    style: const TextStyle(
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
+                      color: Color(0xFF2563EB),
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
+            ),
+            InkWell(
+              onTap: () => _copyInviteCode(room.inviteCode),
+              child: Row(
+                children: [
+                  Text(
+                    '코드: ${room.inviteCode}',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.copy_rounded, size: 11, color: Color(0xFF94A3B8)),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: '초대 코드 복사',
-            icon: const Icon(Icons.share_outlined, size: 20),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: room.inviteCode));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('초대 코드 [${room.inviteCode}]가 복사되었습니다. 친구에게 공유하세요!'),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            tooltip: '내 프로필/컬러 설정',
-            icon: const Icon(Icons.palette_outlined, size: 20),
+            icon: const Icon(Icons.person_pin_rounded, color: Color(0xFF0F172A)),
+            tooltip: '내 컬러 및 이모지 변경',
             onPressed: () => _editMyProfile(room, myMember),
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            color: Colors.white,
-            child: TabBar(
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: const Color(0xFF0F172A),
+          unselectedLabelColor: const Color(0xFF94A3B8),
+          indicatorColor: const Color(0xFF0F172A),
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          tabs: const [
+            Tab(text: '공유 캘린더'),
+            Tab(text: '일정 조율'),
+            Tab(text: '공지 / 투표'),
+            Tab(text: '정산 장부'),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          // 상단 고정(Pin) 공지 배너
+          if (pinnedNotices.isNotEmpty) _buildPinnedNoticesBanner(room, pinnedNotices),
+
+          Expanded(
+            child: TabBarView(
               controller: _tabController,
-              indicatorColor: const Color(0xFF0F172A),
-              indicatorWeight: 2.5,
-              labelColor: const Color(0xFF0F172A),
-              unselectedLabelColor: const Color(0xFF94A3B8),
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-              unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-              tabs: const [
-                Tab(text: '📅 공유캘린더'),
-                Tab(text: '🗳️ 일정조율'),
-                Tab(text: '📌 공지/투표'),
-                Tab(text: '💰 정산'),
+              children: [
+                _buildSharedCalendarTab(room, myMember),
+                _buildAvailabilityTab(room, myMember.uid),
+                _buildNoticeAndVoteTab(room, myMember),
+                _buildSettlementTab(room, myMember),
               ],
             ),
           ),
-        ),
+        ],
       ),
-      body: TabBarView(
-        controller: _tabController,
+    );
+  }
+
+  // 0. 상단 고정(Pin) 공지사항 배너
+  Widget _buildPinnedNoticesBanner(ScheduleRoom room, List<RoomNotice> pinnedNotices) {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFFFFBEB),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
         children: [
-          _buildSharedCalendarTab(room, myMember),
-          _buildAvailabilityTab(room, myUid),
-          _buildNoticeAndVoteTab(room, myMember),
-          _buildSettlementTab(room),
+          const Icon(Icons.push_pin, size: 16, color: Color(0xFFD97706)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      '📌 고정 공지',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD97706)),
+                    ),
+                    if (pinnedNotices.length > 1)
+                      Text(
+                        ' (외 ${pinnedNotices.length - 1}건)',
+                        style: const TextStyle(fontSize: 10, color: Color(0xFF92400E)),
+                      ),
+                  ],
+                ),
+                Text(
+                  pinnedNotices.first.content,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFFD97706)),
+            onPressed: () {
+              _tabController.animateTo(2); // 공지 탭으로 이동
+            },
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
         ],
       ),
     );
@@ -362,35 +338,34 @@ class _ScheduleRoomDetailScreenState
 
   // 1. 공유 캘린더 탭
   Widget _buildSharedCalendarTab(ScheduleRoom room, RoomMember myMember) {
-    final eventsForSelectedDate = room.events
-        .where((e) =>
-            e.date.year == _selectedCalendarDate.year &&
-            e.date.month == _selectedCalendarDate.month &&
-            e.date.day == _selectedCalendarDate.day)
-        .toList();
+    final selectedEvents = room.events.where((e) {
+      return e.date.year == _selectedCalendarDate.year &&
+          e.date.month == _selectedCalendarDate.month &&
+          e.date.day == _selectedCalendarDate.day;
+    }).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Members Bar
-          _buildMembersHorizontalBar(room, myMember),
+          // Member avatars row
+          _buildMembersHorizontalList(room),
           const SizedBox(height: 16),
 
-          // Mini Month Grid
+          // Shared Month Calendar Grid
           _buildSharedCalendarMonthGrid(room),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
 
-          // Events of Selected Date
+          // Events on selected date
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${_selectedCalendarDate.month}월 ${_selectedCalendarDate.day}일 일정 (${eventsForSelectedDate.length})',
+                '${_selectedCalendarDate.month}월 ${_selectedCalendarDate.day}일 공유 일정',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
               ),
-              ElevatedButton.icon(
+              TextButton.icon(
                 onPressed: () async {
                   final newEvent = await showAddRoomEventDialog(
                     context,
@@ -402,21 +377,14 @@ class _ScheduleRoomDetailScreenState
                     ref.read(scheduleRoomsProvider.notifier).addRoomEvent(room.id, newEvent);
                   }
                 },
-                icon: const Icon(Icons.add_rounded, size: 16),
-                label: const Text('일정 등록', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F172A),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('일정 등록', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
-          if (eventsForSelectedDate.isEmpty)
+          if (selectedEvents.isEmpty)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 24),
@@ -426,23 +394,19 @@ class _ScheduleRoomDetailScreenState
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: const Center(
-                child: Text(
-                  '선택된 날짜에 등록된 모임 일정이 없습니다',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                ),
+                child: Text('이 날짜에는 등록된 일정이 없습니다.', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
               ),
             )
           else
-            for (final ev in eventsForSelectedDate)
-              _buildEventTile(room, ev),
+            for (final ev in selectedEvents) _buildEventTile(room, ev),
         ],
       ),
     );
   }
 
-  Widget _buildMembersHorizontalBar(ScheduleRoom room, RoomMember myMember) {
+  Widget _buildMembersHorizontalList(ScheduleRoom room) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -456,50 +420,49 @@ class _ScheduleRoomDetailScreenState
             children: [
               Text(
                 '참여 멤버 (${room.members.length}명)',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
               ),
               InkWell(
-                onTap: () => _editMyProfile(room, myMember),
-                child: const Text(
-                  '내 칩 설정 🎨',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                onTap: () => _copyInviteCode(room.inviteCode),
+                child: const Row(
+                  children: [
+                    Icon(Icons.person_add_alt_1_rounded, size: 14, color: Color(0xFF2563EB)),
+                    SizedBox(width: 4),
+                    Text('친구 초대', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final m in room.members)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _hexToColor(m.colorHex).withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: _hexToColor(m.colorHex)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: _hexToColor(m.colorHex),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${m.icon} ${m.name}${m.uid == myMember.uid ? ' (나)' : ''}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                      ),
-                    ],
-                  ),
+            spacing: 8,
+            runSpacing: 8,
+            children: room.members.map((m) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _hexToColor(m.colorHex).withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _hexToColor(m.colorHex)),
                 ),
-            ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(m.icon, style: const TextStyle(fontSize: 14)),
+                    const SizedBox(width: 4),
+                    Text(
+                      m.name,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    if (m.isHost) ...[
+                      const SizedBox(width: 4),
+                      const Text('👑', style: TextStyle(fontSize: 10)),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -521,7 +484,6 @@ class _ScheduleRoomDetailScreenState
       ),
       child: Column(
         children: [
-          // Month navigation
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -544,7 +506,6 @@ class _ScheduleRoomDetailScreenState
             ],
           ),
           const SizedBox(height: 10),
-          // Weekday header
           Row(
             children: ['일', '월', '화', '수', '목', '금', '토'].map((w) {
               return Expanded(
@@ -562,7 +523,6 @@ class _ScheduleRoomDetailScreenState
             }).toList(),
           ),
           const SizedBox(height: 8),
-          // Days grid
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -584,7 +544,6 @@ class _ScheduleRoomDetailScreenState
                   cellDate.month == _selectedCalendarDate.month &&
                   cellDate.day == _selectedCalendarDate.day;
 
-              // Find events on this date
               final dateEvents = room.events
                   .where((e) =>
                       e.date.year == cellDate.year &&
@@ -623,7 +582,7 @@ class _ScheduleRoomDetailScreenState
                             children: dateEvents.take(3).map((ev) {
                               final author = room.members.firstWhere(
                                 (m) => m.uid == ev.authorUid,
-                                orElse: () => RoomMember(uid: '', name: '', icon: '', colorHex: '#38BDF8'),
+                                orElse: () => const RoomMember(uid: '', name: '', icon: '', colorHex: '#38BDF8'),
                               );
                               return Container(
                                 margin: const EdgeInsets.symmetric(horizontal: 1),
@@ -651,7 +610,7 @@ class _ScheduleRoomDetailScreenState
   Widget _buildEventTile(ScheduleRoom room, RoomSharedEvent ev) {
     final author = room.members.firstWhere(
       (m) => m.uid == ev.authorUid,
-      orElse: () => RoomMember(uid: '', name: '멤버', icon: '👤', colorHex: '#38BDF8'),
+      orElse: () => const RoomMember(uid: '', name: '멤버', icon: '👤', colorHex: '#38BDF8'),
     );
 
     return Container(
@@ -694,7 +653,20 @@ class _ScheduleRoomDetailScreenState
               IconButton(
                 icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.grey),
                 onPressed: () {
+                  ref.read(trashBinProvider.notifier).moveToTrash(
+                        TrashItem(
+                          id: 'trash-ev-${ev.id}',
+                          entityType: TrashEntityType.event,
+                          originalTitle: ev.title,
+                          deletedAt: DateTime.now(),
+                          originalData: ev.toJson(),
+                          roomId: room.id,
+                        ),
+                      );
                   ref.read(scheduleRoomsProvider.notifier).removeRoomEvent(room.id, ev.id);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('일정이 휴지통으로 이동되었습니다 (30일 보존)')),
+                  );
                 },
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -748,7 +720,7 @@ class _ScheduleRoomDetailScreenState
                 Expanded(
                   child: Text(
                     '가능한 날짜를 터치하여 등록하세요. 멤버들의 참여 가능 현황이 실시간 집계됩니다.',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                    style: TextStyle(fontSize: 12, color: Color(0xFF1E40AF), fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -756,49 +728,16 @@ class _ScheduleRoomDetailScreenState
           ),
           const SizedBox(height: 16),
 
+          // Availability Matrix Grid
           RoomAvailabilityMonthGrid(
-            focusedMonth: _focusedMonth,
             room: room,
+            focusedMonth: _focusedMonth,
             myUid: myUid,
-            onDateToggle: (date) => ref
-                .read(scheduleRoomsProvider.notifier)
-                .toggleAvailability(widget.roomId, date, myUid),
+            onDateToggle: (dateStr) {
+              ref.read(scheduleRoomsProvider.notifier).toggleAvailability(room.id, dateStr, myUid);
+            },
             onPreviousMonth: _previousMonth,
             onNextMonth: _nextMonth,
-          ),
-          const SizedBox(height: 10),
-
-          // Legend
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: AppColors.protoStepLabel,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '전원 가능',
-                style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: AppColors.protoRadioSelectedBorder,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '내가 체크함',
-                style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
-              ),
-            ],
           ),
           const SizedBox(height: 20),
 
@@ -807,7 +746,7 @@ class _ScheduleRoomDetailScreenState
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF9C3), // Soft Yellow Gold
+                color: const Color(0xFFFEF9C3),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFFFDE047)),
               ),
@@ -887,6 +826,7 @@ class _ScheduleRoomDetailScreenState
                     context,
                     authorName: myMember.name,
                     authorIcon: myMember.icon,
+                    authorUid: myMember.uid,
                   );
                   if (newNotice != null) {
                     ref.read(scheduleRoomsProvider.notifier).addRoomNotice(room.id, newNotice);
@@ -921,62 +861,7 @@ class _ScheduleRoomDetailScreenState
             )
           else
             for (final notice in room.notices)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: notice.isPinned ? const Color(0xFFFFFBEB) : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: notice.isPinned ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (notice.isPinned)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 6),
-                            child: Icon(Icons.push_pin, size: 14, color: Color(0xFFD97706)),
-                          ),
-                        Text(
-                          '${notice.authorIcon} ${notice.authorName}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: Icon(
-                            notice.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                            size: 16,
-                            color: notice.isPinned ? const Color(0xFFD97706) : Colors.grey,
-                          ),
-                          onPressed: () => ref
-                              .read(scheduleRoomsProvider.notifier)
-                              .togglePinNotice(room.id, notice.id),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.grey),
-                          onPressed: () => ref
-                              .read(scheduleRoomsProvider.notifier)
-                              .deleteRoomNotice(room.id, notice.id),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      notice.content,
-                      style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
-                    ),
-                  ],
-                ),
-              ),
+              _buildNoticeCard(room, notice, myMember),
 
           const SizedBox(height: 24),
 
@@ -1033,8 +918,245 @@ class _ScheduleRoomDetailScreenState
     );
   }
 
+  // 공지사항 카드 (핀 고정, 읽음 확인, 댓글)
+  Widget _buildNoticeCard(ScheduleRoom room, RoomNotice notice, RoomMember myMember) {
+    final hasRead = notice.confirmedMemberUids.contains(myMember.uid);
+    final confirmedMembers = room.members
+        .where((m) => notice.confirmedMemberUids.contains(m.uid))
+        .toList();
+
+    _commentControllers.putIfAbsent(notice.id, () => TextEditingController());
+    final commentCtrl = _commentControllers[notice.id]!;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: notice.isPinned ? const Color(0xFFFFFBEB) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: notice.isPinned ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0),
+          width: notice.isPinned ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (notice.isPinned)
+                const Padding(
+                  padding: EdgeInsets.only(right: 6),
+                  child: Icon(Icons.push_pin, size: 14, color: Color(0xFFD97706)),
+                ),
+              Text(
+                '${notice.authorIcon} ${notice.authorName}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+              ),
+              const Spacer(),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, size: 18, color: Colors.grey),
+                onSelected: (val) async {
+                  if (val == 'pin') {
+                    ref.read(scheduleRoomsProvider.notifier).togglePinNotice(room.id, notice.id);
+                  } else if (val == 'edit') {
+                    final updated = await showAddRoomNoticeDialog(
+                      context,
+                      authorName: notice.authorName,
+                      authorIcon: notice.authorIcon,
+                      authorUid: notice.authorUid,
+                      existingNotice: notice,
+                    );
+                    if (updated != null) {
+                      ref.read(scheduleRoomsProvider.notifier).updateRoomNotice(room.id, updated);
+                    }
+                  } else if (val == 'delete') {
+                    ref.read(trashBinProvider.notifier).moveToTrash(
+                          TrashItem(
+                            id: 'trash-notice-${notice.id}',
+                            entityType: TrashEntityType.notice,
+                            originalTitle: notice.content,
+                            deletedAt: DateTime.now(),
+                            originalData: notice.toJson(),
+                            roomId: room.id,
+                            authorName: notice.authorName,
+                          ),
+                        );
+                    ref.read(scheduleRoomsProvider.notifier).deleteRoomNotice(room.id, notice.id);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('공지가 휴지통으로 이동되었습니다 (30일 보존)')),
+                    );
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                    value: 'pin',
+                    child: Text(notice.isPinned ? '📌 핀 고정 해제' : '📌 상단 핀 고정'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Text('✏️ 공지 수정'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('🗑️ 삭제 (휴지통)'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            notice.content,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B), height: 1.4),
+          ),
+          const SizedBox(height: 12),
+
+          // 읽음 / 확인 완료 버튼 & 확인한 멤버 프로필 목록
+          Row(
+            children: [
+              InkWell(
+                onTap: () {
+                  ref.read(scheduleRoomsProvider.notifier).toggleNoticeRead(room.id, notice.id, myMember.uid);
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: hasRead ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: hasRead ? const Color(0xFF86EFAC) : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        hasRead ? Icons.check_circle_rounded : Icons.thumb_up_alt_outlined,
+                        size: 14,
+                        color: hasRead ? const Color(0xFF16A34A) : const Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        hasRead ? '확인 완료' : '확인했습니다',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: hasRead ? const Color(0xFF16A34A) : const Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (confirmedMembers.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    '${confirmedMembers.length}명 확인 (${confirmedMembers.map((m) => '${m.icon} ${m.name}').join(', ')})',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                  ),
+                ),
+            ],
+          ),
+
+          // 댓글 피드
+          if (notice.comments.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+            const SizedBox(height: 8),
+            for (final c in notice.comments)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(c.authorIcon, style: const TextStyle(fontSize: 13)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                          children: [
+                            TextSpan(text: '${c.authorName}: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            TextSpan(text: c.content),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+
+          // 댓글 작성 필드
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: commentCtrl,
+                  decoration: InputDecoration(
+                    hintText: '공지에 댓글 달기...',
+                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                icon: const Icon(Icons.send_rounded, size: 18, color: Color(0xFF0F172A)),
+                onPressed: () {
+                  final text = commentCtrl.text.trim();
+                  if (text.isNotEmpty) {
+                    ref.read(scheduleRoomsProvider.notifier).addNoticeComment(
+                          room.id,
+                          notice.id,
+                          NoticeComment(
+                            id: 'cmt-${DateTime.now().microsecondsSinceEpoch}',
+                            authorUid: myMember.uid,
+                            authorName: myMember.name,
+                            authorIcon: myMember.icon,
+                            content: text,
+                            createdAt: DateTime.now(),
+                          ),
+                        );
+                    commentCtrl.clear();
+                  }
+                },
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 투표 카드 (실시간 카운트다운 타이머, 복수/익명 투표, 재투표, 수정/마감/삭제)
   Widget _buildVoteCard(ScheduleRoom room, RoomVote vote, RoomMember myMember) {
     final totalVoters = vote.options.fold<int>(0, (sum, o) => sum + o.voterUids.length);
+    final isClosed = vote.isExpiredOrClosed;
+    final isCreator = vote.authorUid == myMember.uid || room.members.first.uid == myMember.uid;
+    final myVotedCount = vote.options.where((o) => o.voterUids.contains(myMember.uid)).length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -1054,28 +1176,107 @@ class _ScheduleRoomDetailScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header badges & Countdown Timer
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: vote.isClosed ? const Color(0xFFF1F5F9) : const Color(0xFFEFF6FF),
+                  color: isClosed ? const Color(0xFFF1F5F9) : const Color(0xFFEFF6FF),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  vote.isClosed ? '종료됨' : (vote.allowMultiple ? '복수 투표' : '단일 투표'),
+                  isClosed ? '종료됨' : (vote.allowMultiple ? '복수 투표' : '단일 투표'),
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: vote.isClosed ? const Color(0xFF64748B) : const Color(0xFF2563EB),
+                    color: isClosed ? const Color(0xFF64748B) : const Color(0xFF2563EB),
                   ),
                 ),
               ),
+              if (vote.isAnonymous) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3E8FF),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    '익명',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF7E22CE)),
+                  ),
+                ),
+              ],
               const Spacer(),
-              Text(
-                '총 $totalVoters표',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+              // Realtime Countdown Timer
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isClosed ? const Color(0xFFF1F5F9) : const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 12,
+                      color: isClosed ? const Color(0xFF64748B) : const Color(0xFFDC2626),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      vote.remainingTimeLabel,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isClosed ? const Color(0xFF64748B) : const Color(0xFFDC2626),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              if (isCreator) ...[
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_rounded, size: 18, color: Colors.grey),
+                  onSelected: (val) async {
+                    if (val == 'edit') {
+                      final updated = await showAddRoomVoteDialog(
+                        context,
+                        authorUid: myMember.uid,
+                        existingVote: vote,
+                      );
+                      if (updated != null) {
+                        ref.read(scheduleRoomsProvider.notifier).updateRoomVote(room.id, updated);
+                      }
+                    } else if (val == 'close') {
+                      ref.read(scheduleRoomsProvider.notifier).closeRoomVote(room.id, vote.id);
+                    } else if (val == 'delete') {
+                      ref.read(trashBinProvider.notifier).moveToTrash(
+                            TrashItem(
+                              id: 'trash-vote-${vote.id}',
+                              entityType: TrashEntityType.vote,
+                              originalTitle: vote.title,
+                              deletedAt: DateTime.now(),
+                              originalData: vote.toJson(),
+                              roomId: room.id,
+                            ),
+                          );
+                      ref.read(scheduleRoomsProvider.notifier).deleteRoomVote(room.id, vote.id);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('투표가 휴지통으로 이동되었습니다 (30일 보존)')),
+                      );
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    if (!isClosed)
+                      const PopupMenuItem(value: 'close', child: Text('🔒 조기 마감하기')),
+                    const PopupMenuItem(value: 'edit', child: Text('✏️ 투표 수정')),
+                    const PopupMenuItem(value: 'delete', child: Text('🗑️ 삭제 (휴지통)')),
+                  ],
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -1094,9 +1295,12 @@ class _ScheduleRoomDetailScreenState
             () {
               final isVoted = opt.voterUids.contains(myMember.uid);
               final ratio = totalVoters == 0 ? 0.0 : (opt.voterUids.length / totalVoters);
+              final voterMembers = room.members
+                  .where((m) => opt.voterUids.contains(m.uid))
+                  .toList();
 
               return GestureDetector(
-                onTap: vote.isClosed
+                onTap: isClosed
                     ? null
                     : () {
                         ref.read(scheduleRoomsProvider.notifier).castVote(
@@ -1157,19 +1361,54 @@ class _ScheduleRoomDetailScreenState
                           minHeight: 6,
                         ),
                       ),
+                      // 익명이 아닐 경우 투표자 프로필 뱃지 노출
+                      if (!vote.isAnonymous && voterMembers.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 4,
+                          children: voterMembers.map((m) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _hexToColor(m.colorHex).withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${m.icon} ${m.name}',
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               );
             }(),
           ],
+
+          // 다시 투표하기 버튼
+          if (!isClosed && myVotedCount > 0)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () {
+                  ref.read(scheduleRoomsProvider.notifier).reVote(room.id, vote.id, myMember.uid);
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 14),
+                label: const Text('다시 투표하기', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  // 4. 정산 탭
-  Widget _buildSettlementTab(ScheduleRoom room) {
+  // 4. 정산 장부 탭 (누적 히스토리 피드, 송금 상태 토글, 프로그레스 바)
+  Widget _buildSettlementTab(ScheduleRoom room, RoomMember myMember) {
+    final history = room.settlementHistory;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -1190,14 +1429,14 @@ class _ScheduleRoomDetailScreenState
                     Icon(Icons.account_balance_wallet_outlined, size: 20, color: Color(0xFF0F172A)),
                     SizedBox(width: 8),
                     Text(
-                      '스마트 N차 차수별 정산',
+                      '스마트 N차 정산 및 송금 장부',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '1차, 2차... N차 차수별 정산과 술값/특정 항목 예외 공제를 지원합니다. 최소 송금 횟수로 깔끔하게 계산해 드려요.',
+                  '1차, 2차... N차 차수별 정산과 술값/특정 항목 예외 공제를 영수증 카드로 기록하고, 멤버별 송금 여부를 실시간 추적하세요.',
                   style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 16),
@@ -1212,7 +1451,7 @@ class _ScheduleRoomDetailScreenState
                       );
                     },
                     icon: const Icon(Icons.calculate_outlined, size: 18),
-                    label: const Text('정산 관리 및 송금하기', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text('+ 새 정산 계산 및 영수증 발행', style: TextStyle(fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0F172A),
                       foregroundColor: Colors.white,
@@ -1225,37 +1464,314 @@ class _ScheduleRoomDetailScreenState
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
-          // Multi-round brief preview
-          if (room.rounds.isNotEmpty) ...[
-            const Text('등록된 차수별 내역', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+          // Cumulative Settlement History Feed
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '🧾 정산 영수증 히스토리',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+              ),
+              Text(
+                '총 ${history.length}건',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          if (history.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 30),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Center(
+                child: Text('발행된 정산 영수증이 없습니다.', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+              ),
+            )
+          else
+            for (final record in history)
+              _buildSettlementRecordCard(room, record, myMember),
+        ],
+      ),
+    );
+  }
+
+  // 정산 영수증 카드 (송금 상태 토글, 프로그레스 바, 차수별 상세 아코디언)
+  Widget _buildSettlementRecordCard(ScheduleRoom room, SettlementRecord record, RoomMember myMember) {
+    final isExpanded = _expandedSettlementAccordions.contains(record.id);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Card Header: Date & Title & Menu
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${record.date.year}.${record.date.month.toString().padLeft(2, '0')}.${record.date.day.toString().padLeft(2, '0')}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    record.title,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Text(
+                    '${record.totalAmount}원',
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded, size: 18, color: Colors.grey),
+                    onSelected: (val) {
+                      if (val == 'delete') {
+                        ref.read(trashBinProvider.notifier).moveToTrash(
+                              TrashItem(
+                                id: 'trash-settle-${record.id}',
+                                entityType: TrashEntityType.settlement,
+                                originalTitle: record.title,
+                                deletedAt: DateTime.now(),
+                                originalData: record.toJson(),
+                                roomId: room.id,
+                              ),
+                            );
+                        ref.read(scheduleRoomsProvider.notifier).deleteSettlementRecord(room.id, record.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('정산 내역이 휴지통으로 이동되었습니다 (30일 보존)')),
+                        );
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem(value: 'delete', child: Text('🗑️ 삭제 (휴지통)')),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 송금 완료 현황 프로그레스 바
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '송금 완료 현황 (${record.completedTransfersCount}/${record.totalTransferTargetCount}명)',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+              ),
+              Text(
+                '${(record.transferProgress * 100).toInt()}%',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF16A34A)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: record.transferProgress,
+              backgroundColor: const Color(0xFFF1F5F9),
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF16A34A)),
+              minHeight: 6,
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 멤버별 송금 상태 칩 목록
+          const Text('멤버별 송금 상태 (터치하여 토글)', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: record.transferStatus.entries.map((entry) {
+              final memberUid = entry.key;
+              final isTransferred = entry.value;
+              final member = room.members.firstWhere(
+                (m) => m.uid == memberUid,
+                orElse: () => RoomMember(uid: memberUid, name: memberUid, icon: '👤'),
+              );
+              final owedAmount = record.perMemberAmounts[memberUid] ?? 0;
+
+              return InkWell(
+                onTap: () {
+                  ref.read(scheduleRoomsProvider.notifier).toggleTransferStatus(room.id, record.id, memberUid);
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isTransferred ? const Color(0xFFDCFCE7) : const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isTransferred ? const Color(0xFF86EFAC) : const Color(0xFFFECACA),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(member.icon, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                      Text(
+                        member.name,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                      const SizedBox(width: 6),
+                      if (owedAmount > 0)
+                        Text(
+                          '$owedAmount원 ',
+                          style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                        ),
+                      Icon(
+                        isTransferred ? Icons.check_circle_rounded : Icons.pending_outlined,
+                        size: 14,
+                        color: isTransferred ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        isTransferred ? '완료' : '미입금',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isTransferred ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 8),
+
+          // 아코디언 토글 (1차, 2차 내역, 예외 차감 내역)
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedSettlementAccordions.remove(record.id);
+                } else {
+                  _expandedSettlementAccordions.add(record.id);
+                }
+              });
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  isExpanded ? '차수별 상세 내역 접기' : '차수별 상세 내역 보기 (${record.rounds.length}개 차수)',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                ),
+                Icon(
+                  isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: const Color(0xFF2563EB),
+                ),
+              ],
+            ),
+          ),
+
+          if (isExpanded) ...[
             const SizedBox(height: 10),
-            for (final r in room.rounds)
+            for (final r in record.rounds)
               Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(r.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                        const SizedBox(height: 2),
-                        Text('참여 ${r.attendeeUids.length}명 · 예외 항목 ${r.exceptions.length}건', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                        Text(
+                          '${r.roundNumber}차: ${r.title}',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
+                        Text(
+                          '${r.totalAmount}원',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
                       ],
                     ),
-                    Text('${r.totalAmount}원', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                    const SizedBox(height: 4),
+                    Text(
+                      '결제자: ${r.payerUid} | 참여자: ${r.attendeeUids.join(', ')}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                    if (r.exceptions.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      for (final exp in r.exceptions)
+                        Text(
+                          '└ 예외: ${exp.name} ${exp.amount}원 (${exp.exemptMemberUids.join(', ')} 제외)',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFFDC2626)),
+                        ),
+                    ],
                   ],
                 ),
               ),
           ],
+
+          const SizedBox(height: 8),
+          // 송금 링크 복사 버튼
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _handleSend(context, 'kakao', record.title, record.totalAmount),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('카카오페이 복사', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _handleSend(context, 'toss', record.title, record.totalAmount),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('토스 복사', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

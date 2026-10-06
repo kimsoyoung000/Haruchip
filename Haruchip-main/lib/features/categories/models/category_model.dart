@@ -256,6 +256,8 @@ class CategoryModel {
     String? colorHex,
     String? backgroundImageUrl,
     this.metadata,
+    this.isDashboardHidden = false,
+    this.hiddenAt,
   })  : icon = icon ?? emoji ?? '📌',
         background = background ??
             BackgroundConfig(
@@ -274,6 +276,8 @@ class CategoryModel {
   final TypographyConfig typography;
   final BackgroundConfig background;
   final Map<String, dynamic>? metadata;
+  final bool isDashboardHidden;
+  final DateTime? hiddenAt;
 
   /// 기존 호환용 게터
   String get emoji => icon;
@@ -295,6 +299,8 @@ class CategoryModel {
     String? colorHex,
     String? backgroundImageUrl,
     Map<String, dynamic>? metadata,
+    bool? isDashboardHidden,
+    DateTime? hiddenAt,
   }) {
     return CategoryModel(
       id: id ?? this.id,
@@ -314,6 +320,8 @@ class CategoryModel {
                 )
               : this.background),
       metadata: metadata ?? this.metadata,
+      isDashboardHidden: isDashboardHidden ?? this.isDashboardHidden,
+      hiddenAt: hiddenAt ?? this.hiddenAt,
     );
   }
 
@@ -326,6 +334,8 @@ class CategoryModel {
         'typography': typography.toJson(),
         'background': background.toJson(),
         if (metadata != null) 'metadata': metadata,
+        'isDashboardHidden': isDashboardHidden,
+        if (hiddenAt != null) 'hiddenAt': hiddenAt!.toIso8601String(),
       };
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
@@ -357,6 +367,10 @@ class CategoryModel {
           : const TypographyConfig(),
       background: bgConfig,
       metadata: json['metadata'] as Map<String, dynamic>?,
+      isDashboardHidden: json['isDashboardHidden'] as bool? ?? false,
+      hiddenAt: json['hiddenAt'] != null
+          ? DateTime.parse(json['hiddenAt'] as String)
+          : null,
     );
   }
 }

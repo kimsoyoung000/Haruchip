@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/exam_model.dart';
 import '../models/exam_timeline.dart';
 
-/// 시험 이벤트 유형 (메인/서브)
+/// 시험 이벤트 유형 (메인/서브 - 하위 호환성 유지)
 enum ExamEventType {
   exam, // 시험일 - 메인
   registration, // 접수일 - 서브
@@ -17,7 +18,7 @@ enum ExamEventType {
   }
 }
 
-/// 시험 타임라인 이벤트 항목
+/// 시험 타임라인 이벤트 항목 (하위 호환성 유지)
 @immutable
 class ExamEventItem {
   const ExamEventItem({
@@ -83,18 +84,177 @@ class ExamEventItem {
   }
 }
 
+/// 활성 시험 대표 디데이 상태 정보
+@immutable
+class ExamRollingStatus {
+  const ExamRollingStatus({
+    required this.badgeText,
+    required this.subDetailText,
+    required this.activeStage,
+    required this.daysLeft,
+    required this.isAllFinished,
+  });
+
+  final String badgeText; // e.g. '필기시험 D-14', '원서접수 마감 D-3', '중간고사 D-7'
+  final String subDetailText; // e.g. '다음: 07.26 실기시험', '1교시 국어 09:00'
+  final ExamStageItem? activeStage;
+  final int daysLeft;
+  final bool isAllFinished;
+}
+
 /// 시험 카테고리 시각적 스타일링 및 타임라인 로직 컨트롤러
 class ExamCategoryController {
   const ExamCategoryController();
 
-  /// D-Day가 임박한 순서대로 시험 이벤트 정렬 (종료되지 않은 일정이 상단, D-Day 적을수록 상단)
+  /// 1. 실시간 대표 디데이 롤링 로직 연산
+  /// - 지난 단계는 자동 완료 처리
+  /// - 현재 시점 기준 가장 먼저 다가오는 단계의 D-Day를 대표 뱃지로 표기
+  ExamRollingStatus getRollingStatus(ExamProfile exam, [DateTime? relativeTo]) {
+    // 학교 시험 모드 (중간고사 / 기말고사)
+    if (exam.type == ExamType.midterm || exam.type == ExamType.finalExam) {
+      if (exam.subjects.isNotEmpty) {
+        final sortedSubjects = List<ExamSubjectItem>.from(exam.subjects)
+          ..sort((a, b) {
+            final cmp = a.examDate.compareTo(b.examDate);
+            if (cmp != 0) return cmp;
+            return a.period.compareTo(b.period);
+          });
+
+        final upcomingSubjects = sortedSubjects.where((s) => !s.isEnded(relativeTo)).toList();
+        if (upcomingSubjects.isNotEmpty) {
+          final firstSub = upcomingSubjects.first;
+          final days = firstSub.daysRemaining(relativeTo);
+          final dDayStr = days > 0 ? 'D-$days' : (days == 0 ? 'D-Day' : 'D+${-days}');
+          final periodStr = firstSub.period > 0 ? '${firstSub.period}교시 ' : '';
+          final timeStr = firstSub.startTime != null ? '${firstSub.startTime} ' : '';
+
+          return ExamRollingStatus(
+            badgeText: '${exam.type.labelKo} $dDayStr',
+            subDetailText: '$periodStr${firstSub.subjectName} $timeStr($dDayStr)',
+            activeStage: null,
+            daysLeft: days,
+            isAllFinished: false,
+          );
+        } else {
+          return ExamRollingStatus(
+            badgeText: '${exam.type.labelKo} 완료 🎉',
+            subDetailText: '모든 과목 시험이 종료되었습니다.',
+            activeStage: null,
+            daysLeft: -1,
+            isAllFinished: true,
+          );
+        }
+      }
+    }
+
+    // 자격증 / 공인시험 다단계 파이프라인
+    if (exam.stages.isNotEmpty) {
+      final sortedStages = List<ExamStageItem>.from(exam.stages)
+        ..sort((a, b) => a.startDate.compareTo(b.startDate));
+
+      final upcoming = sortedStages.where((s) => !s.isEnded(relativeTo) && !s.isCompleted).toList();
+
+      if (upcoming.isNotEmpty) {
+        final active = upcoming.first;
+        final days = active.daysRemaining(relativeTo);
+        final dDayStr = days > 0 ? 'D-$days' : (days == 0 ? 'D-Day' : 'D+${-days}');
+
+        String stageTitle = active.name;
+        if (active.stageType == ExamStageType.application) {
+          stageTitle = '원서접수 마감';
+        } else if (active.stageType == ExamStageType.writtenTest) {
+          stageTitle = '필기/시험일';
+        } else if (active.stageType == ExamStageType.writtenResult) {
+          stageTitle = '합격 발표';
+        } else if (active.stageType == ExamStageType.practicalTest) {
+          stageTitle = '실기/면접';
+        } else if (active.stageType == ExamStageType.finalResult) {
+          stageTitle = '최종 합격자 발표';
+        }
+
+        final m = active.startDate.month.toString().padLeft(2, '0');
+        final d = active.startDate.day.toString().padLeft(2, '0');
+        final dateLabel = '$m.$d';
+
+        return ExamRollingStatus(
+          badgeText: '$stageTitle $dDayStr',
+          subDetailText: '$dateLabel $stageTitle',
+          activeStage: active,
+          daysLeft: days,
+          isAllFinished: false,
+        );
+      } else {
+        return const ExamRollingStatus(
+          badgeText: '시험 일정 종료 🎉',
+          subDetailText: '모든 시험 단계가 마무리되었습니다.',
+          activeStage: null,
+          daysLeft: -1,
+          isAllFinished: true,
+        );
+      }
+    }
+
+    return const ExamRollingStatus(
+      badgeText: 'D-Day',
+      subDetailText: '등록된 일정이 없습니다.',
+      activeStage: null,
+      daysLeft: 0,
+      isAllFinished: false,
+    );
+  }
+
+  /// 2. 시험 목록을 '가장 임박한 세부 일정순'으로 정렬 (Smart View)
+  List<ExamProfile> sortExamsByUrgency(List<ExamProfile> exams, [DateTime? relativeTo]) {
+    final sorted = List<ExamProfile>.from(exams);
+    sorted.sort((a, b) {
+      final aStatus = getRollingStatus(a, relativeTo);
+      final bStatus = getRollingStatus(b, relativeTo);
+
+      if (aStatus.isAllFinished != bStatus.isAllFinished) {
+        return aStatus.isAllFinished ? 1 : -1;
+      }
+
+      final aDays = aStatus.daysLeft;
+      final bDays = bStatus.daysLeft;
+
+      final aIsPast = aDays < 0;
+      final bIsPast = bDays < 0;
+
+      if (aIsPast != bIsPast) {
+        return aIsPast ? 1 : -1;
+      }
+
+      return aDays.compareTo(bDays);
+    });
+    return sorted;
+  }
+
+  /// 3. 과목별 시간 및 남은 시간 텍스트 포맷
+  String getSubjectRemainingLabel(ExamSubjectItem subject, [DateTime? relativeTo]) {
+    final days = subject.daysRemaining(relativeTo);
+    final periodStr = subject.period > 0 ? '${subject.period}교시' : '';
+    final timeStr = subject.startTime != null ? ' ${subject.startTime}' : '';
+
+    if (days == 0) {
+      return '오늘$timeStr ($periodStr)';
+    } else if (days == 1) {
+      return '내일$timeStr ($periodStr) D-1';
+    } else if (days > 1) {
+      return '$periodStr$timeStr D-$days';
+    } else {
+      return '시험 종료';
+    }
+  }
+
+  // ==========================================
+  // 기존 레거시 호환 메서드 (하위 호환성 100% 보존)
+  // ==========================================
   List<ExamEventItem> sortEventsByUrgency(List<ExamEventItem> events, [DateTime? relativeTo]) {
     final sorted = [...events];
     sorted.sort((a, b) {
       final aDiff = a.daysRemaining(relativeTo);
       final bDiff = b.daysRemaining(relativeTo);
 
-      // 미래/오늘(>= 0) 일정이 과거(< 0) 일정보다 상단 배치
       final aIsPast = aDiff < 0;
       final bIsPast = bDiff < 0;
 
@@ -106,14 +266,12 @@ class ExamCategoryController {
     return sorted;
   }
 
-  /// 타임라인 트리를 flowOrder (1 -> 2 -> 3 -> 4 -> 5) 순으로 정렬
   List<ExamEventItem> sortByFlowOrder(List<ExamEventItem> events) {
     final sorted = [...events];
     sorted.sort((a, b) => a.flowOrder.compareTo(b.flowOrder));
     return sorted;
   }
 
-  /// 과목 테마 컬러 기반 서브 컬러 (채도가 낮고 차분한 색) 계산
   Color getSubColor(Color subjectColor) {
     final HSLColor hsl = HSLColor.fromColor(subjectColor);
     final HSLColor mutedHsl = hsl
@@ -122,12 +280,10 @@ class ExamCategoryController {
     return mutedHsl.toColor();
   }
 
-  /// 과목 테마 컬러 기반 Gray-out 마감 컬러 계산
   Color getEndedGrayColor(Color subjectColor) {
     return const Color(0xFF9E9E9E);
   }
 
-  /// 1. 시험일(메인): subjectColor 기반 메인 강조 스타일 (Bold)
   TextStyle getMainTextStyle(Color subjectColor) {
     return TextStyle(
       color: subjectColor,
@@ -136,7 +292,6 @@ class ExamCategoryController {
     );
   }
 
-  /// 2. 접수일/발표일(서브): 채도가 낮은 서브 컬러 스타일 (Regular)
   TextStyle getSubTextStyle(Color subjectColor) {
     return TextStyle(
       color: getSubColor(subjectColor),
@@ -145,7 +300,6 @@ class ExamCategoryController {
     );
   }
 
-  /// 3. 종료(마감)된 일정: Opacity 0.4~0.5, Gray-out, 취소선
   TextStyle getEndedTextStyle() {
     return const TextStyle(
       color: Color(0xFF9E9E9E),

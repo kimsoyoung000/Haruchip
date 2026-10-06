@@ -21,22 +21,12 @@ const Map<String, String> ddayTitlePlaceholder = {
   'plan': '예: 클라이언트 미팅, 친구와의 약속',
   'goal': '예: 올해 토익 900점, 유럽 배낭여행',
   'routine': '예: 매주 월/수 필라테스, 매일 독서 30분',
-  'solo': '예: 혼자만의 힐링 여행, 취미 시작',
+  'solo': '예: 나홀로 제주 여행, 바디프로필',
   'fandom': '예: 최애 컴백일, 콘서트 티켓팅, 팬미팅',
-  'group': '예: 동창회, 정기 모임, 스터디',
 };
 
-/// [kOnboardingCategories]에 명세의 `baby`(아기 — §5.5)를 더한 카테고리
-/// 타입 전체 목록.
-const List<OnboardingCategory> kCategoryTypes = [
-  ...kOnboardingCategories,
-  OnboardingCategory(
-    key: 'baby',
-    labelKo: '아기',
-    group: CategoryGroup.emotional,
-    emoji: '👶',
-  ),
-];
+/// 전체 카테고리 타입 목록.
+const List<OnboardingCategory> kCategoryTypes = kOnboardingCategories;
 
 /// 디데이 추가 화면의 구글 캘린더 연동 토글 초깃값(카테고리별) — 디데이
 /// 추가 화면 명세 §3 예시("시험/계획 카테고리는 기본 ON, 커플/생일은

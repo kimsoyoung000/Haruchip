@@ -35,6 +35,32 @@ enum DdayDisplayMode {
   monthsCount,
 }
 
+/// 캘린더/알림 사전 미리알림 (Reminder) 옵션
+enum EventReminder {
+  none('알림 없음', 0),
+  onTime('정시(이벤트 시작 시)', 0),
+  before10m('10분 전', 10),
+  before30m('30분 전', 30),
+  before1h('1시간 전', 60),
+  before1d9am('1일 전 오전 9시', 1440),
+  before3d('3일 전', 4320),
+  before1w('1주일 전', 10080);
+
+  const EventReminder(this.labelKo, this.minutesBefore);
+
+  final String labelKo;
+  final int minutesBefore;
+
+  String toJson() => name;
+
+  static EventReminder fromJson(String? value) {
+    return EventReminder.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => EventReminder.none,
+    );
+  }
+}
+
 /// 캘린더 연동 체크박스 상태 — 명세 §1 `DdayItem.calendarSync`.
 ///
 /// 실제 구글/네이버 캘린더 API 연동은 보류 트랙(핸드오프 문서 §6)이라
@@ -63,12 +89,6 @@ class CalendarSyncFlags {
 ///
 /// 카테고리는 태그 개념(CLAUDE.md §5) — 동일 [categoryKey]를 가진 항목이
 /// 여러 개 존재하는 것은 항상 허용된다(다중 인스턴스).
-///
-/// NOTE: 카테고리 & 디데이 명세가 정의한 `DdayItem`을 별도 모델로 새로
-/// 만들지 않고 이 클래스를 확장했다 — `PlanItem`이 이미 대시보드/plan
-/// 탭/캘린더 화면이 공유하는 사실상의 통합 D-day 저장소라서, 병렬 모델을
-/// 만들면 그 3곳을 전부 마이그레이션해야 해 "최소 흐름 검증" 범위를
-/// 넘어선다.
 class PlanItem {
   PlanItem({
     required this.id,
@@ -79,6 +99,7 @@ class PlanItem {
     this.displayMode = DdayDisplayMode.dday,
     RepeatConfig? repeatConfig,
     this.calendarSync = const CalendarSyncFlags(),
+    this.reminder = EventReminder.none,
     bool repeat = false,
     this.examTimeline = const [],
     this.kanbanStatus = KanbanStatus.todo,
@@ -111,6 +132,7 @@ class PlanItem {
   final RepeatConfig repeatConfig;
 
   final CalendarSyncFlags calendarSync;
+  final EventReminder reminder;
 
   /// 시험 카테고리 전용 타임라인(§5.4) — exam이 아니면 항상 빈 리스트.
   final List<ExamTimelineEntry> examTimeline;
@@ -167,6 +189,7 @@ class PlanItem {
     DdayDisplayMode? displayMode,
     RepeatConfig? repeatConfig,
     CalendarSyncFlags? calendarSync,
+    EventReminder? reminder,
     List<ExamTimelineEntry>? examTimeline,
     KanbanStatus? kanbanStatus,
     PlanPriority? priority,
@@ -187,6 +210,7 @@ class PlanItem {
       displayMode: displayMode ?? this.displayMode,
       repeatConfig: repeatConfig ?? this.repeatConfig,
       calendarSync: calendarSync ?? this.calendarSync,
+      reminder: reminder ?? this.reminder,
       examTimeline: examTimeline ?? this.examTimeline,
       kanbanStatus: kanbanStatus ?? this.kanbanStatus,
       priority: priority ?? this.priority,
@@ -197,6 +221,51 @@ class PlanItem {
       photoUrl: photoUrl ?? this.photoUrl,
       roomLinks: roomLinks ?? this.roomLinks,
       isPredicted: isPredicted ?? this.isPredicted,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'date': date.toIso8601String(),
+        'categoryKey': categoryKey,
+        'categoryInstanceId': categoryInstanceId,
+        'displayMode': displayMode.name,
+        'reminder': reminder.name,
+        'kanbanStatus': kanbanStatus.name,
+        'priority': priority.name,
+        'endDate': endDate?.toIso8601String(),
+        'isAllDay': isAllDay,
+        'photoUrl': photoUrl,
+        'roomLinks': roomLinks,
+        'isPredicted': isPredicted,
+      };
+
+  factory PlanItem.fromJson(Map<String, dynamic> json) {
+    return PlanItem(
+      id: json['id'] as String? ?? 'item-${DateTime.now().microsecondsSinceEpoch}',
+      title: json['title'] as String? ?? '',
+      date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+      categoryKey: json['categoryKey'] as String? ?? 'plan',
+      categoryInstanceId: json['categoryInstanceId'] as String?,
+      displayMode: DdayDisplayMode.values.firstWhere(
+        (e) => e.name == json['displayMode'],
+        orElse: () => DdayDisplayMode.dday,
+      ),
+      reminder: EventReminder.fromJson(json['reminder'] as String?),
+      kanbanStatus: KanbanStatus.values.firstWhere(
+        (e) => e.name == json['kanbanStatus'],
+        orElse: () => KanbanStatus.todo,
+      ),
+      priority: PlanPriority.values.firstWhere(
+        (e) => e.name == json['priority'],
+        orElse: () => PlanPriority.medium,
+      ),
+      endDate: json['endDate'] != null ? DateTime.tryParse(json['endDate'] as String) : null,
+      isAllDay: json['isAllDay'] as bool? ?? false,
+      photoUrl: json['photoUrl'] as String?,
+      roomLinks: (json['roomLinks'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      isPredicted: json['isPredicted'] as bool? ?? false,
     );
   }
 }

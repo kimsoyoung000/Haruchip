@@ -81,6 +81,8 @@ class RoomSharedEvent {
     this.isAllDay = false,
     this.location,
     this.memo,
+    this.isDeleted = false,
+    this.deletedAt,
   });
 
   final String id;
@@ -92,6 +94,36 @@ class RoomSharedEvent {
   final bool isAllDay;
   final String? location;
   final String? memo;
+  final bool isDeleted;
+  final DateTime? deletedAt;
+
+  RoomSharedEvent copyWith({
+    String? id,
+    String? roomId,
+    String? title,
+    String? authorUid,
+    DateTime? date,
+    String? time,
+    bool? isAllDay,
+    String? location,
+    String? memo,
+    bool? isDeleted,
+    DateTime? deletedAt,
+  }) {
+    return RoomSharedEvent(
+      id: id ?? this.id,
+      roomId: roomId ?? this.roomId,
+      title: title ?? this.title,
+      authorUid: authorUid ?? this.authorUid,
+      date: date ?? this.date,
+      time: time ?? this.time,
+      isAllDay: isAllDay ?? this.isAllDay,
+      location: location ?? this.location,
+      memo: memo ?? this.memo,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -103,6 +135,8 @@ class RoomSharedEvent {
         'isAllDay': isAllDay,
         'location': location,
         'memo': memo,
+        'isDeleted': isDeleted,
+        'deletedAt': deletedAt?.toIso8601String(),
       };
 
   factory RoomSharedEvent.fromJson(Map<String, dynamic> json) {
@@ -116,11 +150,55 @@ class RoomSharedEvent {
       isAllDay: json['isAllDay'] as bool? ?? false,
       location: json['location'] as String?,
       memo: json['memo'] as String?,
+      isDeleted: json['isDeleted'] as bool? ?? false,
+      deletedAt: json['deletedAt'] != null ? DateTime.parse(json['deletedAt'] as String) : null,
     );
   }
 }
 
-/// 모임 게시판 공지 / 메모 모델
+/// 공지 댓글 모델
+@immutable
+class NoticeComment {
+  const NoticeComment({
+    required this.id,
+    required this.authorUid,
+    required this.authorName,
+    required this.authorIcon,
+    required this.content,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String authorUid;
+  final String authorName;
+  final String authorIcon;
+  final String content;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'authorUid': authorUid,
+        'authorName': authorName,
+        'authorIcon': authorIcon,
+        'content': content,
+        'createdAt': createdAt.toIso8601String(),
+      };
+
+  factory NoticeComment.fromJson(Map<String, dynamic> json) {
+    return NoticeComment(
+      id: json['id'] as String? ?? 'cmt-${DateTime.now().microsecondsSinceEpoch}',
+      authorUid: json['authorUid'] as String? ?? '',
+      authorName: json['authorName'] as String? ?? '',
+      authorIcon: json['authorIcon'] as String? ?? '👤',
+      content: json['content'] as String? ?? '',
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+    );
+  }
+}
+
+/// 모임 게시판 공지 / 메모 모델 (상단 핀 고정 및 읽음 확인, 댓글 지원)
 @immutable
 class RoomNotice {
   const RoomNotice({
@@ -129,7 +207,12 @@ class RoomNotice {
     required this.authorIcon,
     required this.content,
     required this.createdAt,
+    this.authorUid,
     this.isPinned = false,
+    this.confirmedMemberUids = const [],
+    this.comments = const [],
+    this.isDeleted = false,
+    this.deletedAt,
   });
 
   final String id;
@@ -137,7 +220,12 @@ class RoomNotice {
   final String authorIcon;
   final String content;
   final DateTime createdAt;
+  final String? authorUid;
   final bool isPinned;
+  final List<String> confirmedMemberUids;
+  final List<NoticeComment> comments;
+  final bool isDeleted;
+  final DateTime? deletedAt;
 
   RoomNotice copyWith({
     String? id,
@@ -145,7 +233,12 @@ class RoomNotice {
     String? authorIcon,
     String? content,
     DateTime? createdAt,
+    String? authorUid,
     bool? isPinned,
+    List<String>? confirmedMemberUids,
+    List<NoticeComment>? comments,
+    bool? isDeleted,
+    DateTime? deletedAt,
   }) {
     return RoomNotice(
       id: id ?? this.id,
@@ -153,7 +246,12 @@ class RoomNotice {
       authorIcon: authorIcon ?? this.authorIcon,
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
+      authorUid: authorUid ?? this.authorUid,
       isPinned: isPinned ?? this.isPinned,
+      confirmedMemberUids: confirmedMemberUids ?? this.confirmedMemberUids,
+      comments: comments ?? this.comments,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 
@@ -163,7 +261,12 @@ class RoomNotice {
         'authorIcon': authorIcon,
         'content': content,
         'createdAt': createdAt.toIso8601String(),
+        'authorUid': authorUid,
         'isPinned': isPinned,
+        'confirmedMemberUids': confirmedMemberUids,
+        'comments': comments.map((c) => c.toJson()).toList(),
+        'isDeleted': isDeleted,
+        'deletedAt': deletedAt?.toIso8601String(),
       };
 
   factory RoomNotice.fromJson(Map<String, dynamic> json) {
@@ -175,7 +278,18 @@ class RoomNotice {
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),
+      authorUid: json['authorUid'] as String?,
       isPinned: json['isPinned'] as bool? ?? false,
+      confirmedMemberUids: (json['confirmedMemberUids'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
+      comments: (json['comments'] as List<dynamic>?)
+              ?.map((e) => NoticeComment.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          [],
+      isDeleted: json['isDeleted'] as bool? ?? false,
+      deletedAt: json['deletedAt'] != null ? DateTime.parse(json['deletedAt'] as String) : null,
     );
   }
 }
@@ -192,6 +306,8 @@ class VoteOption {
   final String id;
   final String text;
   final List<String> voterUids;
+
+  int get voteCount => voterUids.length;
 
   VoteOption copyWith({
     String? id,
@@ -220,7 +336,7 @@ class VoteOption {
   }
 }
 
-/// 모임 투표 모델
+/// 모임 투표 모델 (타이머, 마감 기한, 복수/익명 투표 지원)
 @immutable
 class RoomVote {
   const RoomVote({
@@ -229,9 +345,13 @@ class RoomVote {
     this.description,
     this.authorUid,
     this.allowMultiple = false,
+    this.isAnonymous = false,
     required this.options,
     required this.createdAt,
+    this.deadline,
     this.isClosed = false,
+    this.isDeleted = false,
+    this.deletedAt,
   });
 
   final String id;
@@ -239,11 +359,46 @@ class RoomVote {
   final String? description;
   final String? authorUid;
   final bool allowMultiple;
+  final bool isAnonymous;
   final List<VoteOption> options;
   final DateTime createdAt;
+  final DateTime? deadline;
   final bool isClosed;
+  final bool isDeleted;
+  final DateTime? deletedAt;
 
   int get totalVotes => options.fold(0, (sum, opt) => sum + opt.voterUids.length);
+
+  /// 마감 여부 (수동 마감 또는 마감 시간 경과)
+  bool get isExpiredOrClosed {
+    if (isClosed) return true;
+    if (deadline != null && DateTime.now().isAfter(deadline!)) return true;
+    return false;
+  }
+
+  /// 실시간 마감 카운트다운 라벨
+  String get remainingTimeLabel {
+    if (isExpiredOrClosed) return '투표 마감됨';
+    if (deadline == null) return '진행 중';
+    final now = DateTime.now();
+    final diff = deadline!.difference(now);
+    if (diff.isNegative) return '투표 마감됨';
+
+    final days = diff.inDays;
+    final hours = diff.inHours % 24;
+    final minutes = diff.inMinutes % 60;
+    final seconds = diff.inSeconds % 60;
+
+    final hh = hours.toString().padLeft(2, '0');
+    final mm = minutes.toString().padLeft(2, '0');
+    final ss = seconds.toString().padLeft(2, '0');
+
+    if (days > 0) {
+      return '마감까지 D-$days $hh:$mm:$ss';
+    } else {
+      return '마감까지 $hh:$mm:$ss';
+    }
+  }
 
   RoomVote copyWith({
     String? id,
@@ -251,9 +406,13 @@ class RoomVote {
     String? description,
     String? authorUid,
     bool? allowMultiple,
+    bool? isAnonymous,
     List<VoteOption>? options,
     DateTime? createdAt,
+    DateTime? deadline,
     bool? isClosed,
+    bool? isDeleted,
+    DateTime? deletedAt,
   }) {
     return RoomVote(
       id: id ?? this.id,
@@ -261,9 +420,13 @@ class RoomVote {
       description: description ?? this.description,
       authorUid: authorUid ?? this.authorUid,
       allowMultiple: allowMultiple ?? this.allowMultiple,
+      isAnonymous: isAnonymous ?? this.isAnonymous,
       options: options ?? this.options,
       createdAt: createdAt ?? this.createdAt,
+      deadline: deadline ?? this.deadline,
       isClosed: isClosed ?? this.isClosed,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 
@@ -273,9 +436,13 @@ class RoomVote {
         'description': description,
         'authorUid': authorUid,
         'allowMultiple': allowMultiple,
+        'isAnonymous': isAnonymous,
         'options': options.map((o) => o.toJson()).toList(),
         'createdAt': createdAt.toIso8601String(),
+        'deadline': deadline?.toIso8601String(),
         'isClosed': isClosed,
+        'isDeleted': isDeleted,
+        'deletedAt': deletedAt?.toIso8601String(),
       };
 
   factory RoomVote.fromJson(Map<String, dynamic> json) {
@@ -285,6 +452,7 @@ class RoomVote {
       description: json['description'] as String?,
       authorUid: json['authorUid'] as String?,
       allowMultiple: json['allowMultiple'] as bool? ?? false,
+      isAnonymous: json['isAnonymous'] as bool? ?? false,
       options: (json['options'] as List<dynamic>?)
               ?.map((e) => VoteOption.fromJson(Map<String, dynamic>.from(e as Map)))
               .toList() ??
@@ -292,7 +460,10 @@ class RoomVote {
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),
+      deadline: json['deadline'] != null ? DateTime.parse(json['deadline'] as String) : null,
       isClosed: json['isClosed'] as bool? ?? false,
+      isDeleted: json['isDeleted'] as bool? ?? false,
+      deletedAt: json['deletedAt'] != null ? DateTime.parse(json['deletedAt'] as String) : null,
     );
   }
 }
@@ -400,6 +571,127 @@ class SettlementRound {
   }
 }
 
+/// 모임 정산 영수증 아카이브(누적 장부) 모델
+@immutable
+class SettlementRecord {
+  const SettlementRecord({
+    required this.id,
+    required this.roomId,
+    required this.title,
+    required this.date,
+    required this.totalAmount,
+    required this.rounds,
+    this.payerUid,
+    this.attendeeUids = const [],
+    this.perMemberAmounts = const {},
+    this.transferStatus = const {}, // uid -> true (송금 완료) / false (미입금)
+    required this.createdAt,
+    this.isDeleted = false,
+    this.deletedAt,
+  });
+
+  final String id;
+  final String roomId;
+  final String title;
+  final DateTime date;
+  final int totalAmount;
+  final List<SettlementRound> rounds;
+  final String? payerUid;
+  final List<String> attendeeUids;
+  final Map<String, int> perMemberAmounts; // 각 멤버가 보내거나 받아야 할 금액
+  final Map<String, bool> transferStatus; // 각 멤버의 송금 완료 여부
+  final DateTime createdAt;
+  final bool isDeleted;
+  final DateTime? deletedAt;
+
+  /// 송금 완료된 멤버 수
+  int get completedTransfersCount =>
+      transferStatus.values.where((status) => status == true).length;
+
+  /// 송금 대상 전체 멤버 수 (지급받을 정산자 제외)
+  int get totalTransferTargetCount => transferStatus.keys.length;
+
+  /// 송금 완료율 (0.0 ~ 1.0)
+  double get transferProgress => totalTransferTargetCount == 0
+      ? 1.0
+      : (completedTransfersCount / totalTransferTargetCount);
+
+  SettlementRecord copyWith({
+    String? id,
+    String? roomId,
+    String? title,
+    DateTime? date,
+    int? totalAmount,
+    List<SettlementRound>? rounds,
+    String? payerUid,
+    List<String>? attendeeUids,
+    Map<String, int>? perMemberAmounts,
+    Map<String, bool>? transferStatus,
+    DateTime? createdAt,
+    bool? isDeleted,
+    DateTime? deletedAt,
+  }) {
+    return SettlementRecord(
+      id: id ?? this.id,
+      roomId: roomId ?? this.roomId,
+      title: title ?? this.title,
+      date: date ?? this.date,
+      totalAmount: totalAmount ?? this.totalAmount,
+      rounds: rounds ?? this.rounds,
+      payerUid: payerUid ?? this.payerUid,
+      attendeeUids: attendeeUids ?? this.attendeeUids,
+      perMemberAmounts: perMemberAmounts ?? this.perMemberAmounts,
+      transferStatus: transferStatus ?? this.transferStatus,
+      createdAt: createdAt ?? this.createdAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'roomId': roomId,
+        'title': title,
+        'date': date.toIso8601String(),
+        'totalAmount': totalAmount,
+        'rounds': rounds.map((r) => r.toJson()).toList(),
+        'payerUid': payerUid,
+        'attendeeUids': attendeeUids,
+        'perMemberAmounts': perMemberAmounts,
+        'transferStatus': transferStatus,
+        'createdAt': createdAt.toIso8601String(),
+        'isDeleted': isDeleted,
+        'deletedAt': deletedAt?.toIso8601String(),
+      };
+
+  factory SettlementRecord.fromJson(Map<String, dynamic> json) {
+    return SettlementRecord(
+      id: json['id'] as String? ?? 'rec-${DateTime.now().microsecondsSinceEpoch}',
+      roomId: json['roomId'] as String? ?? '',
+      title: json['title'] as String? ?? '모임 정산 영수증',
+      date: json['date'] != null ? DateTime.parse(json['date'] as String) : DateTime.now(),
+      totalAmount: json['totalAmount'] as int? ?? 0,
+      rounds: (json['rounds'] as List<dynamic>?)
+              ?.map((e) => SettlementRound.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          [],
+      payerUid: json['payerUid'] as String?,
+      attendeeUids: (json['attendeeUids'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      perMemberAmounts: (json['perMemberAmounts'] as Map<String, dynamic>?)
+              ?.map((k, v) => MapEntry(k, v as int)) ??
+          {},
+      transferStatus: (json['transferStatus'] as Map<String, dynamic>?)
+              ?.map((k, v) => MapEntry(k, v as bool)) ??
+          {},
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+      isDeleted: json['isDeleted'] as bool? ?? false,
+      deletedAt: json['deletedAt'] != null ? DateTime.parse(json['deletedAt'] as String) : null,
+    );
+  }
+}
+
 /// 독립 모임 방 모델
 class ScheduleRoom {
   const ScheduleRoom({
@@ -417,6 +709,9 @@ class ScheduleRoom {
     this.notices = const [],
     this.votes = const [],
     this.rounds = const [],
+    this.settlementHistory = const [],
+    this.isDeleted = false,
+    this.deletedAt,
   });
 
   final String id;
@@ -440,6 +735,10 @@ class ScheduleRoom {
   final List<RoomNotice> notices;
   final List<RoomVote> votes;
   final List<SettlementRound> rounds;
+  final List<SettlementRecord> settlementHistory;
+
+  final bool isDeleted;
+  final DateTime? deletedAt;
 
   ScheduleRoom copyWith({
     String? id,
@@ -456,6 +755,9 @@ class ScheduleRoom {
     List<RoomNotice>? notices,
     List<RoomVote>? votes,
     List<SettlementRound>? rounds,
+    List<SettlementRecord>? settlementHistory,
+    bool? isDeleted,
+    DateTime? deletedAt,
   }) {
     return ScheduleRoom(
       id: id ?? this.id,
@@ -476,6 +778,9 @@ class ScheduleRoom {
       notices: notices ?? this.notices,
       votes: votes ?? this.votes,
       rounds: rounds ?? this.rounds,
+      settlementHistory: settlementHistory ?? this.settlementHistory,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 }

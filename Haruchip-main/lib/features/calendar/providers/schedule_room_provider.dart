@@ -69,6 +69,7 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
       notices: const [],
       votes: const [],
       rounds: const [],
+      settlementHistory: const [],
     );
 
     state = [newRoom, ...state];
@@ -160,13 +161,25 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     ];
   }
 
-  /// 5. 공지사항 추가 / 핀 고정 / 삭제
+  /// 5. 공지사항 추가 / 핀 고정 / 수정 / 확인 체크 / 댓글 / 삭제
   void addRoomNotice(String roomId, RoomNotice notice) {
     state = [
       for (final room in state)
         if (room.id == roomId)
           room.copyWith(
             notices: [notice, ...room.notices],
+          )
+        else
+          room,
+    ];
+  }
+
+  void updateRoomNotice(String roomId, RoomNotice updatedNotice) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            notices: room.notices.map((n) => n.id == updatedNotice.id ? updatedNotice : n).toList(),
           )
         else
           room,
@@ -190,6 +203,46 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     ];
   }
 
+  void toggleNoticeRead(String roomId, String noticeId, String memberUid) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            notices: room.notices.map((n) {
+              if (n.id == noticeId) {
+                final list = List<String>.from(n.confirmedMemberUids);
+                if (list.contains(memberUid)) {
+                  list.remove(memberUid);
+                } else {
+                  list.add(memberUid);
+                }
+                return n.copyWith(confirmedMemberUids: list);
+              }
+              return n;
+            }).toList(),
+          )
+        else
+          room,
+    ];
+  }
+
+  void addNoticeComment(String roomId, String noticeId, NoticeComment comment) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            notices: room.notices.map((n) {
+              if (n.id == noticeId) {
+                return n.copyWith(comments: [...n.comments, comment]);
+              }
+              return n;
+            }).toList(),
+          )
+        else
+          room,
+    ];
+  }
+
   void deleteRoomNotice(String roomId, String noticeId) {
     state = [
       for (final room in state)
@@ -202,13 +255,75 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     ];
   }
 
-  /// 6. 모임 투표 생성 및 참여
+  /// 6. 모임 투표 생성, 수정, 참여, 재투표, 마감, 삭제
   void createRoomVote(String roomId, RoomVote vote) {
     state = [
       for (final room in state)
         if (room.id == roomId)
           room.copyWith(
             votes: [vote, ...room.votes],
+          )
+        else
+          room,
+    ];
+  }
+
+  void updateRoomVote(String roomId, RoomVote updatedVote) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            votes: room.votes.map((v) => v.id == updatedVote.id ? updatedVote : v).toList(),
+          )
+        else
+          room,
+    ];
+  }
+
+  void closeRoomVote(String roomId, String voteId) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            votes: room.votes.map((v) {
+              if (v.id == voteId) {
+                return v.copyWith(isClosed: true);
+              }
+              return v;
+            }).toList(),
+          )
+        else
+          room,
+    ];
+  }
+
+  void reVote(String roomId, String voteId, String voterUid) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            votes: room.votes.map((v) {
+              if (v.id == voteId && !v.isExpiredOrClosed) {
+                final cleanedOptions = v.options.map((opt) {
+                  final list = List<String>.from(opt.voterUids)..remove(voterUid);
+                  return opt.copyWith(voterUids: list);
+                }).toList();
+                return v.copyWith(options: cleanedOptions);
+              }
+              return v;
+            }).toList(),
+          )
+        else
+          room,
+    ];
+  }
+
+  void deleteRoomVote(String roomId, String voteId) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            votes: room.votes.where((v) => v.id != voteId).toList(),
           )
         else
           room,
@@ -226,7 +341,7 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
         if (room.id == roomId)
           room.copyWith(
             votes: room.votes.map((v) {
-              if (v.id == voteId && !v.isClosed) {
+              if (v.id == voteId && !v.isExpiredOrClosed) {
                 final updatedOptions = <VoteOption>[];
                 for (final opt in v.options) {
                   final voters = List<String>.from(opt.voterUids);
@@ -251,7 +366,80 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     ];
   }
 
-  /// 7. 다차수 정산 저장
+  /// 7. 정산 아카이브(누적 장부) 및 송금 상태 추적
+  void addSettlementRecord(String roomId, SettlementRecord record) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            settlementHistory: [record, ...room.settlementHistory],
+            rounds: record.rounds,
+            settlementConfirmedAt: DateTime.now(),
+          )
+        else
+          room,
+    ];
+  }
+
+  void updateSettlementRecord(String roomId, SettlementRecord updatedRecord) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            settlementHistory: room.settlementHistory
+                .map((r) => r.id == updatedRecord.id ? updatedRecord : r)
+                .toList(),
+          )
+        else
+          room,
+    ];
+  }
+
+  void toggleTransferStatus(String roomId, String recordId, String memberUid) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            settlementHistory: room.settlementHistory.map((r) {
+              if (r.id == recordId) {
+                final map = Map<String, bool>.from(r.transferStatus);
+                final current = map[memberUid] ?? false;
+                map[memberUid] = !current;
+                return r.copyWith(transferStatus: map);
+              }
+              return r;
+            }).toList(),
+          )
+        else
+          room,
+    ];
+  }
+
+  void deleteSettlementRecord(String roomId, String recordId) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            settlementHistory: room.settlementHistory.where((r) => r.id != recordId).toList(),
+          )
+        else
+          room,
+    ];
+  }
+
+  void restoreSettlementRecord(String roomId, SettlementRecord record) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            settlementHistory: [record, ...room.settlementHistory.where((r) => r.id != record.id)],
+          )
+        else
+          room,
+    ];
+  }
+
+  /// 과거 다차수 정산 호환용
   void saveMultiRoundSettlement(String roomId, List<SettlementRound> rounds) {
     state = [
       for (final room in state)

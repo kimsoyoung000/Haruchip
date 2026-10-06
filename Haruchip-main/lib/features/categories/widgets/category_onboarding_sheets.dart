@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,11 +10,15 @@ import '../../military/providers/military_provider.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../../shared/widgets/haru_calendar_picker.dart';
+import '../controllers/baby_category_controller.dart';
+import '../data/baby_health_database.dart';
 import '../data/kpop_artist_presets.dart';
 import '../logic/repeat_rule.dart';
+import '../models/baby_profile.dart';
 import '../models/category.dart';
 import '../models/fandom_profile.dart';
 import '../models/pet_profile.dart';
+import '../models/solo_profile.dart';
 import '../providers/category_provider.dart';
 
 /// 1. 군대 (Military) 온보딩 설정 바텀시트
@@ -557,19 +562,21 @@ Future<bool?> showBabyOnboardingSheet(
   BuildContext context, {
   required CategoryModel category,
   required WidgetRef ref,
+  BabyProfile? editProfile,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => _BabyOnboardingSheet(category: category),
+    builder: (ctx) => _BabyOnboardingSheet(category: category, editProfile: editProfile),
   );
 }
 
 class _BabyOnboardingSheet extends ConsumerStatefulWidget {
-  const _BabyOnboardingSheet({required this.category});
+  const _BabyOnboardingSheet({required this.category, this.editProfile});
 
   final CategoryModel category;
+  final BabyProfile? editProfile;
 
   @override
   ConsumerState<_BabyOnboardingSheet> createState() => _BabyOnboardingSheetState();
@@ -578,15 +585,47 @@ class _BabyOnboardingSheet extends ConsumerStatefulWidget {
 class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
   late TextEditingController _nameController;
   late DateTime _birthDate;
+  late String? _birthTime;
+  late BabyGender _gender;
+  late String? _bloodType;
+  late int _feedingIntervalHours;
+  String? _photoUrl;
+
+  final ImagePicker _picker = ImagePicker();
+  static const _controller = BabyCategoryController();
 
   @override
   void initState() {
     super.initState();
     final meta = widget.category.metadata;
-    _nameController = TextEditingController(text: meta?['babyName'] as String? ?? '우리 아기 👶');
-    _birthDate = meta?['birthDate'] != null
-        ? DateTime.parse(meta!['birthDate'] as String)
-        : DateTime.now().subtract(const Duration(days: 100));
+    BabyProfile? initialProfile = widget.editProfile;
+
+    if (initialProfile == null && meta?['babyProfile'] != null) {
+      try {
+        final profileMap = meta!['babyProfile'] as Map<String, dynamic>;
+        initialProfile = BabyProfile.fromJson(profileMap);
+      } catch (_) {}
+    }
+
+    if (initialProfile != null) {
+      _nameController = TextEditingController(text: initialProfile.name);
+      _birthDate = initialProfile.birthDate;
+      _birthTime = initialProfile.birthTime;
+      _gender = initialProfile.gender;
+      _bloodType = initialProfile.bloodType;
+      _feedingIntervalHours = initialProfile.feedingIntervalHours;
+      _photoUrl = initialProfile.photoUrl;
+    } else {
+      _nameController = TextEditingController(text: meta?['babyName'] as String? ?? '우리 아기 👶');
+      _birthDate = meta?['birthDate'] != null
+          ? DateTime.parse(meta!['birthDate'] as String)
+          : DateTime.now().subtract(const Duration(days: 100));
+      _birthTime = meta?['birthTime'] as String?;
+      _gender = BabyGender.fromJson(meta?['gender'] as String?);
+      _bloodType = meta?['bloodType'] as String?;
+      _feedingIntervalHours = meta?['feedingIntervalHours'] as int? ?? 3;
+      _photoUrl = meta?['photoUrl'] as String?;
+    }
   }
 
   @override
@@ -598,33 +637,172 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
   String _formatDate(DateTime d) =>
       '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
 
-  String _calculateBabyAge(DateTime birth) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final bDate = DateTime(birth.year, birth.month, birth.day);
-    final days = today.difference(bDate).inDays + 1;
-    if (days <= 0) return '출생 예정';
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (image != null && mounted) {
+        setState(() {
+          _photoUrl = image.path;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('사진을 가져오지 못했습니다: $e')),
+        );
+      }
+    }
+  }
 
-    var months = (today.year - bDate.year) * 12 + (today.month - bDate.month);
-    if (today.day < bDate.day) months -= 1;
-    if (months < 0) months = 0;
-
-    return '$days일째 ($months개월)';
+  void _showImagePickerActionSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                '아기 프로필 사진 설정',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFFD97706), size: 20),
+                ),
+                title: const Text('사진 보관함에서 선택', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFFD97706), size: 20),
+                ),
+                title: const Text('카메라로 촬영하기', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              if (_photoUrl != null)
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFEE2E2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 20),
+                  ),
+                  title: const Text('기본 이모티콘으로 변경 (사진 삭제)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Color(0xFFEF4444))),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    setState(() {
+                      _photoUrl = null;
+                    });
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _save() {
     final name = _nameController.text.trim().isEmpty ? '우리 아기 👶' : _nameController.text.trim();
+
+    // Preserve existing logs & history if present
+    final meta = widget.category.metadata;
+    List<BabyCareLogItem> existingCareLogs = [];
+    List<VaccineDose> existingVaccines = kDefaultVaccineDoses;
+    List<HealthCheckupDose> existingCheckups = kDefaultHealthCheckupDoses;
+    List<GrowthRecord> existingGrowthRecords = [];
+
+    if (widget.editProfile != null) {
+      existingCareLogs = widget.editProfile!.careLogs;
+      existingVaccines = widget.editProfile!.vaccineDoses.isNotEmpty
+          ? widget.editProfile!.vaccineDoses
+          : kDefaultVaccineDoses;
+      existingCheckups = widget.editProfile!.checkupDoses.isNotEmpty
+          ? widget.editProfile!.checkupDoses
+          : kDefaultHealthCheckupDoses;
+      existingGrowthRecords = widget.editProfile!.growthRecords;
+    } else if (meta?['babyProfile'] != null) {
+      try {
+        final prof = BabyProfile.fromJson(meta!['babyProfile'] as Map<String, dynamic>);
+        existingCareLogs = prof.careLogs;
+        existingVaccines = prof.vaccineDoses.isNotEmpty ? prof.vaccineDoses : kDefaultVaccineDoses;
+        existingCheckups = prof.checkupDoses.isNotEmpty ? prof.checkupDoses : kDefaultHealthCheckupDoses;
+        existingGrowthRecords = prof.growthRecords;
+      } catch (_) {}
+    }
+
+    final newProfile = BabyProfile(
+      name: name,
+      birthDate: _birthDate,
+      birthTime: _birthTime,
+      gender: _gender,
+      bloodType: _bloodType,
+      photoUrl: _photoUrl,
+      feedingIntervalHours: _feedingIntervalHours,
+      careLogs: existingCareLogs,
+      vaccineDoses: existingVaccines,
+      checkupDoses: existingCheckups,
+      growthRecords: existingGrowthRecords,
+    );
+
     final updated = widget.category.copyWith(
       metadata: {
         'isInitialized': true,
+        'babyProfile': newProfile.toJson(),
         'babyName': name,
         'birthDate': _birthDate.toIso8601String(),
+        'photoUrl': _photoUrl,
+        'gender': _gender.toJson(),
+        'bloodType': _bloodType,
+        'feedingIntervalHours': _feedingIntervalHours,
       },
     );
     ref.read(categoryListProvider.notifier).updateCategory(updated);
 
+    // D-Day & Milestone Auto Generation
     final existingItems = ref.read(planItemsByCategoryProvider(widget.category.categoryKey));
 
+    // [1] 태어난 날 (Days Count)
     final hasBirth = existingItems.any((i) => i.title.contains('탄생') || i.title.contains('태어난'));
     if (!hasBirth) {
       ref.read(planListProvider.notifier).addItem(
@@ -639,16 +817,78 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
           );
     }
 
+    // [2] 100일 (백일) D-Day
+    final has100 = existingItems.any((i) => i.title.contains('100일') || i.title.contains('백일'));
+    if (!has100) {
+      final date100 = _birthDate.add(const Duration(days: 99));
+      ref.read(planListProvider.notifier).addItem(
+            PlanItem(
+              id: 'plan-baby-100-${DateTime.now().microsecondsSinceEpoch}',
+              title: '100일 (백일)',
+              date: date100,
+              categoryKey: widget.category.categoryKey,
+              isAllDay: true,
+              displayMode: DdayDisplayMode.dday,
+            ),
+          );
+    }
+
+    // [3] 첫돌 D-Day
+    final hasDol = existingItems.any((i) => i.title.contains('첫돌') || i.title.contains('돌잔치'));
+    if (!hasDol) {
+      final dateDol = DateTime(_birthDate.year + 1, _birthDate.month, _birthDate.day);
+      ref.read(planListProvider.notifier).addItem(
+            PlanItem(
+              id: 'plan-baby-dol-${DateTime.now().microsecondsSinceEpoch}',
+              title: '첫돌 (1년)',
+              date: dateDol,
+              categoryKey: widget.category.categoryKey,
+              isAllDay: true,
+              displayMode: DdayDisplayMode.dday,
+            ),
+          );
+    }
+
+    // [4] 2차 영유아 건강검진 D-Day (생후 4개월)
+    final hasCheckup2 = existingItems.any((i) => i.title.contains('2차 영유아'));
+    if (!hasCheckup2) {
+      final dateCheckup2 = _birthDate.add(const Duration(days: 120));
+      ref.read(planListProvider.notifier).addItem(
+            PlanItem(
+              id: 'plan-baby-chk2-${DateTime.now().microsecondsSinceEpoch}',
+              title: '2차 영유아 건강검진 시작',
+              date: dateCheckup2,
+              categoryKey: widget.category.categoryKey,
+              isAllDay: true,
+              displayMode: DdayDisplayMode.dday,
+            ),
+          );
+    }
+
     Navigator.of(context).pop(true);
   }
 
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final ageText = _calculateBabyAge(_birthDate);
+    final daysCountText = _controller.formatBabyDaysCount(_birthDate);
+    final detailedAgeText = _controller.formatBabyAgeDetailed(_birthDate);
+
+    final isBoy = _gender == BabyGender.boy;
+    final isGirl = _gender == BabyGender.girl;
+
+    ImageProvider? avatarImage;
+    if (_photoUrl != null && _photoUrl!.isNotEmpty) {
+      if (_photoUrl!.startsWith('http')) {
+        avatarImage = NetworkImage(_photoUrl!);
+      } else {
+        final f = File(_photoUrl!);
+        if (f.existsSync()) avatarImage = FileImage(f);
+      }
+    }
 
     return Container(
-      height: mediaQuery.size.height * 0.80,
+      height: mediaQuery.size.height * 0.90,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -670,7 +910,7 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  '👶 아기 정보 설정',
+                  '👶 아기 성장 & 프로필 설정',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
                 ),
                 IconButton(
@@ -685,56 +925,150 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                // 미리보기 카드
+                // 1. 성장 프리뷰 카드
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
+                    color: isBoy
+                        ? const Color(0xFFF0F9FF)
+                        : (isGirl ? const Color(0xFFFDF2F8) : const Color(0xFFFFFBEB)),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isBoy
+                          ? const Color(0xFFBAE6FD)
+                          : (isGirl ? const Color(0xFFFBCFE8) : const Color(0xFFFDE68A)),
+                      width: 1.5,
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Text('👶', style: TextStyle(fontSize: 32)),
+                      // 사진 업로드 클릭 아바타
+                      GestureDetector(
+                        onTap: _showImagePickerActionSheet,
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: 64,
+                              height: 64,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isBoy
+                                      ? const Color(0xFF0284C7)
+                                      : (isGirl ? const Color(0xFFDB2777) : const Color(0xFFD97706)),
+                                  width: 2,
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: avatarImage != null
+                                    ? Image(
+                                        image: avatarImage,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => const Center(
+                                          child: Text('👶', style: TextStyle(fontSize: 30)),
+                                        ),
+                                      )
+                                    : const Center(
+                                        child: Text('👶', style: TextStyle(fontSize: 30)),
+                                      ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.camera_alt_rounded, size: 12, color: Colors.black87),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _nameController.text.trim().isEmpty ? '우리 아기' : _nameController.text.trim(),
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            ageText,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFFD97706)),
-                          ),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  _nameController.text.trim().isEmpty ? '우리 아기' : _nameController.text.trim(),
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                                ),
+                                if (_gender != BabyGender.none) ...[
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _gender.label,
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              daysCountText,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                color: isBoy
+                                    ? const Color(0xFF0284C7)
+                                    : (isGirl ? const Color(0xFFDB2777) : const Color(0xFFD97706)),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              detailedAgeText,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-                // 아기 이름
-                const Text('아기 이름 / 태명', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
+                // 2. 아기 이름 / 태명
+                const Text('아기 이름 / 태명', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
+                const SizedBox(height: 6),
                 TextField(
                   controller: _nameController,
                   decoration: InputDecoration(
-                    hintText: '예: 우리 아기, 튼튼이',
+                    hintText: '예: 우리 아기, 튼튼이, 지우',
                     filled: true,
-                    fillColor: const Color(0xFFF2F2F7),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    fillColor: const Color(0xFFF9FAFB),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
 
-                // 탄생일 (생년월일)
-                const Text('탄생일 (생년월일)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                // 3. 성별 선택
+                const Text('성별 선택', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
                 const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _buildGenderChip(BabyGender.boy, '남아 🩵', const Color(0xFF0284C7), const Color(0xFFE0F2FE)),
+                    const SizedBox(width: 8),
+                    _buildGenderChip(BabyGender.girl, '여아 🩷', const Color(0xFFDB2777), const Color(0xFFFCE7F3)),
+                    const SizedBox(width: 8),
+                    _buildGenderChip(BabyGender.none, '미지정', const Color(0xFF64748B), const Color(0xFFF1F5F9)),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                // 4. 출생일 (생년월일)
+                const Text('출생일 (생년월일)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
+                const SizedBox(height: 6),
                 InkWell(
                   onTap: () async {
                     final picked = await showHaruDatePicker(
@@ -749,22 +1083,127 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF2F2F7),
+                      color: const Color(0xFFF9FAFB),
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           _formatDate(_birthDate),
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF007AFF)),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0284C7)),
                         ),
-                        const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF007AFF)),
+                        const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF0284C7)),
                       ],
                     ),
                   ),
+                ),
+                const SizedBox(height: 18),
+
+                // 5. 출생 시간 & 혈액형 (선택)
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('출생 시간 (선택)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
+                          const SizedBox(height: 6),
+                          InkWell(
+                            onTap: () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.now(),
+                              );
+                              if (picked != null) {
+                                final h = picked.hour.toString().padLeft(2, '0');
+                                final m = picked.minute.toString().padLeft(2, '0');
+                                setState(() => _birthTime = '$h:$m');
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE5E7EB)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _birthTime ?? '시간 선택',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: _birthTime != null ? AppColors.protoHeading : Colors.grey,
+                                    ),
+                                  ),
+                                  const Icon(Icons.access_time_rounded, size: 18, color: Colors.grey),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('혈액형 (선택)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<String>(
+                            initialValue: _bloodType,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFB),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            hint: const Text('혈액형', style: TextStyle(fontSize: 13)),
+                            items: const [
+                              DropdownMenuItem(value: 'A', child: Text('A형')),
+                              DropdownMenuItem(value: 'B', child: Text('B형')),
+                              DropdownMenuItem(value: 'O', child: Text('O형')),
+                              DropdownMenuItem(value: 'AB', child: Text('AB형')),
+                            ],
+                            onChanged: (val) => setState(() => _bloodType = val),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                // 6. 기본 수유 텀 설정
+                const Text('기본 수유 텀 (시간)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final hours in [2, 3, 4, 5])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text('$hours시간'),
+                          selected: _feedingIntervalHours == hours,
+                          onSelected: (selected) {
+                            if (selected) setState(() => _feedingIntervalHours = hours);
+                          },
+                          selectedColor: const Color(0xFF0284C7),
+                          labelStyle: TextStyle(
+                            color: _feedingIntervalHours == hours ? Colors.white : Colors.black87,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -773,7 +1212,7 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
             padding: const EdgeInsets.all(20),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF007AFF),
+                backgroundColor: const Color(0xFF0284C7),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 52),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -786,7 +1225,38 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
       ),
     );
   }
+
+  Widget _buildGenderChip(BabyGender gender, String label, Color activeColor, Color activeBg) {
+    final isSelected = _gender == gender;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _gender = gender),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? activeBg : const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? activeColor : const Color(0xFFE5E7EB),
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+              color: isSelected ? activeColor : const Color(0xFF475569),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
+
 
 /// 3. 솔로 (Solo) 온보딩 설정 바텀시트
 Future<bool?> showSoloOnboardingSheet(
@@ -812,38 +1282,57 @@ class _SoloOnboardingSheet extends ConsumerStatefulWidget {
 }
 
 class _SoloOnboardingSheetState extends ConsumerState<_SoloOnboardingSheet> {
-  late DateTime _startDate;
+  late SoloMode _mode;
+  late DateTime _selfCareStartDate;
+  late DateTime _crushStartDate;
 
   @override
   void initState() {
     super.initState();
     final meta = widget.category.metadata;
-    _startDate = meta?['soloStartDate'] != null
+    final now = DateTime.now();
+
+    final profile = meta?['soloProfile'] != null
+        ? SoloProfile.fromJson(Map<String, dynamic>.from(meta!['soloProfile'] as Map))
+        : null;
+
+    final legacySoloStart = meta?['soloStartDate'] != null
         ? DateTime.parse(meta!['soloStartDate'] as String)
-        : DateTime.now().subtract(const Duration(days: 30));
+        : null;
+
+    _mode = profile?.mode ?? SoloMode.selfCare;
+    _selfCareStartDate = profile?.selfCareStartDate ?? (legacySoloStart ?? now.subtract(const Duration(days: 30)));
+    _crushStartDate = profile?.crushStartDate ?? now.subtract(const Duration(days: 7));
   }
 
   String _formatDate(DateTime d) =>
       '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
 
   void _save() {
-    final updated = widget.category.copyWith(
-      metadata: {
-        'isInitialized': true,
-        'soloStartDate': _startDate.toIso8601String(),
-      },
+    final profile = SoloProfile(
+      mode: _mode,
+      selfCareStartDate: _selfCareStartDate,
+      crushStartDate: _crushStartDate,
+      showTopCard: true,
     );
+
+    final currentMeta = Map<String, dynamic>.from(widget.category.metadata ?? {});
+    currentMeta['isInitialized'] = true;
+    currentMeta['soloProfile'] = profile.toJson();
+    currentMeta['soloStartDate'] = profile.activeStartDate.toIso8601String();
+
+    final updated = widget.category.copyWith(metadata: currentMeta);
     ref.read(categoryListProvider.notifier).updateCategory(updated);
 
     final existingItems = ref.read(planItemsByCategoryProvider(widget.category.categoryKey));
-
-    final hasSolo = existingItems.any((i) => i.title.contains('솔로'));
+    final hasSolo = existingItems.any((i) => i.title.contains('집중') || i.title.contains('설레') || i.title.contains('솔로'));
     if (!hasSolo) {
+      final initialTitle = _mode == SoloMode.selfCare ? '나에게 집중하기 시작한 날' : '마음이 설레기 시작한 날';
       ref.read(planListProvider.notifier).addItem(
             PlanItem(
               id: 'plan-solo-${DateTime.now().microsecondsSinceEpoch}',
-              title: '솔로 시작일',
-              date: _startDate,
+              title: initialTitle,
+              date: profile.activeStartDate,
               categoryKey: widget.category.categoryKey,
               isAllDay: true,
               displayMode: DdayDisplayMode.daysCount,
@@ -857,13 +1346,20 @@ class _SoloOnboardingSheetState extends ConsumerState<_SoloOnboardingSheet> {
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
+    final isSelfCare = _mode == SoloMode.selfCare;
+    final activeDate = isSelfCare ? _selfCareStartDate : _crushStartDate;
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final start = DateTime(_startDate.year, _startDate.month, _startDate.day);
+    final start = DateTime(activeDate.year, activeDate.month, activeDate.day);
     final days = today.difference(start).inDays + 1;
 
+    final themeColor = isSelfCare ? const Color(0xFF9333EA) : const Color(0xFFE11D48);
+    final cardBgColor = isSelfCare ? const Color(0xFFFAF5FF) : const Color(0xFFFFF1F2);
+    final borderColor = isSelfCare ? const Color(0xFFE9D5FF) : const Color(0xFFFFE4E6);
+
     return Container(
-      height: mediaQuery.size.height * 0.70,
+      height: mediaQuery.size.height * 0.75,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -885,7 +1381,7 @@ class _SoloOnboardingSheetState extends ConsumerState<_SoloOnboardingSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  '🌟 솔로 시작일 설정',
+                  '🌱 나 중심 디데이 플래너',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
                 ),
                 IconButton(
@@ -900,60 +1396,178 @@ class _SoloOnboardingSheetState extends ConsumerState<_SoloOnboardingSheet> {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                // 1. 모드 선택 세그먼트
+                const Text(
+                  '현재 나에게 맞는 상태를 선택해주세요',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                ),
+                const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFAF5FF),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE9D5FF)),
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
                     children: [
-                      const Text('🌟', style: TextStyle(fontSize: 32)),
-                      const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('자유로운 솔로 라이프', style: TextStyle(fontSize: 13, color: Color(0xFF7E22CE))),
-                          Text(
-                            '솔로 ${days > 0 ? days : 1}일째',
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF9333EA)),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => setState(() => _mode = SoloMode.selfCare),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelfCare ? Colors.white : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: isSelfCare
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.04),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            alignment: Alignment.center,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('🌱', style: TextStyle(fontSize: 14)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '나를 위한 시간',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isSelfCare ? FontWeight.bold : FontWeight.w500,
+                                    color: isSelfCare ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
+                      ),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => setState(() => _mode = SoloMode.crush),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: !isSelfCare ? Colors.white : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: !isSelfCare
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.04),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            alignment: Alignment.center,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('💌', style: TextStyle(fontSize: 14)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '마음 진행 중',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: !isSelfCare ? FontWeight.bold : FontWeight.w500,
+                                    color: !isSelfCare ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // 2. 단정하고 눈이 편안한 파스텔 프리뷰 카드
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: cardBgColor,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(isSelfCare ? '🌱' : '💌', style: const TextStyle(fontSize: 32)),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isSelfCare ? '싱글/이별/새출발 나에게 온전히 집중하는 시간' : '설레는 짝사랑/썸/연락이 시작된 날',
+                              style: TextStyle(fontSize: 11, color: themeColor, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_mode.cardTitlePrefix} ${days > 0 ? days : 1}일째',
+                              style: TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text('솔로 시작일 (싱글/이별 시작일)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+
+                // 3. 시작일 선택 필드
+                Text(
+                  isSelfCare ? '나를 위한 시간 시작일 (싱글/새출발/자유 시작일)' : '마음이 설레기 시작한 날 (짝사랑/썸/연락일)',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                ),
                 const SizedBox(height: 8),
                 InkWell(
                   onTap: () async {
                     final picked = await showHaruDatePicker(
                       context,
-                      initialDate: _startDate,
+                      initialDate: activeDate,
                       firstDate: DateTime(1900),
                       lastDate: DateTime(2100),
                     );
                     if (picked != null) {
-                      setState(() => _startDate = picked);
+                      setState(() {
+                        if (isSelfCare) {
+                          _selfCareStartDate = picked;
+                        } else {
+                          _crushStartDate = picked;
+                        }
+                      });
                     }
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF2F2F7),
+                      color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _formatDate(_startDate),
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF007AFF)),
+                          _formatDate(activeDate),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
                         ),
-                        const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF007AFF)),
+                        Icon(Icons.calendar_today_rounded, size: 18, color: themeColor),
                       ],
                     ),
                   ),
@@ -965,7 +1579,7 @@ class _SoloOnboardingSheetState extends ConsumerState<_SoloOnboardingSheet> {
             padding: const EdgeInsets.all(20),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF007AFF),
+                backgroundColor: const Color(0xFF0F172A),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 52),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

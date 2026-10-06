@@ -33,10 +33,10 @@ const List<OnboardingCategory> kOnboardingCategories = [
     emoji: '⭐',
   ),
   OnboardingCategory(
-    key: 'group',
-    labelKo: '모임',
-    group: CategoryGroup.practical,
-    emoji: '👥',
+    key: 'baby',
+    labelKo: '아기',
+    group: CategoryGroup.emotional,
+    emoji: '👶',
   ),
   OnboardingCategory(
     key: 'military',

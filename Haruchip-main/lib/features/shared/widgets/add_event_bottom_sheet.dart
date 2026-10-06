@@ -5,6 +5,7 @@ import '../../calendar/providers/schedule_room_provider.dart';
 import '../../categories/logic/repeat_rule.dart';
 import '../../categories/models/pet_profile.dart';
 import '../../categories/providers/category_provider.dart';
+import '../../categories/providers/custom_tags_provider.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../../../services/calendar/external_calendar_push_service.dart';
@@ -22,15 +23,14 @@ const Color _kChipSelected = Color(0xFF007AFF);
 
 const Map<String, List<String>> _kPresets = {
   'couple': ['데이트', '기념일', '여행', '처음 만난 날', '100일'],
-  'baby': ['예방접종', '첫걸음마', '첫말하기', '병원 방문', '백일', '돌잔치'],
+  'baby': ['예방접종', '영유아검진', '소아과(진료)', '성장기록', '돌잔치/기념일'],
   'pet': ['병원', '미용', '사료구매', '산책', '예방접종', '생일'],
   'exam': ['필기시험', '실기시험', '원서접수', '합격발표', '중간고사', '기말고사', '토익'],
   'birthday': ['생일', '선물 준비', '파티', '케이크 예약'],
   'plan': ['미팅', '마감', '약속', '기획안', '클라이언트'],
   'military': ['입대', '전역', '면회', '외박'],
-  'solo': ['혼자 여행', '자기개발', '취미 생활', '힐링 데이'],
+  'solo': ['나홀로여행', '바디프로필', '취미/운동', '새출발', '데이트/소개팅'],
   'fandom': ['컴백', '음방', '콘서트/팬미팅', '티켓팅', '생일', '팬싸', '자체컨텐츠'],
-  'group': ['정기 모임', '동창회', '회비 정산', '번개 모임', '스터디'],
 };
 
 const List<({RepeatType type, String label})> _kRepeatOptions = [
@@ -145,6 +145,7 @@ Future<void> showAddEventBottomSheet(
   String? categoryInstanceId,
   String? initialRoomId,
   DateTime? initialDate,
+  String? initialTitle,
   PlanItem? existingItem,
 }) async {
   await showModalBottomSheet(
@@ -156,6 +157,7 @@ Future<void> showAddEventBottomSheet(
       categoryInstanceId: categoryInstanceId,
       initialRoomId: initialRoomId,
       initialDate: initialDate,
+      initialTitle: initialTitle,
       existingItem: existingItem,
     ),
   );
@@ -168,6 +170,7 @@ class AddEventBottomSheet extends ConsumerStatefulWidget {
     this.categoryInstanceId,
     this.initialRoomId,
     this.initialDate,
+    this.initialTitle,
     this.existingItem,
   });
 
@@ -175,6 +178,7 @@ class AddEventBottomSheet extends ConsumerStatefulWidget {
   final String? categoryInstanceId;
   final String? initialRoomId;
   final DateTime? initialDate;
+  final String? initialTitle;
   final PlanItem? existingItem;
 
   @override
@@ -182,10 +186,8 @@ class AddEventBottomSheet extends ConsumerStatefulWidget {
 }
 
 class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
-  int _tabIndex = 0; // 0: 이벤트, 1: 미리 알림
   late String _selectedCategoryKey;
   final _titleCtrl = TextEditingController();
-  final List<String> _customTags = [];
 
   // Pet Target Selection
   String? _selectedPetId;
@@ -210,6 +212,9 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
   final List<String> _selectedDaysOfYear = [];
   DateTime? _repeatEndDate;
 
+  // Pre-event Reminder
+  EventReminder _reminder = EventReminder.none;
+
   // Calendar Sync
   bool _syncGoogle = false;
   bool _syncNaver = false;
@@ -228,7 +233,9 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
     _selectedCategoryKey = widget.categoryKey.isEmpty ? 'plan' : widget.categoryKey;
     final now = DateTime.now();
     _startDate = widget.initialDate ?? DateTime(now.year, now.month, now.day);
-
+    if (widget.initialTitle != null) {
+      _titleCtrl.text = widget.initialTitle!;
+    }
     if (widget.existingItem != null) {
       final item = widget.existingItem!;
       _selectedCategoryKey = item.categoryKey;
@@ -243,6 +250,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
       _endDate = item.endDate;
       _endTime = item.endDeadlineTime;
       _repeatType = item.repeatConfig.type;
+      _reminder = item.reminder;
       _selectedWeekdays.addAll(item.repeatConfig.weekdays);
       _selectedDaysOfMonth.addAll(item.repeatConfig.daysOfMonth);
       _selectedDaysOfYear.addAll(item.repeatConfig.daysOfYear);
@@ -284,12 +292,8 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
   }
 
   void _onTagPressed(String tag) {
-    final cur = _titleCtrl.text.trim();
-    if (cur.isEmpty) {
-      _titleCtrl.text = tag;
-    } else {
-      _titleCtrl.text = '$tag $cur';
-    }
+    // Smart Replace: cleanly replace title text with selected tag
+    _titleCtrl.text = tag;
 
     // Preset auto-behaviors
     if (_selectedCategoryKey == 'pet') {
@@ -360,12 +364,38 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
     );
 
     if (newTag != null && newTag.isNotEmpty) {
-      setState(() {
-        if (!_customTags.contains(newTag)) {
-          _customTags.add(newTag);
-        }
-      });
+      ref.read(categoryCustomTagsProvider.notifier).addCustomTag(_selectedCategoryKey, newTag);
       _onTagPressed(newTag);
+    }
+  }
+
+  Future<void> _showDeleteCustomTagDialog(String tag) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('태그 삭제', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        content: Text('\'$tag\' 커스텀 태그를 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      ref.read(categoryCustomTagsProvider.notifier).removeCustomTag(_selectedCategoryKey, tag);
+      if (_titleCtrl.text.trim() == tag) {
+        _titleCtrl.clear();
+      }
+      setState(() {});
     }
   }
 
@@ -398,6 +428,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
         photoUrl: effectivePhotoUrl,
         displayMode: _displayMode,
         repeatConfig: config,
+        reminder: _reminder,
         calendarSync: CalendarSyncFlags(google: _syncGoogle, naver: _syncNaver, haruchip: true),
         deadlineTime: _startTime,
         endDate: _hasEndDate ? _endDate : null,
@@ -434,6 +465,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
             date: dates[i],
             displayMode: _displayMode,
             repeatConfig: config,
+            reminder: _reminder,
             calendarSync: CalendarSyncFlags(google: _syncGoogle, naver: _syncNaver, haruchip: true),
             deadlineTime: _startTime,
             endDate: _hasEndDate ? _endDate : null,
@@ -462,6 +494,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
           date: _startDate,
           displayMode: _displayMode,
           repeatConfig: config,
+          reminder: _reminder,
           calendarSync: CalendarSyncFlags(google: _syncGoogle, naver: _syncNaver, haruchip: true),
           deadlineTime: _startTime,
           endDate: _hasEndDate ? _endDate : null,
@@ -530,24 +563,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
               ],
             ),
           ),
-          // Segment Control Tab: [이벤트] / [미리 알림]
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Container(
-              height: 36,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE5E5EA),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Row(
-                children: [
-                  _buildSegmentTabItem('이벤트', 0),
-                  _buildSegmentTabItem('미리 알림', 1),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           // Form Scroll View
           Expanded(
             child: ListView(
@@ -576,6 +592,10 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
                 _buildRepeatSection(),
                 const SizedBox(height: 14),
 
+                // 4-1. Pre-event Reminder
+                _buildReminderSection(),
+                const SizedBox(height: 14),
+
                 // 5. Calendar Sync (Google / Naver One-way Outbound Push)
                 _buildCalendarSyncSection(),
                 const SizedBox(height: 14),
@@ -586,40 +606,6 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSegmentTabItem(String label, int index) {
-    final isSelected = _tabIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _tabIndex = index),
-        child: Container(
-          margin: const EdgeInsets.all(2),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(7),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 3,
-                      offset: const Offset(0, 1),
-                    )
-                  ]
-                : null,
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              color: isSelected ? _kLabel : _kSubLabel,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -648,9 +634,11 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
               children: [
                 Icon(Icons.category_outlined, size: 16, color: _kLabel),
                 SizedBox(width: 6),
-                Text(
-                  '등록 카테고리 (D-Day 자동 연동)',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _kLabel),
+                Expanded(
+                  child: Text(
+                    '등록 카테고리 (D-Day 자동 연동)',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _kLabel),
+                  ),
                 ),
               ],
             ),
@@ -832,7 +820,8 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
 
   Widget _buildTitleSection() {
     final defaultPresets = _kPresets[_selectedCategoryKey] ?? ['기념일', '일정', '약속'];
-    final allTags = [...defaultPresets, ..._customTags];
+    final customTags = ref.watch(categoryCustomTagsProvider)[_selectedCategoryKey] ?? [];
+    final allTags = [...defaultPresets, ...customTags];
     final placeholder = switch (_selectedCategoryKey) {
       'couple' => '예: 우리 100일, 여행 기념일',
       'solo' => '예: 혼자만의 힐링 여행, 취미 시작',
@@ -840,11 +829,13 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
       'group' => '예: 동창회, 정기 모임, 스터디',
       'exam' => '예: 정보처리기사 필기, 토익',
       'birthday' => '예: 엄마 생신, ○○이 생일',
-      'baby' => '예: 첫 뒤집기, 백일 사진',
+      'baby' => '예: 2차 예방접종, 영유아검진, 백일 사진, 소아과 진료',
       'pet' => '예: 병원 예약, 산책',
       'military' => '예: 전역까지, 첫 휴가',
       _ => '제목 입력 (예: 기획안 마감, 클라이언트 미팅)',
     };
+
+    final currentTitle = _titleCtrl.text.trim();
 
     return _buildGroupCard(
       child: Column(
@@ -853,6 +844,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
           TextField(
             controller: _titleCtrl,
             style: const TextStyle(fontSize: 16, color: _kLabel),
+            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: placeholder,
               hintStyle: const TextStyle(color: _kSubLabel, fontSize: 14),
@@ -867,22 +859,52 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final tag in allTags)
-                  InkWell(
-                    onTap: () => _onTagPressed(tag),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _kChipBg,
-                        borderRadius: BorderRadius.circular(16),
+                for (final tag in allTags) ...[
+                  () {
+                    final isSelected = currentTitle == tag;
+                    final isCustom = customTags.contains(tag);
+                    return InkWell(
+                      onTap: () => _onTagPressed(tag),
+                      onLongPress: isCustom ? () => _showDeleteCustomTagDialog(tag) : null,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? _kBlue.withValues(alpha: 0.15) : _kChipBg,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected ? _kBlue : Colors.transparent,
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              tag,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? _kBlue : _kLabel,
+                              ),
+                            ),
+                            if (isCustom) ...[
+                              const SizedBox(width: 4),
+                              GestureDetector(
+                                onTap: () => _showDeleteCustomTagDialog(tag),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 14,
+                                  color: isSelected ? _kBlue : _kSubLabel,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                      child: Text(
-                        tag,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _kLabel),
-                      ),
-                    ),
-                  ),
+                    );
+                  }(),
+                ],
                 InkWell(
                   onTap: _showAddCustomTagDialog,
                   borderRadius: BorderRadius.circular(16),
@@ -894,7 +916,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Text(
-                      '+ 직접 추가',
+                      '+ 태그 추가',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _kBlue),
                     ),
                   ),
@@ -1243,6 +1265,114 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
     );
   }
 
+  Widget _buildReminderSection() {
+    return _buildGroupCard(
+      child: Column(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.notifications_active_outlined, size: 20, color: _kBlue),
+            title: const Text('미리알림 (사전 알림)', style: TextStyle(fontSize: 15, color: _kLabel, fontWeight: FontWeight.w600)),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _reminder != EventReminder.none ? _kChipSelected : const Color(0xFFF2F2F7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _reminder.labelKo,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: _reminder != EventReminder.none ? Colors.white : _kLabel,
+                ),
+              ),
+            ),
+            onTap: () async {
+              final selected = await showModalBottomSheet<EventReminder>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (ctx) => SafeArea(
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                '🔔 미리알림 시간 선택',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _kLabel),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 20),
+                                onPressed: () => Navigator.pop(ctx),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: EventReminder.values.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                            itemBuilder: (context, index) {
+                              final opt = EventReminder.values[index];
+                              final isCurrent = _reminder == opt;
+                              return ListTile(
+                                title: Text(
+                                  opt.labelKo,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                    color: isCurrent ? _kBlue : _kLabel,
+                                  ),
+                                ),
+                                trailing: isCurrent
+                                    ? const Icon(Icons.check, color: _kBlue, size: 20)
+                                    : null,
+                                onTap: () {
+                                  Navigator.pop(ctx, opt);
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+
+              if (selected != null) {
+                setState(() => _reminder = selected);
+                if (!mounted) return;
+                if (selected != EventReminder.none) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('🔔 [${selected.labelKo}]에 사전 리마인더가 발송됩니다.'),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCalendarSyncSection() {
     final googleList = ExternalCalendarPushService.instance.googleCalendars;
     final naverList = ExternalCalendarPushService.instance.naverCalendars;
@@ -1427,19 +1557,22 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
   }
 
   Widget _buildGroupCard({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _kGroupBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    return Material(
+      color: _kGroupBg,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
-import '../../onboarding/screens/widget_guide_screen.dart';
+import '../../settings/screens/settings_screen.dart';
+import '../../widgets/screens/widget_simulator_screen.dart';
+import '../screens/trash_bin_screen.dart';
 
 /// 설정 모달 — CLAUDE.md §8(공통 UI 모달 닫기 규칙).
 ///
@@ -26,14 +28,6 @@ Future<void> showSettingsModal(BuildContext context) {
 
 class _SettingsModal extends StatelessWidget {
   const _SettingsModal();
-
-  void _openWidgetGuide(BuildContext context) {
-    final navigator = Navigator.of(context);
-    navigator.pop();
-    navigator.push(
-      MaterialPageRoute(builder: (_) => const WidgetGuideScreen()),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,8 +68,14 @@ class _SettingsModal extends StatelessWidget {
             const SizedBox(height: 16),
             _SettingsRow(
               label: '구글 / 네이버 캘린더 연동',
-              valueText: '연동됨 (구글)',
+              valueText: '관리하기',
               bg: AppColors.protoCardSelectedBg,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
             ),
             const SizedBox(height: 8),
             _SettingsRow(
@@ -85,26 +85,65 @@ class _SettingsModal extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             _SettingsRow(
-              label: '홈 화면 위젯 가이드',
-              valueText: '보기',
-              bg: AppColors.surfaceMuted,
-              onTap: () => _openWidgetGuide(context),
+              label: '홈/잠금화면 위젯 시뮬레이터',
+              valueText: '열기',
+              bg: const Color(0xFFF3E8FF),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const WidgetSimulatorScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            _SettingsRow(
+              label: '🗑️ 휴지통 (30일 복구 보존)',
+              valueText: '열기',
+              bg: const Color(0xFFEFF6FF),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const TrashBinScreen()),
+                );
+              },
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.protoButtonBg,
-                  foregroundColor: AppColors.protoButtonText,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.protoHeading,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text('전체 설정 관리'),
                   ),
                 ),
-                child: const Text('확인'),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.protoButtonBg,
+                      foregroundColor: AppColors.protoButtonText,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text('닫기'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
