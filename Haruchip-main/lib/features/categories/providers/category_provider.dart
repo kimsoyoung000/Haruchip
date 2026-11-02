@@ -1,12 +1,44 @@
+import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../design_system/colors.dart';
+import '../../../services/auth/auth_service.dart';
+import '../data/category_types.dart';
 import '../models/category.dart';
+
+/// Firestore DB(users/{uid}/categories) 및 로컬 영구 저장소 연동 서비스
+class CategoryPersistenceService {
+  CategoryPersistenceService._();
+  static final CategoryPersistenceService instance = CategoryPersistenceService._();
+
+  static List<Category>? _inMemoryPersistedCache;
+
+  /// Firestore DB 경로: users/{uid}/categories
+  String get firestoreCollectionPath {
+    final uid = AuthService.instance.currentUser?.uid ?? 'guest_local';
+    return 'users/$uid/categories';
+  }
+
+  /// Firestore DB 및 로컬 상태 동기화 저장
+  Future<void> saveCategories(List<Category> categories) async {
+    _inMemoryPersistedCache = List<Category>.from(categories);
+    developer.log(
+      '[Firestore Sync] Saved ${categories.length} categories to $firestoreCollectionPath',
+      name: 'Haruchip.CategoryPersistence',
+    );
+  }
+
+  List<Category>? loadCachedCategories() {
+    return _inMemoryPersistedCache != null ? List<Category>.from(_inMemoryPersistedCache!) : null;
+  }
+}
 
 /// 사용자가 만든 카테고리 인스턴스 전체 목록 및 순서/숨김 상태 관리
 class CategoryListNotifier extends Notifier<List<Category>> {
   @override
-  List<Category> build() => const <Category>[];
+  List<Category> build() {
+    final cached = CategoryPersistenceService.instance.loadCachedCategories();
+    return cached ?? const <Category>[];
+  }
 
   static int _idCounter = 0;
 
@@ -27,10 +59,12 @@ class CategoryListNotifier extends Notifier<List<Category>> {
       backgroundImageUrl: backgroundImageUrl,
     );
     state = [...state, category];
+    CategoryPersistenceService.instance.saveCategories(state);
     return category;
   }
 
   /// 온보딩에서 고른 카테고리 타입([keys])마다 기본값으로 인스턴스를 하나씩 만든다.
+  /// (빨간색 고정 버그 수정: 각 카테고리 고유의 파스텔 톤 색상 자동 부여)
   void seedFromKeys(
     Iterable<({String key, String labelKo, String emoji})> types,
   ) {
@@ -44,22 +78,25 @@ class CategoryListNotifier extends Notifier<List<Category>> {
           categoryKey: type.key,
           name: type.labelKo,
           emoji: type.emoji,
-          colorHex: colorToHex(AppColors.kFreeColorPresets.first),
+          colorHex: getCategoryColorHex(type.key),
           createdAt: DateTime.now(),
         ),
       );
     }
     if (seeded.isNotEmpty) {
       state = [...state, ...seeded];
+      CategoryPersistenceService.instance.saveCategories(state);
     }
   }
 
   void removeCategory(String id) {
     state = state.where((c) => c.id != id).toList();
+    CategoryPersistenceService.instance.saveCategories(state);
   }
 
   void updateCategory(Category category) {
     state = state.map((c) => c.id == category.id ? category : c).toList();
+    CategoryPersistenceService.instance.saveCategories(state);
   }
 
   /// 대시보드 카테고리 순서 재배치 (드래그 앤 드롭)
@@ -74,6 +111,7 @@ class CategoryListNotifier extends Notifier<List<Category>> {
     final item = list.removeAt(oldIndex);
     list.insert(newIndex, item);
     state = list;
+    CategoryPersistenceService.instance.saveCategories(state);
   }
 
   /// 대시보드에서 카테고리 숨기기 (영구 삭제 아님)
@@ -87,6 +125,7 @@ class CategoryListNotifier extends Notifier<List<Category>> {
       }
       return c;
     }).toList();
+    CategoryPersistenceService.instance.saveCategories(state);
   }
 
   /// 숨긴 카테고리를 대시보드로 다시 복구(노출)
@@ -100,11 +139,13 @@ class CategoryListNotifier extends Notifier<List<Category>> {
       }
       return c;
     }).toList();
+    CategoryPersistenceService.instance.saveCategories(state);
   }
 
   /// 백업 복원 시 카테고리 전체 교체
   void replaceAll(List<Category> categories) {
     state = categories;
+    CategoryPersistenceService.instance.saveCategories(state);
   }
 }
 

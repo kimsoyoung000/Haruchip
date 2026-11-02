@@ -12,6 +12,7 @@ import '../../shared/widgets/haru_calendar_picker.dart';
 import '../models/category.dart';
 import '../providers/category_provider.dart';
 import '../widgets/category_edit_modal.dart';
+import '../widgets/unified_category_top_card.dart';
 
 class CoupleCategoryDetailScreen extends ConsumerStatefulWidget {
   const CoupleCategoryDetailScreen({
@@ -408,7 +409,6 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
 
     final bgConfig = _category.background;
     final hasImage = bgConfig.type == BackgroundType.image && bgConfig.imageUrl != null;
-    final singleColor = bgConfig.colorValues.isNotEmpty ? colorFromHex(bgConfig.colorValues.first) : AppColors.protoCardBg;
 
     // Filter count-up items (N일째)
     final countUpItems = customItems.where((item) => item.displayMode == DdayDisplayMode.daysCount).toList();
@@ -489,126 +489,32 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Top Custom Main Card
-                  GestureDetector(
-                    onTap: _showRelationshipSetupModal,
-                    child: Container(
-                      width: double.infinity,
-                      height: 220,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: bgConfig.type == BackgroundType.singleColor ? singleColor : null,
-                        gradient: bgConfig.type == BackgroundType.gradient && bgConfig.colorValues.length >= 2
-                            ? LinearGradient(colors: bgConfig.colorValues.map((h) => colorFromHex(h)).toList())
-                            : null,
-                        image: hasImage
-                            ? DecorationImage(
-                                image: bgConfig.imageUrl!.startsWith('http')
-                                    ? NetworkImage(bgConfig.imageUrl!) as ImageProvider
-                                    : AssetImage(bgConfig.imageUrl!),
-                                fit: BoxFit.cover,
-                                colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.2), BlendMode.darken),
-                              )
-                            : null,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, cardConstraints) {
-                          final cWidth = cardConstraints.maxWidth;
-                          final cHeight = cardConstraints.maxHeight;
-                          final typo = _category.typography;
-                          final customTextColor = colorFromHex(typo.textColor);
+                  // 1. Top Custom Main Card (아기 카드와 1:1 통일된 네추럴 미니멀 폼 팩터)
+                  Builder(
+                    builder: (context) {
+                      final breakupDays = couple.reunions.fold<int>(0, (sum, r) => sum + r.length.inDays);
+                      final startDateStr = '시작일: ${couple.startDate.year}.${couple.startDate.month.toString().padLeft(2, '0')}.${couple.startDate.day.toString().padLeft(2, '0')}';
+                      final reunionStr = breakupDays > 0 ? '재회 기간 제외: $breakupDays일' : '연애 진행 중 ing';
 
-                          return Stack(
-                            children: [
-                              Align(
-                                alignment: typo.position.alignment,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20.0),
-                                  child: Opacity(
-                                    opacity: typo.opacity,
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment: switch (typo.position) {
-                                        TextPositionPreset.topLeft || TextPositionPreset.bottomLeft => CrossAxisAlignment.start,
-                                        TextPositionPreset.topRight || TextPositionPreset.bottomRight => CrossAxisAlignment.end,
-                                        _ => CrossAxisAlignment.center,
-                                      },
-                                      children: [
-                                        Text(
-                                          '${totalDays + 1}일째',
-                                          style: TextStyle(
-                                            fontFamily: typo.fontFamily,
-                                            fontSize: 34,
-                                            fontWeight: FontWeight.w800,
-                                            color: hasImage ? Colors.white : customTextColor,
-                                            shadows: hasImage ? const [Shadow(color: Colors.black45, blurRadius: 4)] : null,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              '${couple.startDate.year}.${couple.startDate.month.toString().padLeft(2, '0')}.${couple.startDate.day.toString().padLeft(2, '0')} ~ ing',
-                                              style: TextStyle(
-                                                fontFamily: typo.fontFamily,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: hasImage ? Colors.white70 : customTextColor.withValues(alpha: 0.8),
-                                                shadows: hasImage ? const [Shadow(color: Colors.black45, blurRadius: 2)] : null,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Icon(Icons.edit_calendar, size: 14, color: hasImage ? Colors.white70 : customTextColor.withValues(alpha: 0.8)),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (bgConfig.decorations != null)
-                                for (final sticker in bgConfig.decorations!)
-                                  Positioned(
-                                    left: sticker.x * cWidth,
-                                    top: sticker.y * cHeight,
-                                    child: Transform.rotate(
-                                      angle: sticker.rotation,
-                                      child: Transform.scale(
-                                        scale: sticker.scale,
-                                        child: sticker.isText
-                                            ? Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white.withValues(alpha: 0.85),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  sticker.stickerType,
-                                                  style: TextStyle(
-                                                    fontSize: sticker.fontSize ?? 14,
-                                                    color: sticker.textColor != null ? colorFromHex(sticker.textColor!) : Colors.black87,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              )
-                                            : Text(sticker.stickerType, style: const TextStyle(fontSize: 32)),
-                                      ),
-                                    ),
-                                  ),
-                            ],
-                          );
+                      return UnifiedCategoryTopCard(
+                        categoryKey: 'couple',
+                        title: _category.name.isNotEmpty ? _category.name : '우리 사랑한 지',
+                        symbol: '❤️',
+                        coreDDayText: '사랑한 지 ${totalDays + 1}일째',
+                        startDateText: startDateStr,
+                        reunionOrExtraBadge: reunionStr,
+                        photoUrl: hasImage ? bgConfig.imageUrl : null,
+                        fallbackEmoji: '❤️',
+                        onEditAvatar: () async {
+                          final updated = await showCategoryEditModal(context, category: _category);
+                          if (updated != null) {
+                            setState(() => _category = updated);
+                            ref.read(categoryListProvider.notifier).updateCategory(updated);
+                          }
                         },
-                      ),
-                    ),
+                        onManageSection: _showRelationshipSetupModal,
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 28),
