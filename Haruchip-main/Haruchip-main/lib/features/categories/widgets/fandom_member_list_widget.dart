@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../design_system/colors.dart';
-import '../../shared/widgets/haru_calendar_picker.dart';
+import '../../shared/widgets/common_date_time_picker.dart';
 import '../models/fandom_profile.dart';
 
 class FandomMemberListWidget extends StatelessWidget {
@@ -80,7 +80,8 @@ class FandomMemberListWidget extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
+              Expanded(
+                child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(6),
@@ -91,12 +92,14 @@ class FandomMemberListWidget extends StatelessWidget {
                     child: const Text('👑', style: TextStyle(fontSize: 14)),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
-                    '멤버 프로필 & 최애 순위',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.protoHeading,
+                  const Flexible(
+                    child: Text(
+                      '멤버 프로필 & 최애 순위',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.protoHeading,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -109,7 +112,9 @@ class FandomMemberListWidget extends StatelessWidget {
                     ),
                   ),
                 ],
+                ),
               ),
+              const SizedBox(width: 8),
               InkWell(
                 onTap: () => _showAddOrEditMemberDialog(context),
                 borderRadius: BorderRadius.circular(8),
@@ -338,33 +343,17 @@ class _MemberEditSheetState extends State<_MemberEditSheet> {
     } catch (_) {}
   }
 
-  void _showDatePicker() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            HaruCalendarPicker(
-              initialDate: _birthDate,
-              firstDate: DateTime(1950, 1, 1),
-              lastDate: DateTime.now(),
-              onDateChanged: (picked) {
-                setState(() => _birthDate = picked);
-                Navigator.pop(ctx);
-              },
-            ),
-          ],
-        ),
-      ),
+  void _showDatePicker() async {
+    final picked = await showCommonDatePickerModal(
+      context,
+      initialDate: _birthDate,
+      firstDate: DateTime(1950, 1, 1),
+      lastDate: DateTime.now(),
+      title: '생일 선택',
     );
+    if (picked != null && mounted) {
+      setState(() => _birthDate = picked);
+    }
   }
 
   @override

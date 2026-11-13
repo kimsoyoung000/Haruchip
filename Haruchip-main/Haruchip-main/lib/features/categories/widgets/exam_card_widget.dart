@@ -12,6 +12,9 @@ class ExamCardWidget extends StatefulWidget {
     required this.onDelete,
     required this.onExamChanged,
     this.initiallyExpanded = true,
+    this.isEditMode = false,
+    this.onToggleHidden,
+    this.index,
   });
 
   final ExamProfile exam;
@@ -19,6 +22,9 @@ class ExamCardWidget extends StatefulWidget {
   final VoidCallback onDelete;
   final ValueChanged<ExamProfile> onExamChanged;
   final bool initiallyExpanded;
+  final bool isEditMode;
+  final VoidCallback? onToggleHidden;
+  final int? index;
 
   @override
   State<ExamCardWidget> createState() => _ExamCardWidgetState();
@@ -89,9 +95,12 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: exam.isHidden ? const Color(0xFFF8FAFC) : Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        border: Border.all(
+          color: exam.isHidden ? const Color(0xFFCBD5E1) : const Color(0xFFE2E8F0),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -115,6 +124,12 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
                   // 상단 메타 라인 (이모지, 카테고리 태그, 목표점수, 메뉴)
                   Row(
                     children: [
+                      // 분류·목표 칩이 길면 다음 줄로 (오른쪽 메뉴 버튼 자리는 유지)
+                      Expanded(
+                        child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      runSpacing: 4,
+                      children: [
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
@@ -164,43 +179,123 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
                           ),
                         ),
                       ],
-                      const Spacer(),
-                      // 메뉴 버튼
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF94A3B8), size: 20),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        onSelected: (val) {
-                          if (val == 'edit') {
-                            widget.onEdit();
-                          } else if (val == 'delete') {
-                            widget.onDelete();
-                          }
-                        },
-                        itemBuilder: (ctx) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_outlined, size: 16, color: Color(0xFF0F172A)),
-                                SizedBox(width: 8),
-                                Text('수정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                              ],
-                            ),
+                      if (exam.isHidden) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)),
-                                SizedBox(width: 8),
-                                Text('삭제', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFEF4444))),
-                              ],
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.visibility_off_rounded, size: 11, color: Color(0xFFDC2626)),
+                              SizedBox(width: 3),
+                              Text(
+                                '숨김',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      ],
+                        ),
+                      ),
+                      // 편집 모드: 눈동자(숨김/표시) 토글 & Reorder 드래그 핸들
+                      if (widget.isEditMode) ...[
+                        IconButton(
+                          onPressed: widget.onToggleHidden ??
+                              () => widget.onExamChanged(exam.copyWith(isHidden: !exam.isHidden)),
+                          icon: Icon(
+                            exam.isHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                            size: 20,
+                            color: exam.isHidden ? const Color(0xFFEF4444) : const Color(0xFF3B82F6),
+                          ),
+                          tooltip: exam.isHidden ? '숨김 해제' : '목록에서 숨기기',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        if (widget.index != null) ...[
+                          const SizedBox(width: 10),
+                          ReorderableDragStartListener(
+                            index: widget.index!,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4),
+                              child: Icon(
+                                Icons.drag_handle_rounded,
+                                size: 22,
+                                color: Color(0xFF64748B),
+                              ),
                             ),
                           ),
                         ],
-                      ),
+                      ] else ...[
+                        // 일반 모드: 메뉴 버튼
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF94A3B8), size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          onSelected: (val) {
+                            if (val == 'edit') {
+                              widget.onEdit();
+                            } else if (val == 'delete') {
+                              widget.onDelete();
+                            } else if (val == 'toggle_hide') {
+                              if (widget.onToggleHidden != null) {
+                                widget.onToggleHidden!();
+                              } else {
+                                widget.onExamChanged(exam.copyWith(isHidden: !exam.isHidden));
+                              }
+                            }
+                          },
+                          itemBuilder: (ctx) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined, size: 16, color: Color(0xFF0F172A)),
+                                  SizedBox(width: 8),
+                                  Text('수정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'toggle_hide',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    exam.isHidden ? Icons.visibility_rounded : Icons.visibility_off_outlined,
+                                    size: 16,
+                                    color: const Color(0xFF64748B),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    exam.isHidden ? '숨김 해제' : '대시보드에서 숨기기',
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)),
+                                  SizedBox(width: 8),
+                                  Text('삭제', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFEF4444))),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 10),

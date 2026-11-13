@@ -108,6 +108,16 @@ void main() {
       expect(fromJson.stages.length, 2);
       expect(fromJson.stages.first.name, '원서접수');
       expect(fromJson.stages.last.name, '필기시험');
+      expect(fromJson.isHidden, false);
+      expect(fromJson.sortOrder, 0);
+
+      final hiddenExam = exam.copyWith(isHidden: true, sortOrder: 5);
+      expect(hiddenExam.isHidden, true);
+      expect(hiddenExam.sortOrder, 5);
+      final hiddenJson = hiddenExam.toJson();
+      final fromHiddenJson = ExamProfile.fromJson(hiddenJson);
+      expect(fromHiddenJson.isHidden, true);
+      expect(fromHiddenJson.sortOrder, 5);
     });
   });
 
@@ -130,6 +140,58 @@ void main() {
       final qnet = kOfficialExamPresets.firstWhere((p) => p.id == 'preset-qnet-cs');
       expect(qnet.title.contains('정보처리기사'), true);
       expect(qnet.rounds.length >= 2, true);
+
+      // Verify new seeds: 토플, 토스, 정보처리산업기사, 공인중개사, 공기업
+      expect(kOfficialExamPresets.any((p) => p.title.contains('토플')), true);
+      expect(kOfficialExamPresets.any((p) => p.title.contains('토익스피킹')), true);
+      expect(kOfficialExamPresets.any((p) => p.title.contains('정보처리산업기사')), true);
+      expect(kOfficialExamPresets.any((p) => p.title.contains('공인중개사')), true);
+      expect(kOfficialExamPresets.any((p) => p.title.contains('공기업')), true);
+    });
+
+    test('OfficialExamRound auto-expiration rule: expires on next day 00:00 of final result', () {
+      final round = OfficialExamRound(
+        roundName: '테스트 회차',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 't-1',
+            stageType: ExamStageType.writtenTest,
+            name: '필기시험',
+            startDate: DateTime(2026, 10, 10),
+          ),
+          ExamStageItem(
+            id: 't-2',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2026, 11, 10),
+          ),
+        ],
+      );
+
+      // 최종 발표일 당일 23:59: 아직 만료되지 않음 (안정적 유지)
+      final sameDayNight = DateTime(2026, 11, 10, 23, 59, 59);
+      expect(round.isExpired(sameDayNight), false);
+
+      // 최종 발표일 다음 날 00:00:01: 자동 만료(파기)
+      final nextDayMidnight = DateTime(2026, 11, 11, 0, 0, 1);
+      expect(round.isExpired(nextDayMidnight), true);
+
+      final nextWeek = DateTime(2026, 11, 18);
+      expect(round.isExpired(nextWeek), true);
+    });
+
+    test('getActiveOfficialExamPresets returns only active presets with unexpired rounds', () {
+      final now = DateTime(2026, 11, 13);
+      final activePresets = getActiveOfficialExamPresets(now);
+
+      expect(activePresets.isNotEmpty, true);
+      for (final preset in activePresets) {
+        expect(preset.rounds.isNotEmpty, true);
+        for (final round in preset.rounds) {
+          expect(round.isExpired(now), false, reason: '${preset.title} - ${round.roundName} should not be expired');
+        }
+      }
     });
   });
 
@@ -383,6 +445,53 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('토익 (TOEIC)'), findsOneWidget);
+    });
+
+    testWidgets('ExamCardWidget renders in edit mode with eye toggle and drag handle', (tester) async {
+      final exam = ExamProfile(
+        id: 'test-card-edit',
+        title: '2026 정보처리기사',
+        type: ExamType.qualification,
+        categoryName: '국가기술자격',
+        colorHex: '#3B82F6',
+        isHidden: false,
+        stages: [
+          ExamStageItem(
+            id: 'st-1',
+            stageType: ExamStageType.writtenTest,
+            name: '필기시험',
+            startDate: DateTime(2026, 11, 20),
+          ),
+        ],
+      );
+
+      bool toggled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ExamCardWidget(
+              exam: exam,
+              isEditMode: true,
+              index: 0,
+              onEdit: () {},
+              onDelete: () {},
+              onExamChanged: (_) {},
+              onToggleHidden: () {
+                toggled = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      // Verify drag handle is present
+      expect(find.byIcon(Icons.drag_handle_rounded), findsOneWidget);
+      // Verify eye icon toggle is present
+      expect(find.byIcon(Icons.visibility_rounded), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.visibility_rounded));
+      expect(toggled, true);
     });
   });
 }

@@ -88,7 +88,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('시험 파이프라인 관리'), findsOneWidget);
+      expect(find.text('등록된 시험'), findsOneWidget);
+      expect(find.text('통합 임박 일정 타임라인'), findsOneWidget);
       expect(find.textContaining('정보처리기사'), findsWidgets);
       expect(find.textContaining('중간고사'), findsWidgets);
       expect(tester.takeException(), isNull);

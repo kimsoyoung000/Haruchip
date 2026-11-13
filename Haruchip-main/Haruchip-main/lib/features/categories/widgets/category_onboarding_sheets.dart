@@ -9,6 +9,7 @@ import '../../military/models/military_rank.dart';
 import '../../military/providers/military_provider.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
+import '../../shared/widgets/common_date_time_picker.dart';
 import '../../shared/widgets/haru_calendar_picker.dart';
 import '../controllers/baby_category_controller.dart';
 import '../data/baby_health_database.dart';
@@ -258,9 +259,13 @@ class _MilitaryOnboardingSheetState extends ConsumerState<_MilitaryOnboardingShe
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  '🎖️ 복무 & 휴가 정보 설정',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                const Expanded(
+                  child: Text(
+                    '🎖️ 복무 & 휴가 정보 설정',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),
@@ -283,9 +288,13 @@ class _MilitaryOnboardingSheetState extends ConsumerState<_MilitaryOnboardingShe
                     border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Column(
+                    // 폭을 꽉 채워야 Wrap의 양끝 정렬이 원래 Row처럼 보인다
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
                           Text(
                             '${_branch.labelKo} 복무율 ${(progress * 100).toStringAsFixed(1)}%',
@@ -308,8 +317,10 @@ class _MilitaryOnboardingSheetState extends ConsumerState<_MilitaryOnboardingShe
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
                           Text(
                             '남은 휴가: $remainingVacation일 (총 $_totalVacationDays일 중)',
@@ -391,8 +402,11 @@ class _MilitaryOnboardingSheetState extends ConsumerState<_MilitaryOnboardingShe
                 const SizedBox(height: 20),
 
                 // 3. 전역일 (수동 보정 가능)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     const Text('전역일 (예정일)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                     Text(
@@ -909,9 +923,13 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  '👶 아기 성장 & 프로필 설정',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                const Expanded(
+                  child: Text(
+                    '👶 아기 성장 & 프로필 설정',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),
@@ -1114,9 +1132,12 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
                           const SizedBox(height: 6),
                           InkWell(
                             onTap: () async {
-                              final picked = await showTimePicker(
-                                context: context,
-                                initialTime: TimeOfDay.now(),
+                              final picked = await showCommonDateTimePickerModal(
+                                context,
+                                initialDateTime: DateTime.now(),
+                                isAllDay: false,
+                                showAllDayToggle: false,
+                                title: '출생 시간 선택',
                               );
                               if (picked != null) {
                                 final h = picked.hour.toString().padLeft(2, '0');
@@ -1185,22 +1206,21 @@ class _BabyOnboardingSheetState extends ConsumerState<_BabyOnboardingSheet> {
                 // 6. 기본 수유 텀 설정
                 const Text('기본 수유 텀 (시간)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     for (final hours in [2, 3, 4, 5])
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text('$hours시간'),
-                          selected: _feedingIntervalHours == hours,
-                          onSelected: (selected) {
-                            if (selected) setState(() => _feedingIntervalHours = hours);
-                          },
-                          selectedColor: const Color(0xFF0284C7),
-                          labelStyle: TextStyle(
-                            color: _feedingIntervalHours == hours ? Colors.white : Colors.black87,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      ChoiceChip(
+                        label: Text('$hours시간'),
+                        selected: _feedingIntervalHours == hours,
+                        onSelected: (selected) {
+                          if (selected) setState(() => _feedingIntervalHours = hours);
+                        },
+                        selectedColor: const Color(0xFF0284C7),
+                        labelStyle: TextStyle(
+                          color: _feedingIntervalHours == hours ? Colors.white : Colors.black87,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                   ],
@@ -1380,9 +1400,13 @@ class _SoloOnboardingSheetState extends ConsumerState<_SoloOnboardingSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  '🌱 나 중심 디데이 플래너',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                const Expanded(
+                  child: Text(
+                    '🌱 나 중심 디데이 플래너',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),
@@ -1435,12 +1459,15 @@ class _SoloOnboardingSheetState extends ConsumerState<_SoloOnboardingSheet> {
                               children: [
                                 const Text('🌱', style: TextStyle(fontSize: 14)),
                                 const SizedBox(width: 6),
-                                Text(
-                                  '나를 위한 시간',
-                                  style: TextStyle(
+                                Flexible(
+                                  child: Text(
+                                    '나를 위한 시간',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: isSelfCare ? FontWeight.bold : FontWeight.w500,
                                     color: isSelfCare ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1473,12 +1500,15 @@ class _SoloOnboardingSheetState extends ConsumerState<_SoloOnboardingSheet> {
                               children: [
                                 const Text('💌', style: TextStyle(fontSize: 14)),
                                 const SizedBox(width: 6),
-                                Text(
-                                  '마음 진행 중',
-                                  style: TextStyle(
+                                Flexible(
+                                  child: Text(
+                                    '마음 진행 중',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: !isSelfCare ? FontWeight.bold : FontWeight.w500,
                                     color: !isSelfCare ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1794,15 +1824,21 @@ class _FandomOnboardingSheetState extends ConsumerState<_FandomOnboardingSheet> 
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Text('💜', style: TextStyle(fontSize: 20)),
-                    SizedBox(width: 8),
-                    Text(
-                      '덕질 / 아티스트 온보딩',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-                    ),
-                  ],
+                const Expanded(
+                  child: Row(
+                    children: [
+                      Text('💜', style: TextStyle(fontSize: 20)),
+                      SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '덕질 / 아티스트 온보딩',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),
@@ -1908,7 +1944,7 @@ class _FandomOnboardingSheetState extends ConsumerState<_FandomOnboardingSheet> 
                   const Text('주요 K-POP 아티스트 원터치 선택', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.protoSubtitle)),
                   const SizedBox(height: 8),
                   SizedBox(
-                    height: 100,
+                    height: MediaQuery.textScalerOf(context).scale(100),
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: _filteredPresets.length,
@@ -2229,15 +2265,21 @@ class _CustomOnboardingSheetState extends ConsumerState<_CustomOnboardingSheet> 
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Text('✨', style: TextStyle(fontSize: 20)),
-                    SizedBox(width: 8),
-                    Text(
-                      '나만의 카테고리 직접 설정',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-                    ),
-                  ],
+                const Expanded(
+                  child: Row(
+                    children: [
+                      Text('✨', style: TextStyle(fontSize: 20)),
+                      SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '나만의 카테고리 직접 설정',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),
@@ -2693,15 +2735,21 @@ class _PetOnboardingSheetState extends ConsumerState<_PetOnboardingSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Text('🐾', style: TextStyle(fontSize: 20)),
-                    SizedBox(width: 8),
-                    Text(
-                      '반려동물 패밀리 프로필 설정',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-                    ),
-                  ],
+                const Expanded(
+                  child: Row(
+                    children: [
+                      Text('🐾', style: TextStyle(fontSize: 20)),
+                      SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '반려동물 패밀리 프로필 설정',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.grey),

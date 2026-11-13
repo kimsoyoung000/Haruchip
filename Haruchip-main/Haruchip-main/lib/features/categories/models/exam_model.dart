@@ -293,6 +293,8 @@ class ExamProfile {
     this.subjects = const [],
     this.targetScore,
     this.showInMainCalendar = true,
+    this.isHidden = false,
+    this.sortOrder = 0,
     this.createdAt,
   });
 
@@ -305,6 +307,8 @@ class ExamProfile {
   final List<ExamSubjectItem> subjects; // 중간/기말용 과목별 타임테이블
   final String? targetScore; // e.g. '850점 목표', '평점 4.0'
   final bool showInMainCalendar;
+  final bool isHidden;
+  final int sortOrder;
   final DateTime? createdAt;
 
   ExamProfile copyWith({
@@ -317,6 +321,8 @@ class ExamProfile {
     List<ExamSubjectItem>? subjects,
     String? targetScore,
     bool? showInMainCalendar,
+    bool? isHidden,
+    int? sortOrder,
     DateTime? createdAt,
   }) {
     return ExamProfile(
@@ -329,6 +335,8 @@ class ExamProfile {
       subjects: subjects ?? this.subjects,
       targetScore: targetScore ?? this.targetScore,
       showInMainCalendar: showInMainCalendar ?? this.showInMainCalendar,
+      isHidden: isHidden ?? this.isHidden,
+      sortOrder: sortOrder ?? this.sortOrder,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -343,6 +351,8 @@ class ExamProfile {
         'subjects': subjects.map((s) => s.toJson()).toList(),
         if (targetScore != null) 'targetScore': targetScore,
         'showInMainCalendar': showInMainCalendar,
+        'isHidden': isHidden,
+        'sortOrder': sortOrder,
         if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
       };
 
@@ -366,6 +376,8 @@ class ExamProfile {
           const [],
       targetScore: json['targetScore'] as String?,
       showInMainCalendar: json['showInMainCalendar'] as bool? ?? true,
+      isHidden: json['isHidden'] as bool? ?? false,
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : null,

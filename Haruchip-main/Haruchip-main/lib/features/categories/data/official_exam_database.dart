@@ -11,6 +11,39 @@ class OfficialExamRound {
   final String roundName; // e.g. '2026년 제1회', '제538회 (9월)'
   final int year;
   final List<ExamStageItem> stages;
+
+  /// 최종 합격자 발표일 (또는 최종 결과/성적 발표일)
+  DateTime get finalResultDate {
+    // 1. finalResult 타입 단계 (최종 합격 발표)
+    final finalStages = stages.where((s) => s.stageType == ExamStageType.finalResult).toList();
+    if (finalStages.isNotEmpty) {
+      return finalStages.first.endDate ?? finalStages.first.startDate;
+    }
+    // 2. writtenResult 타입 단계 (성적/합격 발표)
+    final resultStages = stages.where((s) => s.stageType == ExamStageType.writtenResult).toList();
+    if (resultStages.isNotEmpty) {
+      return resultStages.last.endDate ?? resultStages.last.startDate;
+    }
+    // 3. 가장 늦은 날짜의 단계
+    if (stages.isNotEmpty) {
+      final latest = stages.reduce((a, b) {
+        final aDate = a.endDate ?? a.startDate;
+        final bDate = b.endDate ?? b.startDate;
+        return aDate.isAfter(bDate) ? a : b;
+      });
+      return latest.endDate ?? latest.startDate;
+    }
+    return DateTime(year, 12, 31);
+  }
+
+  /// [자동 삭제 파기 규칙]:
+  /// '최종 합격자 발표일' 다음 날(자정 00:00)이 지나면 공식 DB 목록에서 자동으로 만료(숨김 또는 삭제)
+  bool isExpired([DateTime? relativeTo]) {
+    final now = relativeTo ?? DateTime.now();
+    final fDate = finalResultDate;
+    final expirationMidnight = DateTime(fDate.year, fDate.month, fDate.day).add(const Duration(days: 1));
+    return now.isAfter(expirationMidnight);
+  }
 }
 
 /// 공식 시험 프리셋 메타데이터
@@ -34,6 +67,51 @@ class OfficialExamPreset {
   final ExamType type;
   final List<OfficialExamRound> rounds;
   final List<String> defaultChecklist;
+
+  OfficialExamPreset copyWith({
+    String? id,
+    String? groupCategory,
+    String? title,
+    String? description,
+    String? colorHex,
+    ExamType? type,
+    List<OfficialExamRound>? rounds,
+    List<String>? defaultChecklist,
+  }) {
+    return OfficialExamPreset(
+      id: id ?? this.id,
+      groupCategory: groupCategory ?? this.groupCategory,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      colorHex: colorHex ?? this.colorHex,
+      type: type ?? this.type,
+      rounds: rounds ?? this.rounds,
+      defaultChecklist: defaultChecklist ?? this.defaultChecklist,
+    );
+  }
+
+  /// 현재 시점 기준 만료되지 않은 유효 회차 목록
+  List<OfficialExamRound> getActiveRounds([DateTime? relativeTo]) {
+    return rounds.where((r) => !r.isExpired(relativeTo)).toList();
+  }
+
+  /// 현재 유효한 회차가 남아있는지 여부
+  bool hasActiveRounds([DateTime? relativeTo]) {
+    return getActiveRounds(relativeTo).isNotEmpty;
+  }
+}
+
+/// 현재 시점 기준 만료(파기)되지 않은 유효한 공식 시험 프리셋 목록 반환
+List<OfficialExamPreset> getActiveOfficialExamPresets([DateTime? relativeTo]) {
+  final now = relativeTo ?? DateTime.now();
+  final activeList = <OfficialExamPreset>[];
+  for (final preset in kOfficialExamPresets) {
+    final activeRounds = preset.getActiveRounds(now);
+    if (activeRounds.isNotEmpty) {
+      activeList.add(preset.copyWith(rounds: activeRounds));
+    }
+  }
+  return activeList;
 }
 
 /// 연간 회차별 공식 시험 프리셋 데이터베이스
@@ -161,6 +239,190 @@ final List<OfficialExamPreset> kOfficialExamPresets = [
             stageType: ExamStageType.writtenResult,
             name: '성적 발표일',
             startDate: DateTime(2026, 12, 23),
+            testTime: '낮 12:00 발표',
+          ),
+        ],
+      ),
+    ],
+  ),
+
+  OfficialExamPreset(
+    id: 'preset-toefl',
+    groupCategory: '어학/상시',
+    title: '토플 (TOEFL iBT)',
+    description: 'ETS 주관 전 세계 인정 공인 영어능력평가 시험 (시험 4~8일 후 성적 확인)',
+    colorHex: '#0284C7',
+    type: ExamType.qualification,
+    defaultChecklist: ['유효한 여권 (필수)', '등록 확인서', '간식 및 음료 (쉬는시간용)'],
+    rounds: [
+      OfficialExamRound(
+        roundName: '2026년 11월 정기시험 (2026.11.21)',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 'toefl-2611-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 마감',
+            startDate: DateTime(2026, 10, 1),
+            endDate: DateTime(2026, 11, 17),
+            testTime: '정규등록 마감 (시험 4일전)',
+          ),
+          ExamStageItem(
+            id: 'toefl-2611-2',
+            stageType: ExamStageType.writtenTest,
+            name: '토플 본시험 (센터/Home)',
+            startDate: DateTime(2026, 11, 21),
+            testTime: '08:30 입실완료 (09:00~11:00 시험)',
+          ),
+          ExamStageItem(
+            id: 'toefl-2611-3',
+            stageType: ExamStageType.writtenResult,
+            name: '온라인 성적 발표일',
+            startDate: DateTime(2026, 11, 27),
+            testTime: '오전 중 ETS 계정 공시',
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '2026년 12월 정기시험 (2026.12.19)',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 'toefl-2612-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 마감',
+            startDate: DateTime(2026, 11, 1),
+            endDate: DateTime(2026, 12, 15),
+          ),
+          ExamStageItem(
+            id: 'toefl-2612-2',
+            stageType: ExamStageType.writtenTest,
+            name: '토플 본시험',
+            startDate: DateTime(2026, 12, 19),
+            testTime: '08:30 입실완료',
+          ),
+          ExamStageItem(
+            id: 'toefl-2612-3',
+            stageType: ExamStageType.writtenResult,
+            name: '온라인 성적 발표일',
+            startDate: DateTime(2026, 12, 25),
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '2027년 1월 정기시험 (2027.01.16)',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'toefl-2701-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 마감',
+            startDate: DateTime(2026, 12, 1),
+            endDate: DateTime(2027, 1, 12),
+          ),
+          ExamStageItem(
+            id: 'toefl-2701-2',
+            stageType: ExamStageType.writtenTest,
+            name: '토플 본시험',
+            startDate: DateTime(2027, 1, 16),
+            testTime: '08:30 입실완료',
+          ),
+          ExamStageItem(
+            id: 'toefl-2701-3',
+            stageType: ExamStageType.writtenResult,
+            name: '온라인 성적 발표일',
+            startDate: DateTime(2027, 1, 22),
+          ),
+        ],
+      ),
+    ],
+  ),
+
+  OfficialExamPreset(
+    id: 'preset-tos',
+    groupCategory: '어학/상시',
+    title: '토익스피킹 (TOEIC Speaking / 토스)',
+    description: 'YBM 주관 공인 영어 말하기 시험 (주말 정기 시행, 시험 5일 후 성적 발표)',
+    colorHex: '#0891B2',
+    type: ExamType.qualification,
+    defaultChecklist: ['규정 신분증 (주민등록증/운전면허증/여권)'],
+    rounds: [
+      OfficialExamRound(
+        roundName: '11월 4주차 (2026.11.28 토)',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 'tos-2611-1',
+            stageType: ExamStageType.application,
+            name: '접수 마감 (시험 전날 23:00)',
+            startDate: DateTime(2026, 11, 1),
+            endDate: DateTime(2026, 11, 27),
+          ),
+          ExamStageItem(
+            id: 'tos-2611-2',
+            stageType: ExamStageType.writtenTest,
+            name: '토익스피킹 시험일 (CBT 센터)',
+            startDate: DateTime(2026, 11, 28),
+            testTime: '11:30 또는 13:30 입실',
+          ),
+          ExamStageItem(
+            id: 'tos-2611-3',
+            stageType: ExamStageType.writtenResult,
+            name: '성적 발표일',
+            startDate: DateTime(2026, 12, 3),
+            testTime: '낮 12:00 발표',
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '12월 2주차 (2026.12.12 토)',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 'tos-2612-1',
+            stageType: ExamStageType.application,
+            name: '접수 마감',
+            startDate: DateTime(2026, 11, 15),
+            endDate: DateTime(2026, 12, 11),
+          ),
+          ExamStageItem(
+            id: 'tos-2612-2',
+            stageType: ExamStageType.writtenTest,
+            name: '토익스피킹 시험일',
+            startDate: DateTime(2026, 12, 12),
+            testTime: '지정 입실시간 (약 20분간 시험)',
+          ),
+          ExamStageItem(
+            id: 'tos-2612-3',
+            stageType: ExamStageType.writtenResult,
+            name: '성적 발표일',
+            startDate: DateTime(2026, 12, 17),
+            testTime: '낮 12:00 발표',
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '2027년 1월 2주차 (2027.01.09 토)',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'tos-2701-1',
+            stageType: ExamStageType.application,
+            name: '접수 마감',
+            startDate: DateTime(2026, 12, 15),
+            endDate: DateTime(2027, 1, 8),
+          ),
+          ExamStageItem(
+            id: 'tos-2701-2',
+            stageType: ExamStageType.writtenTest,
+            name: '토익스피킹 시험일',
+            startDate: DateTime(2027, 1, 9),
+          ),
+          ExamStageItem(
+            id: 'tos-2701-3',
+            stageType: ExamStageType.writtenResult,
+            name: '성적 발표일',
+            startDate: DateTime(2027, 1, 14),
             testTime: '낮 12:00 발표',
           ),
         ],
@@ -323,6 +585,61 @@ final List<OfficialExamPreset> kOfficialExamPresets = [
           ),
         ],
       ),
+      OfficialExamRound(
+        roundName: '제75회 한능검 (2026.12.06)',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 'hist-75-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 기간',
+            startDate: DateTime(2026, 11, 3),
+            endDate: DateTime(2026, 11, 10),
+            testTime: '마감일 18:00까지',
+          ),
+          ExamStageItem(
+            id: 'hist-75-2',
+            stageType: ExamStageType.writtenTest,
+            name: '시험일 (심화/기본)',
+            startDate: DateTime(2026, 12, 6),
+            testTime: '10:00 입실완료 (10:20~11:40 시험)',
+          ),
+          ExamStageItem(
+            id: 'hist-75-3',
+            stageType: ExamStageType.writtenResult,
+            name: '합격자 성적 발표일',
+            startDate: DateTime(2026, 12, 18),
+            testTime: '오전 10:00 발표',
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '제76회 한능검 (2027.02.14)',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'hist-76-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 기간',
+            startDate: DateTime(2027, 1, 12),
+            endDate: DateTime(2027, 1, 19),
+          ),
+          ExamStageItem(
+            id: 'hist-76-2',
+            stageType: ExamStageType.writtenTest,
+            name: '시험일 (심화/기본)',
+            startDate: DateTime(2027, 2, 14),
+            testTime: '10:00 입실완료',
+          ),
+          ExamStageItem(
+            id: 'hist-76-3',
+            stageType: ExamStageType.writtenResult,
+            name: '합격자 성적 발표일',
+            startDate: DateTime(2027, 2, 27),
+            testTime: '오전 10:00 발표',
+          ),
+        ],
+      ),
     ],
   ),
 
@@ -422,6 +739,193 @@ final List<OfficialExamPreset> kOfficialExamPresets = [
             stageType: ExamStageType.finalResult,
             name: '최종 합격자 발표',
             startDate: DateTime(2026, 12, 11),
+            testTime: '오전 09:00 발표',
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '2027년 정기 기사 1회차',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'qnet-cs-271-1',
+            stageType: ExamStageType.application,
+            name: '필기 원서접수 마감',
+            startDate: DateTime(2027, 1, 18),
+            endDate: DateTime(2027, 1, 21),
+            testTime: '마감일 18:00까지',
+          ),
+          ExamStageItem(
+            id: 'qnet-cs-271-2',
+            stageType: ExamStageType.writtenTest,
+            name: '필기 시험 (CBT)',
+            startDate: DateTime(2027, 2, 15),
+            endDate: DateTime(2027, 3, 7),
+            testTime: '지정 입실시간 (CBT 시험)',
+          ),
+          ExamStageItem(
+            id: 'qnet-cs-271-3',
+            stageType: ExamStageType.writtenResult,
+            name: '필기 합격(예정)자 발표',
+            startDate: DateTime(2027, 3, 13),
+            testTime: '오전 09:00 발표',
+          ),
+          ExamStageItem(
+            id: 'qnet-cs-271-4',
+            stageType: ExamStageType.practicalTest,
+            name: '실기 시험 (필답형)',
+            startDate: DateTime(2027, 4, 25),
+            testTime: '09:00 입실완료 (09:30~12:00 시험)',
+            checklist: ['검정색 볼펜', '신분증', '수험표'],
+          ),
+          ExamStageItem(
+            id: 'qnet-cs-271-5',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2027, 6, 18),
+            testTime: '오전 09:00 발표',
+          ),
+        ],
+      ),
+    ],
+  ),
+
+  OfficialExamPreset(
+    id: 'preset-qnet-cs-ind',
+    groupCategory: '국가기술자격',
+    title: '정보처리산업기사 (Q-Net 정기 산업기사)',
+    description: '한국산업인력공단 IT 개발 및 인프라 실무 국가기술자격 파이프라인',
+    colorHex: '#3B82F6',
+    type: ExamType.qualification,
+    defaultChecklist: ['신분증', '수험표', '검정색 볼펜', '컴퓨터용 사인펜'],
+    rounds: [
+      OfficialExamRound(
+        roundName: '2026년 정기 산업기사 3회차',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 'qnet-csind-3-1',
+            stageType: ExamStageType.application,
+            name: '실기 원서접수 마감',
+            startDate: DateTime(2026, 9, 10),
+            endDate: DateTime(2026, 9, 13),
+          ),
+          ExamStageItem(
+            id: 'qnet-csind-3-2',
+            stageType: ExamStageType.practicalTest,
+            name: '실기 시험 (필답형)',
+            startDate: DateTime(2026, 10, 19),
+            testTime: '09:00 입실완료',
+          ),
+          ExamStageItem(
+            id: 'qnet-csind-3-3',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2026, 12, 11),
+            testTime: '오전 09:00 발표',
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '2027년 정기 산업기사 1회차',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'qnet-csind-271-1',
+            stageType: ExamStageType.application,
+            name: '필기 원서접수 마감',
+            startDate: DateTime(2027, 1, 18),
+            endDate: DateTime(2027, 1, 21),
+          ),
+          ExamStageItem(
+            id: 'qnet-csind-271-2',
+            stageType: ExamStageType.writtenTest,
+            name: '필기 시험 (CBT)',
+            startDate: DateTime(2027, 2, 15),
+            endDate: DateTime(2027, 3, 7),
+          ),
+          ExamStageItem(
+            id: 'qnet-csind-271-3',
+            stageType: ExamStageType.writtenResult,
+            name: '필기 합격자 발표',
+            startDate: DateTime(2027, 3, 13),
+          ),
+          ExamStageItem(
+            id: 'qnet-csind-271-4',
+            stageType: ExamStageType.practicalTest,
+            name: '실기 시험 (필답형)',
+            startDate: DateTime(2027, 4, 25),
+          ),
+          ExamStageItem(
+            id: 'qnet-csind-271-5',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2027, 6, 18),
+          ),
+        ],
+      ),
+    ],
+  ),
+
+  OfficialExamPreset(
+    id: 'preset-realtor',
+    groupCategory: '국가기술자격',
+    title: '공인중개사 (한국산업인력공단)',
+    description: '부동산 중개 전문자격증 1차/2차 동차 파이프라인 (연 1회 시행)',
+    colorHex: '#047857',
+    type: ExamType.qualification,
+    defaultChecklist: ['수험표', '신분증', '컴퓨터용 싸인펜', '수정테이프', '단기 계산기'],
+    rounds: [
+      OfficialExamRound(
+        roundName: '제37회 공인중개사 (2026년)',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 'realtor-37-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 기간 (동차/1차/2차)',
+            startDate: DateTime(2026, 8, 10),
+            endDate: DateTime(2026, 8, 14),
+          ),
+          ExamStageItem(
+            id: 'realtor-37-2',
+            stageType: ExamStageType.writtenTest,
+            name: '1차 및 2차 본시험',
+            startDate: DateTime(2026, 10, 31),
+            testTime: '1차 09:00 입실 / 2차 12:30 입실',
+          ),
+          ExamStageItem(
+            id: 'realtor-37-3',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2026, 11, 30),
+            testTime: '오전 09:00 Q-Net 공지',
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '제38회 공인중개사 (2027년)',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'realtor-38-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 기간',
+            startDate: DateTime(2027, 8, 9),
+            endDate: DateTime(2027, 8, 13),
+          ),
+          ExamStageItem(
+            id: 'realtor-38-2',
+            stageType: ExamStageType.writtenTest,
+            name: '1차 및 2차 본시험',
+            startDate: DateTime(2027, 10, 30),
+            testTime: '1차 09:00 입실 / 2차 12:30 입실',
+          ),
+          ExamStageItem(
+            id: 'realtor-38-3',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2027, 12, 1),
             testTime: '오전 09:00 발표',
           ),
         ],
@@ -537,6 +1041,48 @@ final List<OfficialExamPreset> kOfficialExamPresets = [
           ),
         ],
       ),
+      OfficialExamRound(
+        roundName: '2027년도 국가직 9급 공채',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'gov9-27-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 기간',
+            startDate: DateTime(2027, 1, 18),
+            endDate: DateTime(2027, 1, 22),
+            testTime: '마감일 21:00까지',
+          ),
+          ExamStageItem(
+            id: 'gov9-27-2',
+            stageType: ExamStageType.writtenTest,
+            name: '필기 시험일',
+            startDate: DateTime(2027, 3, 27),
+            testTime: '09:20 입실완료 (10:00~11:40 시험)',
+          ),
+          ExamStageItem(
+            id: 'gov9-27-3',
+            stageType: ExamStageType.writtenResult,
+            name: '필기 합격자 발표',
+            startDate: DateTime(2027, 4, 23),
+            testTime: '오전 09:00 사이버국가고시센터',
+          ),
+          ExamStageItem(
+            id: 'gov9-27-4',
+            stageType: ExamStageType.practicalTest,
+            name: '면접 시험',
+            startDate: DateTime(2027, 5, 28),
+            endDate: DateTime(2027, 6, 2),
+          ),
+          ExamStageItem(
+            id: 'gov9-27-5',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2027, 6, 18),
+            testTime: '오전 09:00 발표',
+          ),
+        ],
+      ),
     ],
   ),
 
@@ -585,6 +1131,137 @@ final List<OfficialExamPreset> kOfficialExamPresets = [
             stageType: ExamStageType.finalResult,
             name: '최종 합격자 발표',
             startDate: DateTime(2026, 9, 10),
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '2027년도 지방직 9급 공채',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'loc9-27-1',
+            stageType: ExamStageType.application,
+            name: '원서 접수 기간',
+            startDate: DateTime(2027, 3, 22),
+            endDate: DateTime(2027, 3, 26),
+          ),
+          ExamStageItem(
+            id: 'loc9-27-2',
+            stageType: ExamStageType.writtenTest,
+            name: '필기 시험일',
+            startDate: DateTime(2027, 6, 19),
+            testTime: '09:20 입실완료 (10:00~11:40 시험)',
+          ),
+          ExamStageItem(
+            id: 'loc9-27-3',
+            stageType: ExamStageType.writtenResult,
+            name: '필기 합격자 발표',
+            startDate: DateTime(2027, 7, 16),
+          ),
+          ExamStageItem(
+            id: 'loc9-27-4',
+            stageType: ExamStageType.practicalTest,
+            name: '면접 시험',
+            startDate: DateTime(2027, 8, 9),
+            endDate: DateTime(2027, 8, 19),
+          ),
+          ExamStageItem(
+            id: 'loc9-27-5',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2027, 9, 8),
+          ),
+        ],
+      ),
+    ],
+  ),
+
+  OfficialExamPreset(
+    id: 'preset-public-corp',
+    groupCategory: '공무원/공기업',
+    title: '주요 공기업 채용 (NCS & 직무시험)',
+    description: '공기업/공공기관 블라인드 채용 통합 5단계 (서류 -> NCS 필기 -> 전공 -> 면접 -> 최종)',
+    colorHex: '#1D4ED8',
+    type: ExamType.qualification,
+    defaultChecklist: ['수험표', '규정 신분증', '컴퓨터용 사인펜', '수정테이프', '필기도구'],
+    rounds: [
+      OfficialExamRound(
+        roundName: '2026년 하반기 통합 공채',
+        year: 2026,
+        stages: [
+          ExamStageItem(
+            id: 'pubcorp-26h-1',
+            stageType: ExamStageType.application,
+            name: '입사지원서 접수 마감',
+            startDate: DateTime(2026, 10, 15),
+            endDate: DateTime(2026, 10, 28),
+            testTime: '마감일 17:00까지',
+          ),
+          ExamStageItem(
+            id: 'pubcorp-26h-2',
+            stageType: ExamStageType.writtenTest,
+            name: 'NCS 직업기초능력 & 전공 필기시험',
+            startDate: DateTime(2026, 11, 21),
+            testTime: '09:30 입실완료 (10:00~12:00 필기)',
+          ),
+          ExamStageItem(
+            id: 'pubcorp-26h-3',
+            stageType: ExamStageType.writtenResult,
+            name: '필기시험 합격자 발표',
+            startDate: DateTime(2026, 11, 27),
+            testTime: '17:00 채용 홈페이지',
+          ),
+          ExamStageItem(
+            id: 'pubcorp-26h-4',
+            stageType: ExamStageType.practicalTest,
+            name: '직무/인성 면접 전형',
+            startDate: DateTime(2026, 12, 7),
+            endDate: DateTime(2026, 12, 11),
+          ),
+          ExamStageItem(
+            id: 'pubcorp-26h-5',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2026, 12, 24),
+          ),
+        ],
+      ),
+      OfficialExamRound(
+        roundName: '2027년 상반기 통합 공채',
+        year: 2027,
+        stages: [
+          ExamStageItem(
+            id: 'pubcorp-27s-1',
+            stageType: ExamStageType.application,
+            name: '입사지원서 접수 마감',
+            startDate: DateTime(2027, 3, 10),
+            endDate: DateTime(2027, 3, 24),
+          ),
+          ExamStageItem(
+            id: 'pubcorp-27s-2',
+            stageType: ExamStageType.writtenTest,
+            name: 'NCS & 전공 필기시험',
+            startDate: DateTime(2027, 4, 17),
+            testTime: '09:30 입실완료',
+          ),
+          ExamStageItem(
+            id: 'pubcorp-27s-3',
+            stageType: ExamStageType.writtenResult,
+            name: '필기 합격 발표',
+            startDate: DateTime(2027, 4, 23),
+          ),
+          ExamStageItem(
+            id: 'pubcorp-27s-4',
+            stageType: ExamStageType.practicalTest,
+            name: '면접 전형',
+            startDate: DateTime(2027, 5, 10),
+            endDate: DateTime(2027, 5, 14),
+          ),
+          ExamStageItem(
+            id: 'pubcorp-27s-5',
+            stageType: ExamStageType.finalResult,
+            name: '최종 합격자 발표',
+            startDate: DateTime(2027, 5, 28),
           ),
         ],
       ),

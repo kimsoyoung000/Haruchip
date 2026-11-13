@@ -110,7 +110,10 @@ class _MonthGridState extends State<MonthGrid> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
+              Expanded(
+                child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                runSpacing: 4,
                 children: [
                   Text(
                     '${widget.focusedMonth.year}년 ${widget.focusedMonth.month}월',
@@ -141,6 +144,7 @@ class _MonthGridState extends State<MonthGrid> {
                     ),
                   ),
                 ],
+                ),
               ),
               Row(
                 children: [
@@ -261,7 +265,12 @@ class _MonthGridState extends State<MonthGrid> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
+                          // 아주 좁은 폰·큰 글씨에서는 칸보다 숫자가 커질 수 있어 살짝 줄여 맞춘다.
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                             decoration: isToday
                                 ? BoxDecoration(
@@ -278,6 +287,8 @@ class _MonthGridState extends State<MonthGrid> {
                                 color: dayTextColor,
                                 fontSize: 11.5,
                               ),
+                            ),
+                          ),
                             ),
                           ),
                           if (holidayName != null)
@@ -300,10 +311,23 @@ class _MonthGridState extends State<MonthGrid> {
 
                       // 그룹웨어 감성 둥근 컬러 라벨 바 (Badge Chips)
                       Expanded(
+                        // 칸 높이(좁은 폰·큰 글씨에서는 낮아짐)에 들어가는 칩 개수만 보여주고
+                        // 나머지는 "+N"으로 줄인다 — 최대 2개, 넘치면 RenderFlex 오류가 나므로.
+                        child: LayoutBuilder(builder: (context, box) {
+                          final scaler = MediaQuery.textScalerOf(context);
+                          final chipH = scaler.scale(10) + 8.5;
+                          final plusH = scaler.scale(9) + 2;
+                          var shown = dayEvents.length < 2 ? dayEvents.length : 2;
+                          while (shown > 0 &&
+                              shown * chipH + (dayEvents.length > shown ? plusH : 0) >
+                                  box.maxHeight) {
+                            shown--;
+                          }
+                          return ClipRect(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            for (final ev in dayEvents.take(2))
+                            for (final ev in dayEvents.take(shown))
                               Container(
                                 margin: const EdgeInsets.only(bottom: 2),
                                 padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1.5),
@@ -341,11 +365,11 @@ class _MonthGridState extends State<MonthGrid> {
                                   ],
                                 ),
                               ),
-                            if (dayEvents.length > 2)
+                            if (dayEvents.length > shown)
                               Padding(
                                 padding: const EdgeInsets.only(top: 1),
                                 child: Text(
-                                  '+${dayEvents.length - 2}',
+                                  '+${dayEvents.length - shown}',
                                   style: const TextStyle(
                                     fontSize: 7.5,
                                     color: AppColors.protoSubtitle,
@@ -356,6 +380,8 @@ class _MonthGridState extends State<MonthGrid> {
                               ),
                           ],
                         ),
+                          );
+                        }),
                       ),
                     ],
                   ),

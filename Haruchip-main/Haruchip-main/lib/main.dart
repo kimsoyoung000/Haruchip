@@ -8,10 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'design_system/colors.dart';
 import 'features/calendar/data/room_remote.dart';
-import 'features/onboarding/screens/category_selection_screen.dart';
 import 'features/onboarding/screens/splash_screen.dart';
 import 'firebase_options.dart';
 import 'services/storage/local_store.dart';
+import 'services/storage/user_data_remote.dart';
+import 'services/storage/user_scoped_local_store.dart';
+import 'services/storage/user_session.dart';
 
 /// 전역 스크롤 및 마우스/터치 드래그 제스처 인에이블러
 class HaruAppScrollBehavior extends MaterialScrollBehavior {
@@ -43,18 +45,42 @@ void main() async {
   // 카테고리/일정/휴지통 로컬 저장소 — Notifier.build()가 동기로 읽을 수
   // 있도록 runApp 전에 미리 로드한다.
   final prefs = await SharedPreferences.getInstance();
-  runApp(
-    ProviderScope(
-      overrides: [
-        localStoreProvider.overrideWithValue(SharedPrefsLocalStore(prefs)),
-        // 모임방 Firestore 실시간 동기화 (로그인 시)
-        roomRemoteProvider.overrideWithValue(
-          FirestoreRoomRemote(FirebaseFirestore.instance, authChanges: firebaseRoomUserChanges()),
+  final container = ProviderContainer(
+    overrides: [
+      baseLocalStoreProvider.overrideWithValue(SharedPrefsLocalStore(prefs)),
+      userDataRemoteProvider.overrideWithValue(
+        FirestoreUserDataRemote(FirebaseFirestore.instance),
+      ),
+      // 카테고리/일정/휴지통은 로그인한 계정별로 분리 저장하고 Firestore
+      // `users/{uid}/appData`에 동기화한다. 계정이 바뀌면 이 Provider가 새로
+      // 만들어져 저장된 데이터로 다시 그려진다.
+      localStoreProvider.overrideWith(
+        (ref) => UserScopedLocalStore(
+          base: ref.watch(baseLocalStoreProvider),
+          uid: ref.watch(userSessionProvider.select((s) => s.uid)),
+          remote: ref.watch(userDataRemoteProvider),
         ),
-      ],
-      child: const HaruChipApp(),
-    ),
+      ),
+      // 모임방 Firestore 실시간 동기화 (로그인 시)
+      roomRemoteProvider.overrideWithValue(
+        FirestoreRoomRemote(FirebaseFirestore.instance, authChanges: firebaseRoomUserChanges()),
+      ),
+    ],
   );
+  // 앱 시작 시 남아 있는 로그인 세션도 같은 경로로 서버 데이터를 불러온다.
+  container.read(userSessionProvider.notifier).start(
+        FirebaseAuth.instance.authStateChanges().map(
+              (u) => u == null
+                  ? null
+                  : AuthIdentity(
+                      uid: u.uid,
+                      name: u.displayName,
+                      email: u.email,
+                      provider: u.providerData.isEmpty ? null : u.providerData.first.providerId,
+                    ),
+            ),
+      );
+  runApp(UncontrolledProviderScope(container: container, child: const HaruChipApp()));
 }
 
 class HaruChipApp extends StatelessWidget {
@@ -66,6 +92,12 @@ class HaruChipApp extends StatelessWidget {
       title: '하루칩',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const HaruAppScrollBehavior(),
+      // 폰 글씨 크기 설정은 따르되 최대 1.3배까지만 — 그 이상은 레이아웃이 깨진다.
+      // (반응형 점검 테스트도 1.3배 기준: test/responsive/)
+      builder: (context, child) => MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.3,
+        child: child!,
+      ),
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: AppColors.background,
@@ -80,18 +112,13 @@ class HaruChipApp extends StatelessWidget {
   }
 }
 
-/// 앱 시작 지점에서 Firebase 로그인 세션을 확인해 온보딩의 어디서부터
-/// 시작할지 정한다.
+/// 앱 시작 지점에서 Firebase 로그인 세션을 확인해 스플래시 완료 후 어디로
+/// 전환할지 결정한다.
 ///
-/// `firebase_auth`는 기본적으로 로그인 세션을 기기에 영속 저장한다 —
-/// 앱을 완전히 종료했다 다시 열어도 [FirebaseAuth.instance.currentUser]는
-/// 그대로 유지된다. 이 위젯은 그 사실을 UI에 반영할 뿐이다:
-/// - 이미 로그인된 사용자([User] 존재) → 스플래시/로그인 화면을 건너뛰고
-///   온보딩의 다음 단계인 [CategorySelectionScreen]으로 바로 진입한다.
-/// - 로그인 안 된 사용자 → 기존과 동일하게 [SplashScreen]부터 시작한다.
-///
-/// [FirebaseAuth.authStateChanges]를 구독해서, 로그인 화면에서 로그아웃하는
-/// 케이스가 생기더라도(현재는 없음) 다음 빌드에서 즉시 반영되게 해둔다.
+/// 모든 유저는 앱 진입 시 브랜드 경험(로고 및 "하루의 소중한 조각들을 담아봐요")
+/// 스플래시를 경험하며, 스플래시 종료 시:
+/// - 기존 로그인 세션이 유지된 유저([User] 존재) → 즉시 [MainShellScreen]으로 진입
+/// - 최초 진입 또는 미인증 유저 → [AppPermissionScreen] 및 토스 온보딩 퍼널로 연결
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -105,9 +132,7 @@ class AuthGate extends StatelessWidget {
       initialData: FirebaseAuth.instance.currentUser,
       builder: (context, snapshot) {
         final isLoggedIn = snapshot.data != null;
-        return isLoggedIn
-            ? const CategorySelectionScreen()
-            : const SplashScreen();
+        return SplashScreen(isLoggedIn: isLoggedIn);
       },
     );
   }

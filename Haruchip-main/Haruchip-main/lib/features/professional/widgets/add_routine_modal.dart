@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../../shared/widgets/common_date_time_picker.dart';
 import '../../shared/widgets/event_sync_options_section.dart';
 import '../models/routine_model.dart';
 
@@ -86,16 +87,32 @@ class _AddRoutineModalState extends State<_AddRoutineModal> {
   }
 
   Future<void> _pickStartTime() async {
-    final picked = await showTimePicker(context: context, initialTime: _startTime);
+    final now = DateTime.now();
+    final currentDt = DateTime(now.year, now.month, now.day, _startTime.hour, _startTime.minute);
+    final picked = await showCommonDateTimePickerModal(
+      context,
+      initialDateTime: currentDt,
+      isAllDay: false,
+      showAllDayToggle: false,
+      title: '루틴 시작 시간 선택',
+    );
     if (picked != null) {
-      setState(() => _startTime = picked);
+      setState(() => _startTime = TimeOfDay(hour: picked.hour, minute: picked.minute));
     }
   }
 
   Future<void> _pickEndTime() async {
-    final picked = await showTimePicker(context: context, initialTime: _endTime);
+    final now = DateTime.now();
+    final currentDt = DateTime(now.year, now.month, now.day, _endTime.hour, _endTime.minute);
+    final picked = await showCommonDateTimePickerModal(
+      context,
+      initialDateTime: currentDt,
+      isAllDay: false,
+      showAllDayToggle: false,
+      title: '루틴 종료 시간 선택',
+    );
     if (picked != null) {
-      setState(() => _endTime = picked);
+      setState(() => _endTime = TimeOfDay(hour: picked.hour, minute: picked.minute));
     }
   }
 
@@ -169,12 +186,16 @@ class _AddRoutineModalState extends State<_AddRoutineModal> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        isEditing ? '루틴 / 주간 일정 수정' : '새 루틴 / 주간 일정 추가',
-                        style: AppTypography.heading2.copyWith(
-                          color: AppColors.protoHeading,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Text(
+                          isEditing ? '루틴 / 주간 일정 수정' : '새 루틴 / 주간 일정 추가',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.heading2.copyWith(
+                            color: AppColors.protoHeading,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       IconButton(
@@ -362,7 +383,8 @@ class _AddRoutineModalState extends State<_AddRoutineModal> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Row(
+                    Wrap(
+                      runSpacing: 8,
                       children: _colorPresets.map((hex) {
                         final isSelected = _colorHex.toLowerCase() == hex.toLowerCase();
                         final color = Color(int.parse('0xFF${hex.replaceAll('#', '')}'));

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../../shared/widgets/common_date_time_picker.dart';
 import '../../shared/widgets/event_sync_options_section.dart';
-import '../../shared/widgets/haru_calendar_picker.dart';
 import '../models/goal_model.dart';
 
 /// 목표 / 버킷리스트 추가 및 수정 모달
@@ -77,36 +77,21 @@ class _AddGoalModalState extends State<_AddGoalModal> {
     super.dispose();
   }
 
-  void _openDatePicker() {
+  void _openDatePicker() async {
     final initialDate = _deadline ?? DateTime.now();
-    showDialog<void>(
-      context: context,
-      builder: (dialogCtx) => Dialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              HaruCalendarPicker(
-                initialDate: initialDate,
-                firstDate: DateTime(2020, 1, 1),
-                lastDate: DateTime(2035, 12, 31),
-                onDateChanged: (picked) {
-                  setState(() {
-                    _deadline = picked;
-                    _noDeadline = false;
-                  });
-                  Navigator.of(dialogCtx).pop();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    final picked = await showCommonDatePickerModal(
+      context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime(2035, 12, 31),
+      title: '목표 마감일 선택',
     );
+    if (picked != null && mounted) {
+      setState(() {
+        _deadline = picked;
+        _noDeadline = false;
+      });
+    }
   }
 
   void _save() {
@@ -173,12 +158,16 @@ class _AddGoalModalState extends State<_AddGoalModal> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        isEditing ? '목표 / 버킷리스트 수정' : '새 목표 / 버킷리스트 추가',
-                        style: AppTypography.heading2.copyWith(
-                          color: AppColors.protoHeading,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Text(
+                          isEditing ? '목표 / 버킷리스트 수정' : '새 목표 / 버킷리스트 추가',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.heading2.copyWith(
+                            color: AppColors.protoHeading,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       IconButton(
@@ -351,14 +340,16 @@ class _AddGoalModalState extends State<_AddGoalModal> {
                                     color: _noDeadline ? Colors.grey : const Color(0xFF0F172A),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    _noDeadline || _deadline == null
-                                        ? '기한 없음'
-                                        : '${_deadline!.year}.${_deadline!.month.toString().padLeft(2, '0')}.${_deadline!.day.toString().padLeft(2, '0')}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: _noDeadline ? Colors.grey : const Color(0xFF0F172A),
+                                  Flexible(
+                                    child: Text(
+                                      _noDeadline || _deadline == null
+                                          ? '기한 없음'
+                                          : '${_deadline!.year}.${_deadline!.month.toString().padLeft(2, '0')}.${_deadline!.day.toString().padLeft(2, '0')}',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: _noDeadline ? Colors.grey : const Color(0xFF0F172A),
+                                      ),
                                     ),
                                   ),
                                 ],
