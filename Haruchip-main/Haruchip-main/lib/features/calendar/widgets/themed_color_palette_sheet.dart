@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../categories/models/category.dart';
+import '../models/calendar_event.dart';
 
 /// 테마별 컬러 팔레트 그룹 정의 (TimeTree 스타일 1:1 벤치마킹)
 class ThemedColorGroup {
@@ -312,6 +314,9 @@ Future<String?> showThemedColorPickerSheet(
   BuildContext context, {
   required String title,
   required String currentHex,
+  String? iconKey,
+  bool? initialFillLabelBg,
+  ValueChanged<bool>? onFillLabelBgChanged,
 }) {
   return showModalBottomSheet<String>(
     context: context,
@@ -320,6 +325,9 @@ Future<String?> showThemedColorPickerSheet(
     builder: (ctx) => _ThemedColorPickerSheet(
       title: title,
       initialHex: currentHex,
+      iconKey: iconKey,
+      initialFillLabelBg: initialFillLabelBg,
+      onFillLabelBgChanged: onFillLabelBgChanged,
     ),
   );
 }
@@ -328,10 +336,16 @@ class _ThemedColorPickerSheet extends StatefulWidget {
   const _ThemedColorPickerSheet({
     required this.title,
     required this.initialHex,
+    this.iconKey,
+    this.initialFillLabelBg,
+    this.onFillLabelBgChanged,
   });
 
   final String title;
   final String initialHex;
+  final String? iconKey;
+  final bool? initialFillLabelBg;
+  final ValueChanged<bool>? onFillLabelBgChanged;
 
   @override
   State<_ThemedColorPickerSheet> createState() =>
@@ -340,11 +354,13 @@ class _ThemedColorPickerSheet extends StatefulWidget {
 
 class _ThemedColorPickerSheetState extends State<_ThemedColorPickerSheet> {
   late String _selectedHex;
+  late bool _fillLabelBg;
 
   @override
   void initState() {
     super.initState();
     _selectedHex = _normalizeHex(widget.initialHex);
+    _fillLabelBg = widget.initialFillLabelBg ?? false;
   }
 
   @override
@@ -358,7 +374,7 @@ class _ThemedColorPickerSheetState extends State<_ThemedColorPickerSheet> {
         constraints: BoxConstraints(maxHeight: mediaQuery.size.height * 0.85),
         child: Container(
           decoration: const BoxDecoration(
-            color: Color(0xFFF5F6F8),
+            color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
           ),
           child: SafeArea(
@@ -388,16 +404,31 @@ class _ThemedColorPickerSheetState extends State<_ThemedColorPickerSheet> {
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                       Expanded(
-                        child: Text(
-                          widget.title,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1F2937),
-                          ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (widget.iconKey != null && widget.iconKey!.isNotEmpty) ...[
+                              HaruChipIconViewer(
+                                iconKey: widget.iconKey!,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Flexible(
+                              child: Text(
+                                widget.title,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1F2937),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       TextButton(
@@ -425,6 +456,76 @@ class _ThemedColorPickerSheetState extends State<_ThemedColorPickerSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (widget.onFillLabelBgChanged != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF9FAFB),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        '캘린더 라벨 배경 채우기',
+                                        style: TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1F2937),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: _fillLabelBg
+                                              ? resolveCalendarLabelPastelBg(previewColor)
+                                              : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 2.5,
+                                              height: 12,
+                                              decoration: BoxDecoration(
+                                                color: previewColor,
+                                                borderRadius: BorderRadius.circular(1.5),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _fillLabelBg ? '파스텔 배경 채움 미리보기' : '투명 라벨 미리보기',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: kCalendarLabelDarkText,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Switch.adaptive(
+                                  value: _fillLabelBg,
+                                  activeTrackColor: const Color(0xFF007AFF),
+                                  onChanged: (v) {
+                                    setState(() => _fillLabelBg = v);
+                                    widget.onFillLabelBgChanged?.call(v);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [

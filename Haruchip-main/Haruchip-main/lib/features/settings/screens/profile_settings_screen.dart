@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_picker.dart';
+import '../../../core/icons/haruchip_icon_registry.dart';
+import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../../core/theme/app_font_settings_provider.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -41,14 +45,8 @@ class ProfileSettingsScreen extends ConsumerStatefulWidget {
 class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   // 프로필 상태
   String _nickname = '하루칩 여행자';
-  String _selectedAvatarEmoji = '🐣';
+  String _selectedAvatarEmoji = 'simple_chick';
   bool _isSyncing = false;
-
-  final List<String> _avatarEmojis = [
-    '🐣', '🐻', '🐱', '🐶', '🐰', '🐯',
-    '🐼', '🦊', '🍓', '☕', '🎮', '🌿',
-    '✈️', '💍', '🎓', '🎖️', '🍼', '🎨',
-  ];
 
   @override
   void initState() {
@@ -74,87 +72,21 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     );
   }
 
-  /// 아바타 이모지 변경 바텀시트
-  void _openAvatarPicker() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '프로필 아바타 선택',
-                      style: AppTypography.heading2.copyWith(fontSize: 18, color: AppColors.protoHeading),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '나만의 감성을 담은 하루칩 캐릭터를 골라보세요.',
-                  style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
-                ),
-                const SizedBox(height: 16),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: _avatarEmojis.length,
-                  itemBuilder: (context, index) {
-                    final emoji = _avatarEmojis[index];
-                    final isSelected = emoji == _selectedAvatarEmoji;
-                    return InkWell(
-                      onTap: () {
-                        setState(() => _selectedAvatarEmoji = emoji);
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('🎉 프로필 아바타가 $emoji 로 변경되었습니다.'),
-                            behavior: SnackBarBehavior.floating,
-                            duration: const Duration(seconds: 1),
-                          ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF9FAFB),
-                          border: Border.all(
-                            color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFE5E7EB),
-                            width: isSelected ? 2 : 1,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(emoji, style: const TextStyle(fontSize: 26)),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
-        ),
+  /// 프로필 아이콘/사진 변경 바텀시트 (신규 HaruChipIconPicker 연동)
+  Future<void> _openAvatarPicker() async {
+    final picked = await showHaruChipIconPicker(
+      context,
+      initialIconKey: _selectedAvatarEmoji,
+      title: '프로필 아이콘 선택',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _selectedAvatarEmoji = picked);
+    final label = HaruChipIconRegistry.labelForKey(picked);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('🎉 프로필 아바타가 [$label]로 변경되었습니다.'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -672,7 +604,11 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                                   border: Border.all(color: const Color(0xFFE5E7EB), width: 1.3),
                                 ),
                                 alignment: Alignment.center,
-                                child: Text(_selectedAvatarEmoji, style: const TextStyle(fontSize: 26)),
+                                child: HaruChipIconViewer(
+                                  iconKey: _selectedAvatarEmoji,
+                                  size: 32,
+                                  circular: true,
+                                ),
                               ),
                               Positioned(
                                 right: 0,
@@ -1084,6 +1020,25 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       badgeColor: const Color(0xFFF5F3FF),
                       badgeTextColor: const Color(0xFF7C3AED),
                       onTap: () => showCategoryOrderEditSheet(context),
+                    ),
+                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
+
+                    // 글꼴 및 글자 크기 설정 (카테고리 꾸미기에서 앱 전역 환경설정으로 이관)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final fontSettings = ref.watch(appFontSettingsProvider);
+                        return _buildSettingsTile(
+                          icon: Icons.text_fields_rounded,
+                          iconColor: AppColors.chipYellowText,
+                          title: '글꼴 및 글자 크기 설정',
+                          subtitle:
+                              '${fontSettings.fontFamily.labelKo} · 글자 크기 ${fontSettings.fontSize.labelKo}',
+                          badgeText: '전역 폰트',
+                          badgeColor: AppColors.chipYellowBg,
+                          badgeTextColor: AppColors.chipYellowText,
+                          onTap: () => showAppFontSettingsSheet(context),
+                        );
+                      },
                     ),
                     const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
 

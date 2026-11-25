@@ -76,13 +76,9 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                               ? AppColors.protoCardSelectedBg
                               : AppColors.surfaceMuted,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _selectedIcon == item.icon
-                                ? AppColors.protoCardSelectedBorder
-                                : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
+                        
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -129,7 +125,6 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
       decoration: BoxDecoration(
         color: AppColors.protoCardBg,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.protoCardSelectedBg, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),

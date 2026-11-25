@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../categories/models/category.dart';
 import '../../categories/providers/category_provider.dart';
 import '../providers/calendar_provider.dart';
@@ -225,7 +226,10 @@ class _CalendarCategoryFilterSheet extends ConsumerWidget {
                                         : null,
                                   ),
                                   const SizedBox(width: 12),
-                                  Text(item.emoji, style: const TextStyle(fontSize: 15)),
+                                  HaruChipIconViewer(
+                                    iconKey: item.emoji,
+                                    size: 18,
+                                  ),
                                   const SizedBox(width: 7),
                                   Expanded(
                                     child: Text(
@@ -258,10 +262,31 @@ class _CalendarCategoryFilterSheet extends ConsumerWidget {
                           ),
                           tooltip: '${item.label} 색상 설정',
                           onPressed: () async {
+                            final matchedCat = userCategories.where(
+                              (c) => (item.id.isNotEmpty && c.id == item.id) || c.categoryKey == item.key,
+                            );
+                            bool currentFillBg = matchedCat.isNotEmpty
+                                ? matchedCat.first.fillCalendarLabelBg
+                                : false;
                             final pickedHex = await showThemedColorPickerSheet(
                               context,
-                              title: '${item.emoji} ${item.label} 색상 변경',
+                              title: '${item.label} 색상 변경',
+                              iconKey: item.emoji,
                               currentHex: _colorToHex(item.color),
+                              initialFillLabelBg: currentFillBg,
+                              onFillLabelBgChanged: (v) {
+                                currentFillBg = v;
+                                ref
+                                    .read(categoryListProvider.notifier)
+                                    .updateCategoryColor(
+                                      categoryKey: item.key,
+                                      id: item.id,
+                                      name: item.label,
+                                      emoji: item.emoji,
+                                      colorHex: _colorToHex(item.color),
+                                      fillCalendarLabelBg: v,
+                                    );
+                              },
                             );
                             if (pickedHex != null) {
                               ref
@@ -272,6 +297,7 @@ class _CalendarCategoryFilterSheet extends ConsumerWidget {
                                     name: item.label,
                                     emoji: item.emoji,
                                     colorHex: pickedHex,
+                                    fillCalendarLabelBg: currentFillBg,
                                   );
                             }
                           },

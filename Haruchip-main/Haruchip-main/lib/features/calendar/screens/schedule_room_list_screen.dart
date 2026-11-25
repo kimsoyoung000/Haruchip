@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../data/room_remote.dart';
 import '../providers/schedule_room_provider.dart';
@@ -29,7 +30,7 @@ class ScheduleRoomListScreen extends ConsumerWidget {
     final myCode = ref.watch(myUserCodeProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.cleanCanvasBg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -119,8 +120,9 @@ class ScheduleRoomListScreen extends ConsumerWidget {
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F172A),
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.chipYellowBg,
+                        foregroundColor: AppColors.chipYellowText,
+                        overlayColor: const Color(0xFFF7D779),
                         padding: const EdgeInsets.symmetric(vertical: 9.5),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -205,15 +207,19 @@ class ScheduleRoomListScreen extends ConsumerWidget {
                       ElevatedButton(
                         onPressed: () => showCreateRoomDialog(context),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F172A),
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppColors.chipYellowBg,
+                          foregroundColor: AppColors.chipYellowText,
+                          overlayColor: const Color(0xFFF7D779),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           elevation: 0,
                         ),
-                        child: const Text('모임 개설하기', style: TextStyle(fontSize: 12)),
+                        child: const Text(
+                          '모임 개설하기',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ],
                   ),

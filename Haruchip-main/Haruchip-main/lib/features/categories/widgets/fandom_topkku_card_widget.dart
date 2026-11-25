@@ -223,8 +223,9 @@ class _FandomTopkkuCardWidgetState extends State<FandomTopkkuCardWidget>
                         decoration: BoxDecoration(
                           color: const Color(0xFFF9FAFB),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFF3F4F6)),
-                        ),
+                        
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                         child: Text(emoji, style: const TextStyle(fontSize: 22)),
                       ),
                     );
@@ -462,8 +463,9 @@ class _FandomTopkkuCardWidgetState extends State<FandomTopkkuCardWidget>
                   height: 240,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
+                  
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                   clipBehavior: Clip.antiAlias,
                   child: Image.memory(byteData.buffer.asUint8List(), fit: BoxFit.contain),
                 ),
@@ -517,7 +519,6 @@ class _FandomTopkkuCardWidgetState extends State<FandomTopkkuCardWidget>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -605,7 +606,6 @@ class _FandomTopkkuCardWidgetState extends State<FandomTopkkuCardWidget>
                       Color(0xFFEFF6FF),
                     ],
                   ),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 3.5),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF9333EA).withValues(alpha: 0.08),
@@ -686,8 +686,9 @@ class _FandomTopkkuCardWidgetState extends State<FandomTopkkuCardWidget>
                                     decoration: BoxDecoration(
                                       color: Colors.black.withValues(alpha: 0.55),
                                       borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                                    ),
+                                    
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                                     child: Text(
                                       widget.topkkuCard.customOverlayText,
                                       textAlign: TextAlign.center,
@@ -854,8 +855,9 @@ class _FandomTopkkuCardWidgetState extends State<FandomTopkkuCardWidget>
               decoration: BoxDecoration(
                 color: const Color(0xFFFAF5FF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFF3E8FF)),
-              ),
+              
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
               child: Row(
                 children: [
                   // Animated Turntable Vinyl Icon
@@ -938,8 +940,9 @@ class _FandomTopkkuCardWidgetState extends State<FandomTopkkuCardWidget>
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFF3F4F6)),
-        ),
+        
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

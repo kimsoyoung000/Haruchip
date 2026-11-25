@@ -219,8 +219,9 @@ class _RoutineCategoryViewState extends State<RoutineCategoryView> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: Column(
               children: [
                 const Icon(Icons.alarm_outlined, size: 40, color: Colors.grey),
@@ -257,8 +258,9 @@ class _RoutineCategoryViewState extends State<RoutineCategoryView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
       child: Column(
         children: [
           // 요일 헤더 행
@@ -455,8 +457,9 @@ class _RoutineCategoryViewState extends State<RoutineCategoryView> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
+              
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
               child: Text(
                 '${_dayNames[_selectedDayFilter - 1]}요일에 예정된 루틴이 없습니다',
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
@@ -481,8 +484,9 @@ class _RoutineCategoryViewState extends State<RoutineCategoryView> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
+                  
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                   child: Row(
                     children: [
                       Container(

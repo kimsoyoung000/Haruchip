@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -31,8 +32,10 @@ class SkinThemeBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (patternType == SkinPatternType.none) return;
+    final clampedOpacity = opacity.clamp(0.0, 1.0);
+    if (clampedOpacity <= 0.001) return;
 
-    final paintColor = patternColor.withValues(alpha: opacity.clamp(0.05, 0.65));
+    final paintColor = patternColor.withValues(alpha: clampedOpacity);
 
     switch (patternType) {
       case SkinPatternType.dot:
@@ -315,7 +318,7 @@ class SkinThemeBorderPainter extends CustomPainter {
   }
 }
 
-/// Y2K 스킨 테마가 적용된 통합 카드 컨테이너 위젯
+/// 스킨 테마가 적용된 통합 카드 컨테이너 위젯 (무테두리 플랫 라운드 기본 지원)
 class SkinThemeCardContainer extends StatelessWidget {
   const SkinThemeCardContainer({
     super.key,
@@ -327,6 +330,8 @@ class SkinThemeCardContainer extends StatelessWidget {
     this.margin,
     this.onTap,
     this.showShadow = true,
+    this.borderless = true,
+    this.backgroundImageUrl,
   });
 
   final CategorySkinTheme theme;
@@ -337,13 +342,33 @@ class SkinThemeCardContainer extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final VoidCallback? onTap;
   final bool showShadow;
+  final bool borderless;
+  final String? backgroundImageUrl;
 
   @override
   Widget build(BuildContext context) {
     final bgColor = _hexToColor(theme.backgroundColor);
     final patternColor = _hexToColor(theme.patternColor, fallback: Colors.white);
     final borderColor = _hexToColor(theme.borderColor);
-    final radius = Radius.circular(theme.borderRadius);
+    final radius = Radius.circular(borderless ? 18.0 : theme.borderRadius);
+
+    DecorationImage? photoImage;
+    if (backgroundImageUrl != null && backgroundImageUrl!.isNotEmpty) {
+      if (backgroundImageUrl!.startsWith('http')) {
+        photoImage = DecorationImage(
+          image: NetworkImage(backgroundImageUrl!),
+          fit: BoxFit.cover,
+        );
+      } else {
+        final file = File(backgroundImageUrl!);
+        if (file.existsSync()) {
+          photoImage = DecorationImage(
+            image: FileImage(file),
+            fit: BoxFit.cover,
+          );
+        }
+      }
+    }
 
     Widget container = Container(
       width: width,
@@ -351,13 +376,14 @@ class SkinThemeCardContainer extends StatelessWidget {
       margin: margin,
       decoration: BoxDecoration(
         color: bgColor,
+        image: photoImage,
         borderRadius: BorderRadius.all(radius),
         boxShadow: showShadow
             ? [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: theme.borderStyleEnum == SkinBorderStyle.window98Bevel ? 0.08 : 0.04),
-                  blurRadius: theme.borderStyleEnum == SkinBorderStyle.window98Bevel ? 6 : 10,
-                  offset: theme.borderStyleEnum == SkinBorderStyle.window98Bevel ? const Offset(2, 2) : const Offset(0, 4),
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
                 ),
               ]
             : null,
@@ -366,8 +392,16 @@ class SkinThemeCardContainer extends StatelessWidget {
         borderRadius: BorderRadius.all(radius),
         child: Stack(
           children: [
-            // Background Pattern
-            if (theme.patternTypeEnum != SkinPatternType.none)
+            // 사진 배경 가독성 소프트 오버레이
+            if (photoImage != null)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.white.withValues(alpha: 0.25),
+                ),
+              ),
+
+            // Background Pattern (실시간 투명도 블렌딩)
+            if (theme.patternTypeEnum != SkinPatternType.none && photoImage == null)
               Positioned.fill(
                 child: CustomPaint(
                   painter: SkinThemeBackgroundPainter(
@@ -384,8 +418,10 @@ class SkinThemeCardContainer extends StatelessWidget {
               child: child,
             ),
 
-            // Top Border Layer
-            if (theme.borderStyleEnum != SkinBorderStyle.none && theme.borderWidth > 0)
+            // Top Border Layer (무테두리 원칙: borderless == false일 때만 표시)
+            if (!borderless &&
+                theme.borderStyleEnum != SkinBorderStyle.none &&
+                theme.borderWidth > 0)
               Positioned.fill(
                 child: IgnorePointer(
                   child: CustomPaint(

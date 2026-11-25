@@ -32,12 +32,6 @@ class BirthdayGridCardWidget extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isToday
-                ? const Color(0xFFF472B6)
-                : const Color(0xFFF1F5F9),
-            width: isToday ? 2 : 1.5,
-          ),
           boxShadow: [
             BoxShadow(
               color: isToday
@@ -91,14 +85,9 @@ class BirthdayGridCardWidget extends StatelessWidget {
                         ? const Color(0xFFFDF2F8)
                         : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isToday
-                      ? const Color(0xFFDB2777)
-                      : isSoon
-                          ? const Color(0xFFFCE7F3)
-                          : const Color(0xFFE2E8F0),
-                ),
-              ),
+              
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
               child: Text(
                 isToday ? '🎂 오늘 D-Day!' : dDayLabel,
                 style: TextStyle(

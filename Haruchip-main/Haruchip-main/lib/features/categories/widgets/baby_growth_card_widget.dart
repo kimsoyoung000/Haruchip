@@ -44,12 +44,6 @@ class BabyGrowthCardWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFFFDF5),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isBoy
-              ? const Color(0xFFBAE6FD)
-              : (isGirl ? const Color(0xFFFBCFE8) : const Color(0xFFFED7AA)),
-          width: 1.4,
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),

@@ -66,10 +66,6 @@ class _ExamTimelineTreeWidgetState extends State<ExamTimelineTreeWidget> {
       decoration: BoxDecoration(
         color: AppColors.protoCardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: subjectColor.withValues(alpha: 0.4),
-          width: 2,
-        ),
         boxShadow: [
           BoxShadow(
             color: subjectColor.withValues(alpha: 0.08),

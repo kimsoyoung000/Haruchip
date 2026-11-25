@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:haruchip/core/icons/haruchip_icon_viewer.dart';
 import 'package:haruchip/features/home/screens/main_shell_screen.dart';
 import 'package:haruchip/features/home/screens/trash_bin_screen.dart';
 import 'package:haruchip/features/onboarding/providers/calendar_integration_provider.dart';
@@ -88,18 +89,20 @@ void main() {
       await tester.pumpWidget(buildTestApp());
       await tester.pumpAndSettle();
 
-      // 아바타 터치
-      await tester.tap(find.text('🐣'));
+      // 아바타 터치 (HaruChipIconViewer)
+      await tester.tap(find.byType(HaruChipIconViewer).first);
       await tester.pumpAndSettle();
 
-      expect(find.text('프로필 아바타 선택'), findsOneWidget);
-      expect(find.text('나만의 감성을 담은 하루칩 캐릭터를 골라보세요.'), findsOneWidget);
+      expect(find.text('프로필 아이콘 선택'), findsOneWidget);
+      expect(find.text('아이콘'), findsOneWidget);
+      expect(find.text('사진'), findsOneWidget);
 
-      // 이모지 선택 (예: 🐻)
-      await tester.tap(find.text('🐻'));
+      // 아이콘 선택 (하트)
+      await tester.tap(find.byTooltip('하트'));
       await tester.pumpAndSettle();
 
-      expect(find.text('🐻'), findsOneWidget);
+      final viewer = tester.widget<HaruChipIconViewer>(find.byType(HaruChipIconViewer).first);
+      expect(viewer.iconKey, 'simple_heart');
     });
 
     testWidgets('toggles calendar integration and view mode providers', (tester) async {

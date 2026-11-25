@@ -32,7 +32,6 @@ class BabyGrowthRecordsWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -110,8 +109,9 @@ class BabyGrowthRecordsWidget extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFFFFBEB),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
+              
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -206,8 +206,9 @@ class BabyGrowthRecordsWidget extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
+              
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
               alignment: Alignment.center,
               child: const Text(
                 '아직 등록된 신체 측정 기록이 없습니다.\n상단의 [+ 기록 추가] 버튼을 눌러 아기의 키와 몸무게를 기록해보세요.',
@@ -232,8 +233,9 @@ class BabyGrowthRecordsWidget extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
+                    
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                     child: Row(
                       children: [
                         Column(

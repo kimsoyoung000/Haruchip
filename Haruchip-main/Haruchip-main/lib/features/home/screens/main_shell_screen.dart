@@ -200,13 +200,13 @@ class _IconButtonBadge extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: AppColors.protoCardSelectedBg,
+          color: AppColors.chipYellowBg,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Icon(icon, size: 20, color: AppColors.protoStepLabel),
+            Icon(icon, size: 20, color: AppColors.chipYellowText),
             Positioned(
               top: -1,
               right: -1,
@@ -214,7 +214,7 @@ class _IconButtonBadge extends StatelessWidget {
                 width: 8,
                 height: 8,
                 decoration: const BoxDecoration(
-                  color: AppColors.protoStepLabel,
+                  color: AppColors.chipGoldOutline,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -242,14 +242,14 @@ class _BottomNavBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.protoCardBg,
-        border: Border(
-          top: BorderSide(color: AppColors.protoCardSelectedBg, width: 1),
+        color: AppColors.cleanWhiteBg,
+        border: const Border(
+          top: BorderSide(color: Color(0xFFF1F5F9), width: 1),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
             offset: const Offset(0, -2),
           ),
         ],
@@ -287,19 +287,27 @@ class _NavBarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.protoStepLabel : AppColors.protoSubtitle;
+    final color = selected ? AppColors.chipYellowText : AppColors.protoSubtitle;
     final displayIcon = selected ? (tab.activeIcon ?? tab.icon) : tab.icon;
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(displayIcon, size: 24, color: color),
-            const SizedBox(height: 4),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.chipYellowBg : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Icon(displayIcon, size: 22, color: color),
+            ),
+            const SizedBox(height: 3),
             Text(
               tab.label,
               maxLines: 1,
@@ -307,7 +315,7 @@ class _NavBarButton extends StatelessWidget {
               style: AppTypography.caption.copyWith(
                 fontSize: 11,
                 color: color,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
               ),
             ),
           ],

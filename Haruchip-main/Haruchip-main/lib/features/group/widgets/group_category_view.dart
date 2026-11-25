@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../models/group_category_item.dart';
 import '../providers/group_category_provider.dart';
 import 'add_group_modal.dart';
@@ -84,7 +85,11 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                 label: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(group.icon, style: const TextStyle(fontSize: 14)),
+                    HaruChipIconViewer(
+                      iconKey: group.icon,
+                      size: 16,
+                      circular: true,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       group.name,
@@ -147,7 +152,6 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
       decoration: BoxDecoration(
         color: const Color(0xFFFFF5F2),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFE2D9), width: 1.4),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFFE26D5C).withValues(alpha: 0.06),
@@ -343,7 +347,6 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFFE2D9), width: 1.3),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFFE26D5C).withValues(alpha: 0.08),
@@ -353,9 +356,10 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
         ],
       ),
       alignment: Alignment.center,
-      child: Text(
-        group.icon,
-        style: const TextStyle(fontSize: 24),
+      child: HaruChipIconViewer(
+        iconKey: group.icon,
+        size: 28,
+        borderRadius: BorderRadius.circular(12),
       ),
     );
   }
@@ -368,8 +372,9 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
       decoration: BoxDecoration(
         color: const Color(0xFFFFF5F2),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFFFE2D9)),
-      ),
+      
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
       child: Column(
         children: [
           const Text('👥', style: TextStyle(fontSize: 44)),
@@ -639,12 +644,6 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
       decoration: BoxDecoration(
         color: isPast ? const Color(0xFFFAFAFA) : Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isToday
-              ? const Color(0xFFE26D5C)
-              : (isPast ? const Color(0xFFE7E5E4) : const Color(0xFFFFE2D9)),
-          width: isToday ? 1.4 : 1,
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isPast ? 0.01 : 0.02),
@@ -905,8 +904,9 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7E5E4)),
-      ),
+      
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
       child: Column(
         children: [
           const Text('📅', style: TextStyle(fontSize: 32)),

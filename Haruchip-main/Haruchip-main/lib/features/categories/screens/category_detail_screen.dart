@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../plan/models/plan_item.dart';
@@ -299,11 +300,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                             decoration: BoxDecoration(
                               color: isHidden ? const Color(0xFFF1F5F9) : Colors.white,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: isHidden ? const Color(0xFFE2E8F0) : const Color(0xFFCBD5E1),
-                                width: isHidden ? 1 : 1.5,
-                              ),
-                            ),
+                            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                             child: Row(
                               children: [
                                 Checkbox(
@@ -1478,9 +1477,36 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         ),
         backgroundColor: AppColors.protoBackground,
         elevation: 0,
-        title: Text(
-          '${_category.icon} ${_category.name}',
-          style: AppTypography.heading2.copyWith(color: AppColors.protoHeading),
+        title: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 34) {
+              return Text(
+                _category.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.heading2.copyWith(color: AppColors.protoHeading),
+              );
+            }
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                HaruChipIconViewer(
+                  iconKey: _category.icon,
+                  size: 20,
+                  circular: true,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    _category.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.heading2.copyWith(color: AppColors.protoHeading),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         actions: [
           if (_isProfessionalCategory) ...[
@@ -1530,31 +1556,39 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             )
           else if (_category.categoryKey == 'exam')
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 TextButton.icon(
                   onPressed: _openExamOfficialDbModal,
-                  icon: const Text('📚', style: TextStyle(fontSize: 16)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Text('📚', style: TextStyle(fontSize: 14)),
                   label: const Text(
                     '공식 DB',
                     style: TextStyle(
                       color: Color(0xFF2563EB),
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 12.5,
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: TextButton.icon(
-                    onPressed: () => _openAddExamModal(),
-                    icon: const Icon(Icons.add_rounded, size: 17, color: Color(0xFF0F172A)),
-                    label: const Text(
-                      '+ 시험 추가',
-                      style: TextStyle(
-                        color: Color(0xFF0F172A),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
+                TextButton.icon(
+                  onPressed: () => _openAddExamModal(),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF0F172A)),
+                  label: const Text(
+                    '시험 추가',
+                    style: TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
                     ),
                   ),
                 ),
@@ -1589,73 +1623,43 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
               ],
             )
           else if (_category.categoryKey == 'travel')
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => AddTripModal.show(context),
-                  icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF0284C7)),
-                  label: const Text(
-                    '새 여행',
-                    style: TextStyle(
-                      color: Color(0xFF0284C7),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
+            TextButton.icon(
+              onPressed: () => AddTripModal.show(context),
+              icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF0284C7)),
+              label: const Text(
+                '새 여행',
+                style: TextStyle(
+                  color: Color(0xFF0284C7),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
-                IconButton(
-                  onPressed: _openEditModal,
-                  icon: const Icon(Icons.palette_outlined, size: 20, color: AppColors.protoHeading),
-                  tooltip: '꾸미기',
-                ),
-                const SizedBox(width: 4),
-              ],
+              ),
             )
           else if (_category.categoryKey == 'hobby')
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => AddHobbyModal.show(context),
-                  icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF354235)),
-                  label: const Text(
-                    '새 취미',
-                    style: TextStyle(
-                      color: Color(0xFF354235),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
+            TextButton.icon(
+              onPressed: () => AddHobbyModal.show(context),
+              icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF354235)),
+              label: const Text(
+                '새 취미',
+                style: TextStyle(
+                  color: Color(0xFF354235),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
-                IconButton(
-                  onPressed: _openEditModal,
-                  icon: const Icon(Icons.palette_outlined, size: 20, color: AppColors.protoHeading),
-                  tooltip: '꾸미기',
-                ),
-                const SizedBox(width: 4),
-              ],
+              ),
             )
           else if (_category.categoryKey == 'group')
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => AddGroupModal.show(context),
-                  icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFFE26D5C)),
-                  label: const Text(
-                    '새 모임',
-                    style: TextStyle(
-                      color: Color(0xFFE26D5C),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
+            TextButton.icon(
+              onPressed: () => AddGroupModal.show(context),
+              icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFFE26D5C)),
+              label: const Text(
+                '새 모임',
+                style: TextStyle(
+                  color: Color(0xFFE26D5C),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
-                IconButton(
-                  onPressed: _openEditModal,
-                  icon: const Icon(Icons.palette_outlined, size: 20, color: AppColors.protoHeading),
-                  tooltip: '꾸미기',
-                ),
-                const SizedBox(width: 4),
-              ],
+              ),
             )
           else ...[
             // 좁은 폰(<400)에서는 앱바 버튼이 넘치므로 섹션 관리는 아이콘만 보여준다.
@@ -1678,18 +1682,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                   ),
                 ),
               ),
-            if (_category.categoryKey != 'pet')
-              TextButton.icon(
-                onPressed: _openEditModal,
-                icon: const Icon(Icons.palette_outlined, size: 17, color: AppColors.protoHeading),
-                label: Text(
-                  '꾸미기',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.protoHeading,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
             TextButton.icon(
               onPressed: () => showAddEventBottomSheet(
                 context,
@@ -1705,8 +1697,22 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 6),
           ],
+          // 전 카테고리 공통 꾸미기(단일 스킨 엔진) 진입 버튼
+          IconButton(
+            key: const Key('category_decorate_button'),
+            onPressed: _openEditModal,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(
+              Icons.palette_outlined,
+              size: 20,
+              color: AppColors.protoHeading,
+            ),
+            tooltip: '꾸미기',
+          ),
+          const SizedBox(width: 2),
         ],
       ),
       body: Stack(
@@ -1866,11 +1872,12 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                                           Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Text(
-                                                skinTheme?.accentEmoji.isNotEmpty == true
+                                              HaruChipIconViewer(
+                                                iconKey: skinTheme?.accentEmoji.isNotEmpty == true
                                                     ? skinTheme!.accentEmoji
                                                     : _category.icon,
-                                                style: const TextStyle(fontSize: 28),
+                                                size: 30,
+                                                circular: true,
                                               ),
                                               const SizedBox(width: 8),
                                               Text(
@@ -2026,6 +2033,8 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                             coreDDayText: dDayStr,
                             startDateText: startStr,
                             reunionOrExtraBadge: badgeStr,
+                            skinTheme: _category.skinTheme,
+                            backgroundImageUrl: hasImage ? bgConfig.imageUrl : null,
                             onEditAvatar: () => _openCategorySpecificSettings(),
                             onManageSection: () => _openCategorySpecificSettings(),
                             manageSectionText: '설정 관리',
@@ -2051,7 +2060,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                                     )
                                   : null,
                               borderRadius: BorderRadius.circular(24),
-                              border: Border.all(color: AppColors.protoCardBorder, width: 1.5),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.04),
@@ -2301,8 +2309,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE5E5EA)),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: const Text('등록된 N일째 항목이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13)),
           )
         else
@@ -2363,8 +2372,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE5E5EA)),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: const Column(
               children: [
                 Icon(Icons.event_available_rounded, size: 28, color: Colors.grey),
@@ -2427,7 +2437,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFECE4D8), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
@@ -2614,7 +2623,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFECE4D8), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
@@ -2730,8 +2738,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE5E5EA)),
-        ),
+        
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
         child: Column(
           children: [
             const Text('🎂', style: TextStyle(fontSize: 44)),
@@ -2872,8 +2881,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE5E5EA)),
-        ),
+        
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
         child: Column(
           children: [
             const Text('📝', style: TextStyle(fontSize: 44)),
@@ -3049,8 +3059,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: Text(
               _showHiddenExamsOnly ? '숨겨진 시험이 없습니다.' : '표시할 시험이 없습니다.',
               style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
@@ -3208,7 +3219,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../couple/models/couple_relationship.dart';
@@ -131,8 +132,9 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFF7F2),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFFFD4C2)),
-                          ),
+                          
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                           child: Row(
                             children: [
                               const Icon(Icons.favorite, color: Color(0xFFFF7A59), size: 28),
@@ -227,8 +229,9 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
                             decoration: BoxDecoration(
                               color: const Color(0xFFFAFAFA),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFEEEEEE)),
-                            ),
+                            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                             child: const Text('등록된 이별/재회 기간이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13)),
                           )
                         else
@@ -239,8 +242,9 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF9F9FB),
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFE5E5EA)),
-                              ),
+                              
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -429,7 +433,7 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
     final countDownItems = customItems.where((item) => item.displayMode != DdayDisplayMode.daysCount).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFCFBF8),
+      backgroundColor: AppColors.cleanCanvasBg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -437,7 +441,11 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
         iconTheme: const IconThemeData(color: AppColors.protoHeading),
         title: Row(
           children: [
-            Text(_category.icon, style: const TextStyle(fontSize: 24)),
+            HaruChipIconViewer(
+              iconKey: _category.icon,
+              size: 26,
+              circular: true,
+            ),
             const SizedBox(width: 8),
             if (_isTitleEditing)
               Expanded(
@@ -471,6 +479,7 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
             )
           else ...[
             TextButton.icon(
+              key: const Key('category_decorate_button'),
               onPressed: _openEditModal,
               icon: const Icon(Icons.palette_outlined, size: 18, color: AppColors.protoHeading),
               label: Text('꾸미기', style: AppTypography.caption.copyWith(color: AppColors.protoHeading, fontWeight: FontWeight.bold)),
@@ -508,12 +517,14 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
                       return UnifiedCategoryTopCard(
                         categoryKey: 'couple',
                         title: _category.name.isNotEmpty ? _category.name : '우리 사랑한 지',
-                        symbol: '❤️',
+                        symbol: _category.icon.isNotEmpty ? _category.icon : 'simple_heart',
                         coreDDayText: '사랑한 지 ${totalDays + 1}일째',
                         startDateText: startDateStr,
                         reunionOrExtraBadge: reunionStr,
                         photoUrl: hasImage ? bgConfig.imageUrl : null,
-                        fallbackEmoji: '❤️',
+                        skinTheme: _category.skinTheme,
+                        backgroundImageUrl: hasImage ? bgConfig.imageUrl : null,
+                        fallbackEmoji: _category.icon.isNotEmpty ? _category.icon : 'simple_heart',
                         onEditAvatar: () async {
                           final updated = await showCategoryEditModal(context, category: _category);
                           if (updated != null) {
@@ -743,7 +754,6 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFECE4D8), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
@@ -851,7 +861,6 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFECE4D8), width: 1.5),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.02),

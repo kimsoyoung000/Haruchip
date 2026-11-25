@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_picker.dart';
+import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../calendar/models/calendar_event.dart';
 import '../../calendar/providers/schedule_room_provider.dart';
 import '../../calendar/widgets/themed_color_palette_sheet.dart';
 import '../../categories/logic/repeat_rule.dart';
@@ -533,6 +536,88 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
 
                 // 7. Room Links
                 _buildRoomSection(),
+
+                // 8. Edit Mode: 일정 삭제 버튼
+                if (isEdit) ...[
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (dCtx) => AlertDialog(
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            title: const Text(
+                              '일정 삭제',
+                              style: TextStyle(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w800,
+                                color: _kLabel,
+                              ),
+                            ),
+                            content: Text(
+                              '\'${widget.existingItem!.title}\' 일정을 삭제할까요?',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF4B5563),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dCtx, false),
+                                child: const Text(
+                                  '취소',
+                                  style: TextStyle(color: _kSubLabel),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(dCtx, true),
+                                child: const Text(
+                                  '삭제',
+                                  style: TextStyle(
+                                    color: Color(0xFFE11D48),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true && context.mounted) {
+                          ref
+                              .read(planListProvider.notifier)
+                              .removeItem(widget.existingItem!.id);
+                          Navigator.pop(context);
+                        }
+                      },
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: Color(0xFFE11D48),
+                      ),
+                      label: const Text(
+                        '이 일정 삭제',
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFE11D48),
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0xFFFECDD3)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1166,7 +1251,10 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
                                                   : null,
                                             ),
                                             const SizedBox(width: 6),
-                                            Text(item.emoji, style: const TextStyle(fontSize: 16)),
+                                            HaruChipIconViewer(
+                                              iconKey: item.emoji,
+                                              size: 20,
+                                            ),
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
@@ -1189,10 +1277,33 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
                                   InkWell(
                                     key: Key('category_color_dot_${item.key}'),
                                     onTap: () async {
+                                      final matchedCat = liveCats.where(
+                                        (c) =>
+                                            (item.id.isNotEmpty && c.id == item.id) ||
+                                            c.categoryKey == item.key,
+                                      );
+                                      bool currentFillBg = matchedCat.isNotEmpty
+                                          ? matchedCat.first.fillCalendarLabelBg
+                                          : false;
                                       final pickedHex = await showThemedColorPickerSheet(
                                         context,
-                                        title: '${item.emoji} ${item.name} 색상 변경',
+                                        title: '${item.name} 색상 변경',
+                                        iconKey: item.emoji,
                                         currentHex: itemHex,
+                                        initialFillLabelBg: currentFillBg,
+                                        onFillLabelBgChanged: (v) {
+                                          currentFillBg = v;
+                                          modalRef
+                                              .read(categoryListProvider.notifier)
+                                              .updateCategoryColor(
+                                                categoryKey: item.key,
+                                                id: item.id,
+                                                name: item.name,
+                                                emoji: item.emoji,
+                                                colorHex: itemHex,
+                                                fillCalendarLabelBg: v,
+                                              );
+                                        },
                                       );
                                       if (pickedHex != null) {
                                         modalRef
@@ -1203,6 +1314,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
                                               name: item.name,
                                               emoji: item.emoji,
                                               colorHex: pickedHex,
+                                              fillCalendarLabelBg: currentFillBg,
                                             );
                                       }
                                     },
@@ -1272,165 +1384,335 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
   void _showAddNewCategoryDialog() {
     final nameCtrl = TextEditingController();
     String selectedHex = kThemedColorPaletteGroups.first.hexColors.first;
-    String selectedEmoji = '📌';
-    final emojis = ['📌', '✨', '🗓️', '🎯', '🌿', '☕', '💡', '🌟', '🎵', '💼', '🏡', '🎨'];
+    String selectedIcon = 'simple_star';
+    bool fillCalendarLabelBg = false;
 
-    showDialog<void>(
+    showModalBottomSheet<void>(
       context: context,
-      builder: (dialogCtx) {
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (context, setSheetState) {
             final currentColor = colorFromHex(selectedHex);
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              title: const Row(
-                children: [
-                  Icon(Icons.bookmark_add_outlined, size: 20, color: _kBlue),
-                  SizedBox(width: 8),
-                  Text('새 카테고리 추가', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: _kLabel)),
-                ],
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.86,
               ),
-              content: SizedBox(
-                width: 340,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          PopupMenuButton<String>(
-                            initialValue: selectedEmoji,
-                            onSelected: (val) => setDialogState(() => selectedEmoji = val),
-                            child: Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF3F4F6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Center(
-                                child: Text(selectedEmoji, style: const TextStyle(fontSize: 20)),
-                              ),
-                            ),
-                            itemBuilder: (ctx) => [
-                              for (final em in emojis)
-                                PopupMenuItem(value: em, child: Text(em, style: const TextStyle(fontSize: 20))),
-                            ],
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              controller: nameCtrl,
-                              autofocus: true,
-                              decoration: InputDecoration(
-                                hintText: '카테고리 이름 입력',
-                                hintStyle: const TextStyle(color: _kSubLabel, fontSize: 14),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                                filled: true,
-                                fillColor: const Color(0xFFF9FAFB),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: _kBlue, width: 1.5),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          const Text(
-                            '라벨 색상',
-                            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: _kLabel),
-                          ),
-                          const Spacer(),
-                          Container(
-                            width: 14,
-                            height: 14,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 10, 20, bottomInset + 16),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 상단 드래그 핸들
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 12),
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: currentColor,
-                              border: Border.all(color: Colors.black.withValues(alpha: 0.12)),
+                              color: const Color(0xFFD1D1D6),
+                              borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ThemedColorPaletteGrid(
-                        selectedHex: selectedHex,
-                        compact: true,
-                        onColorSelected: (hex) => setDialogState(() => selectedHex = hex),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        // 헤더
+                        Row(
                           children: [
-                            Icon(Icons.info_outline, size: 14, color: _kBlue),
-                            SizedBox(width: 6),
+                            const Text(
+                              '새 카테고리 추가',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: _kLabel,
+                              ),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                size: 22,
+                                color: _kSubLabel,
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              onPressed: () => Navigator.pop(sheetCtx),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+
+                        // 좌측 아이콘 버튼(HaruChipIconPicker 연동) + 카테고리명 입력
+                        Row(
+                          children: [
+                            InkWell(
+                              onTap: () async {
+                                final picked = await showHaruChipIconPicker(
+                                  context,
+                                  initialIconKey: selectedIcon,
+                                  title: '카테고리 아이콘 선택',
+                                );
+                                if (picked != null) {
+                                  setSheetState(() => selectedIcon = picked);
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                width: 46,
+                                height: 46,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3F4F6),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFE5E7EB),
+                                  ),
+                                ),
+                                child: HaruChipIconViewer(
+                                  iconKey: selectedIcon,
+                                  size: 24,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
                             Expanded(
-                              child: Text(
-                                '이 카테고리 색상은 캘린더 일정 표시에도 동일하게 적용됩니다',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF1E40AF),
-                                  fontWeight: FontWeight.w500,
+                              child: TextField(
+                                controller: nameCtrl,
+                                autofocus: true,
+                                decoration: InputDecoration(
+                                  hintText: '카테고리 이름 입력',
+                                  hintStyle: const TextStyle(
+                                    color: _kSubLabel,
+                                    fontSize: 14,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xFFF9FAFB),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFE5E7EB),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFE5E7EB),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: _kBlue,
+                                      width: 1.5,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 14),
+
+                        // 캘린더 라벨 배경 채우기 토글
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '캘린더 라벨 배경 채우기',
+                                      style: TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: _kLabel,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: fillCalendarLabelBg
+                                            ? resolveCalendarLabelPastelBg(
+                                                currentColor)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: 2.5,
+                                            height: 12,
+                                            decoration: BoxDecoration(
+                                              color: currentColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(1.5),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            fillCalendarLabelBg
+                                                ? '파스텔 배경 채움 스타일'
+                                                : '투명 + 세로 컬러 바 스타일',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: kCalendarLabelDarkText,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: fillCalendarLabelBg,
+                                activeTrackColor: _kBlue,
+                                onChanged: (v) => setSheetState(
+                                  () => fillCalendarLabelBg = v,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+
+                        Row(
+                          children: [
+                            const Text(
+                              '라벨 색상',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.bold,
+                                color: _kLabel,
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: currentColor,
+                                border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ThemedColorPaletteGrid(
+                          selectedHex: selectedHex,
+                          compact: true,
+                          onColorSelected: (hex) =>
+                              setSheetState(() => selectedHex = hex),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 하단 버튼
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(sheetCtx),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: _kSubLabel,
+                                  side: const BorderSide(
+                                    color: Color(0xFFE5E7EB),
+                                  ),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '취소',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _kBlue,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  final name = nameCtrl.text.trim();
+                                  if (name.isEmpty) return;
+
+                                  final newCat = ref
+                                      .read(categoryListProvider.notifier)
+                                      .addCategory(
+                                        categoryKey:
+                                            'custom_${DateTime.now().millisecondsSinceEpoch}',
+                                        name: name,
+                                        emoji: selectedIcon,
+                                        colorHex: selectedHex,
+                                        fillCalendarLabelBg:
+                                            fillCalendarLabelBg,
+                                      );
+
+                                  setState(() {
+                                    _selectedCategoryKey = newCat.categoryKey;
+                                  });
+                                  Navigator.pop(sheetCtx);
+                                },
+                                child: const Text(
+                                  '추가',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogCtx),
-                  child: const Text('취소', style: TextStyle(color: _kSubLabel)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _kBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () {
-                    final name = nameCtrl.text.trim();
-                    if (name.isEmpty) return;
-
-                    final newCat = ref.read(categoryListProvider.notifier).addCategory(
-                          categoryKey: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-                          name: name,
-                          emoji: selectedEmoji,
-                          colorHex: selectedHex,
-                        );
-
-                    setState(() {
-                      _selectedCategoryKey = newCat.categoryKey;
-                    });
-                    Navigator.pop(dialogCtx);
-                  },
-                  child: const Text('추가', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
             );
           },
         );

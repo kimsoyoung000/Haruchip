@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_picker.dart';
+import '../../../core/icons/haruchip_icon_registry.dart';
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../../calendar/widgets/themed_color_palette_sheet.dart';
 import '../../categories/data/category_types.dart';
 import '../../categories/logic/category_content_flow.dart';
 import '../../categories/models/category.dart';
@@ -10,49 +14,20 @@ import '../../categories/providers/category_provider.dart';
 import '../../categories/services/image_upload_service.dart';
 import '../../onboarding/models/onboarding_category.dart';
 
-/// "카테고리 추가하기" 모달 — CLAUDE.md §5("+ 새 카테고리 추가하기" 진입점),
-/// §8(대시보드 명세).
+/// "카테고리 추가하기" 순백 화이트 미니멀 바텀시트
 ///
-/// 카테고리 & 디데이 커스텀 2단계: 타입 선택(STEP A) → 이름/아이콘/색상
-/// 커스텀(STEP B) → [categoryListProvider]에 새 [Category] 인스턴스를
-/// 추가한다. "카테고리는 태그 개념 — 동일 카테고리 다중 인스턴스 항상
-/// 허용"(CLAUDE.md §5)이므로 STEP A는 이미 추가한 타입도 계속 보여준다
-/// (기존처럼 already-selected 필터로 숨기지 않는다).
-///
-/// CLAUDE.md 공통 UI 모달 닫기 규칙(X 버튼 / 하단 닫기 버튼 / 배경 클릭)을
-/// 모두 지원한다.
+/// - 타입 선택(STEP A) → 이름/아이콘/파스텔 테마 색상 커스텀(STEP B)
+/// - 캘린더와 동일한 테마 파스텔 팔레트([ThemedColorPaletteGrid]) 및
+///   통합 아이콘 피커([showHaruChipIconPicker]) 연동
 Future<void> showAddCategoryDashboardModal(BuildContext context) {
-  return showDialog<void>(
+  return showModalBottomSheet<void>(
     context: context,
-    barrierDismissible: true,
+    isScrollControlled: true,
+    isDismissible: true,
+    backgroundColor: Colors.transparent,
     builder: (_) => const _AddCategoryDashboardModal(),
   );
 }
-
-/// STEP B에서 기본 이모지 외에 고를 수 있는 대체 이모지 chip 목록.
-/// 특정 카테고리 타입에 종속되지 않는 범용 세트다.
-const List<String> _alternateEmojis = [
-  '✨',
-  '🎯',
-  '⭐',
-  '🔥',
-  '💡',
-  '📌',
-  '🎨',
-  '🌈',
-  '🚀',
-  '💎',
-  '🍀',
-  '🌻',
-  '🎮',
-  '✈️',
-  '🎵',
-  '🎈',
-  '🏠',
-  '📖',
-  '🏆',
-  '☕',
-];
 
 class _AddCategoryDashboardModal extends ConsumerStatefulWidget {
   const _AddCategoryDashboardModal();
@@ -66,12 +41,9 @@ class _AddCategoryDashboardModalState
     extends ConsumerState<_AddCategoryDashboardModal> {
   OnboardingCategory? _selectedType;
   final _nameController = TextEditingController();
-  String? _selectedEmoji;
-  Color _selectedColor = AppColors.kFreeColorPresets.first;
+  String? _selectedIcon;
+  String _selectedColorHex = kThemedColorPaletteGroups[3].hexColors.first; // 파스텔 기본값
 
-  /// 배경 사진(§5 감성형 한정, §6 사진 업로드) — 업로드 중엔 null이 아니라
-  /// [_uploadingBackground]로 별도 로딩 상태를 둔다(업로드 실패해도 이전
-  /// 값을 잃지 않도록).
   String? _backgroundImageUrl;
   bool _uploadingBackground = false;
 
@@ -85,8 +57,8 @@ class _AddCategoryDashboardModalState
     setState(() {
       _selectedType = type;
       _nameController.clear();
-      _selectedEmoji = type.emoji;
-      _selectedColor = AppColors.kFreeColorPresets.first;
+      _selectedIcon = type.emoji;
+      _selectedColorHex = getCategoryColorHex(type.key);
       _backgroundImageUrl = null;
     });
   }
@@ -120,21 +92,19 @@ class _AddCategoryDashboardModalState
     }
   }
 
-  /// 카테고리 설정(이름/이모지/색) → 그 카테고리의 내용 입력 → 저장하면 추가.
-  /// 입력창을 그냥 닫으면 아무것도 추가되지 않고 이 화면(설정)으로 돌아온다.
   Future<void> _handleAdd(BuildContext context) async {
     final type = _selectedType;
     if (type == null) return;
     final name = _nameController.text.trim().isEmpty
         ? type.labelKo
         : _nameController.text.trim();
-    final emoji = _selectedEmoji ?? type.emoji;
+    final icon = _selectedIcon ?? type.emoji;
 
     final draft = ref.read(categoryListProvider.notifier).newDraft(
           categoryKey: type.key,
           name: name,
-          emoji: emoji,
-          colorHex: colorToHex(_selectedColor),
+          emoji: icon,
+          colorHex: _selectedColorHex,
           backgroundImageUrl: _backgroundImageUrl,
         );
     final added = await collectContentAndAddCategory(context, ref, draft);
@@ -155,95 +125,116 @@ class _AddCategoryDashboardModalState
   @override
   Widget build(BuildContext context) {
     final type = _selectedType;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return GestureDetector(
-      onTap: () => Navigator.of(context).pop(),
-      child: Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(20),
-        child: GestureDetector(
-          onTap: () {},
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxWidth: 380),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: AppColors.protoCardBg,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          if (type != null)
-                            GestureDetector(
-                              onTap: _backToTypeSelection,
-                              child: const Padding(
-                                padding: EdgeInsets.only(right: 8),
-                                child: Icon(
-                                  Icons.arrow_back_rounded,
-                                  size: 20,
-                                  color: AppColors.protoSubtitle,
-                                ),
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(22, 10, 22, bottomInset + 16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD1D5DB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        if (type != null)
+                          GestureDetector(
+                            onTap: _backToTypeSelection,
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 8),
+                              child: Icon(
+                                Icons.arrow_back_rounded,
+                                size: 20,
+                                color: AppColors.protoSubtitle,
                               ),
                             ),
-                          Text(
-                            type == null ? '카테고리 추가하기' : '${type.labelKo} 커스텀',
-                            style: AppTypography.heading2.copyWith(
-                              color: AppColors.protoHeading,
-                            ),
                           ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: const Icon(
-                          Icons.close_rounded,
-                          size: 20,
-                          color: AppColors.protoSubtitle,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (type == null) _buildStepA() else _buildStepB(type),
-                  const SizedBox(height: 16),
-                  if (type != null)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => _handleAdd(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.protoButtonBg,
-                          foregroundColor: AppColors.protoButtonText,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                        Text(
+                          type == null ? '카테고리 추가하기' : '${type.labelKo} 커스텀',
+                          style: AppTypography.heading2.copyWith(
+                            color: AppColors.protoHeading,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        child: Text(
-                          categoryNeedsContent(type.key)
-                              ? '다음: 내용 입력하기'
-                              : '추가하기',
-                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: AppColors.protoSubtitle,
                       ),
                     ),
-                  const SizedBox(height: 8),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (type == null) _buildStepA() else _buildStepB(type),
+                const SizedBox(height: 18),
+                if (type != null)
                   SizedBox(
                     width: double.infinity,
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('닫기'),
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () => _handleAdd(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.chipYellowBg,
+                        foregroundColor: AppColors.chipYellowText,
+                        overlayColor: const Color(0xFFF7D779),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        categoryNeedsContent(type.key)
+                            ? '다음: 내용 입력하기'
+                            : '추가하기',
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.protoSubtitle,
+                    ),
+                    child: const Text(
+                      '닫기',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -277,25 +268,22 @@ class _AddCategoryDashboardModalState
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    border: Border.all(
-                      color: AppColors.protoCardBorder,
-                      width: 2,
-                    ),
+                    color: AppColors.cleanCanvasBg,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        category.emoji,
-                        style: const TextStyle(fontSize: 22),
+                      HaruChipIconViewer(
+                        iconKey: category.emoji,
+                        size: 26,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         category.labelKo,
                         textAlign: TextAlign.center,
                         style: AppTypography.caption.copyWith(
-                          color: AppColors.protoCardText,
+                          color: AppColors.protoHeading,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -310,7 +298,11 @@ class _AddCategoryDashboardModalState
   }
 
   Widget _buildStepB(OnboardingCategory type) {
-    final emojiChoices = <String>{type.emoji, ..._alternateEmojis}.toList();
+    final currentIcon = _selectedIcon ?? type.emoji;
+    final iconChoices = <String>{
+      currentIcon,
+      ...HaruChipIconRegistry.quickPresetKeys,
+    }.toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,7 +310,8 @@ class _AddCategoryDashboardModalState
         Text(
           '이름',
           style: AppTypography.caption.copyWith(
-            color: AppColors.protoSubtitle,
+            color: AppColors.protoCardText,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 6),
@@ -329,8 +322,12 @@ class _AddCategoryDashboardModalState
             hintText: type.key == 'custom'
                 ? '예: 우리 가족, 나만의 디데이, 버킷리스트'
                 : type.labelKo,
+            hintStyle: const TextStyle(
+              color: Color(0xFF9CA3AF),
+              fontSize: 13.5,
+            ),
             filled: true,
-            fillColor: AppColors.surfaceMuted,
+            fillColor: AppColors.cleanCanvasBg,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 12,
@@ -339,126 +336,159 @@ class _AddCategoryDashboardModalState
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide.none,
             ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: AppColors.chipGoldOutline,
+                width: 1.5,
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 16),
-        Text(
-          '아이콘',
-          style: AppTypography.caption.copyWith(
-            color: AppColors.protoSubtitle,
-          ),
+
+        // 상단 아이콘 셀렉터 (HaruChipIconViewer + 전체 아이콘 피커 연동)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '아이콘',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.protoCardText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () async {
+                final picked = await showHaruChipIconPicker(
+                  context,
+                  initialIconKey: currentIcon,
+                  title: '카테고리 아이콘 선택',
+                );
+                if (picked != null && mounted) {
+                  setState(() => _selectedIcon = picked);
+                }
+              },
+              icon: const Icon(Icons.grid_view_rounded, size: 15),
+              label: const Text(
+                '전체 아이콘',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.chipYellowText,
+                backgroundColor: const Color(0xFFFFF8E1),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 10,
           runSpacing: 10,
           children: [
-            for (final emoji in emojiChoices)
+            for (final iconKey in iconChoices)
               GestureDetector(
-                onTap: () => setState(() => _selectedEmoji = emoji),
+                onTap: () => setState(() => _selectedIcon = iconKey),
                 child: Container(
-                  width: 40,
-                  height: 40,
+                  width: 42,
+                  height: 42,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: (_selectedEmoji ?? type.emoji) == emoji
-                        ? AppColors.protoCardSelectedBg
-                        : AppColors.surfaceMuted,
+                    color: currentIcon == iconKey
+                        ? AppColors.chipYellowBg
+                        : AppColors.cleanCanvasBg,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: (_selectedEmoji ?? type.emoji) == emoji
-                          ? AppColors.protoCardSelectedBorder
+                      color: currentIcon == iconKey
+                          ? AppColors.chipGoldOutline
                           : Colors.transparent,
-                      width: 2,
+                      width: 1.6,
                     ),
                   ),
-                  child: Text(emoji, style: const TextStyle(fontSize: 18)),
+                  child: HaruChipIconViewer(iconKey: iconKey, size: 22),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 16),
-        Text(
-          '색상',
-          style: AppTypography.caption.copyWith(
-            color: AppColors.protoSubtitle,
-          ),
+        const SizedBox(height: 18),
+
+        // 캘린더/꾸미기와 100% 동일한 테마 파스텔 팔레트
+        Row(
+          children: [
+            Text(
+              '테마 색상',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.protoCardText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: colorFromHex(_selectedColorHex),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.1),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (final color in AppColors.kFreeColorPresets)
-              GestureDetector(
-                onTap: () => setState(() => _selectedColor = color),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: colorToHex(_selectedColor) == colorToHex(color)
-                          ? AppColors.protoHeading
-                          : Colors.transparent,
-                      width: 3,
-                    ),
-                  ),
-                ),
-              ),
-          ],
+        ThemedColorPaletteGrid(
+          selectedHex: _selectedColorHex,
+          compact: true,
+          onColorSelected: (hex) => setState(() => _selectedColorHex = hex),
         ),
+
         if (type.group == CategoryGroup.emotional) ...[
           const SizedBox(height: 16),
           Text(
             '배경 사진 (선택)',
             style: AppTypography.caption.copyWith(
-              color: AppColors.protoSubtitle,
+              color: AppColors.protoCardText,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
-          GestureDetector(
-            onTap: _uploadingBackground ? null : _pickBackgroundImage,
-            child: Container(
-              width: double.infinity,
-              height: 96,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceMuted,
-                borderRadius: BorderRadius.circular(14),
-                image: _backgroundImageUrl == null
-                    ? null
-                    : DecorationImage(
-                        image: NetworkImage(_backgroundImageUrl!),
-                        fit: BoxFit.cover,
-                      ),
+          if (_backgroundImageUrl != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.network(
+                _backgroundImageUrl!,
+                height: 100,
+                width: double.infinity,
+                fit: BoxFit.cover,
               ),
-              child: _uploadingBackground
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : _backgroundImageUrl == null
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.add_photo_alternate_outlined,
-                              size: 22,
-                              color: AppColors.protoStepLabel,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '갤러리에서 사진 선택',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.protoSubtitle,
-                              ),
-                            ),
-                          ],
-                        )
-                      : null,
+            ),
+            const SizedBox(height: 6),
+          ],
+          OutlinedButton.icon(
+            onPressed: _uploadingBackground ? null : _pickBackgroundImage,
+            icon: _uploadingBackground
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add_photo_alternate_outlined, size: 18),
+            label: Text(
+              _backgroundImageUrl == null ? '사진 추가하기' : '사진 변경하기',
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.protoHeading,
+              side: const BorderSide(color: AppColors.border),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ],

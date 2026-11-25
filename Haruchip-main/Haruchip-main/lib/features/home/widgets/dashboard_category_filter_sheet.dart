@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../categories/models/category.dart';
 import '../../categories/providers/category_provider.dart';
 import '../providers/dashboard_filter_provider.dart';
@@ -170,8 +171,10 @@ class _DashboardCategoryFilterSheet extends ConsumerWidget {
                                     : null,
                               ),
                               const SizedBox(width: 12),
-                              Text(cat.emoji,
-                                  style: const TextStyle(fontSize: 15)),
+                              HaruChipIconViewer(
+                                iconKey: cat.emoji,
+                                size: 18,
+                              ),
                               const SizedBox(width: 7),
                               Expanded(
                                 child: Text(
@@ -296,8 +299,10 @@ class _CategoryOrderEditSheet extends ConsumerWidget {
                       final cat = categories[index];
                       return ListTile(
                         key: ValueKey('order_${cat.id}'),
-                        leading: Text(cat.emoji,
-                            style: const TextStyle(fontSize: 18)),
+                        leading: HaruChipIconViewer(
+                          iconKey: cat.emoji,
+                          size: 22,
+                        ),
                         title: Text(
                           cat.name,
                           style: const TextStyle(

@@ -97,10 +97,6 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
       decoration: BoxDecoration(
         color: exam.isHidden ? const Color(0xFFF8FAFC) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: exam.isHidden ? const Color(0xFFCBD5E1) : const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.025),
@@ -530,13 +526,9 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
                             ? themeColor.withValues(alpha: 0.04)
                             : (isEnded ? const Color(0xFFF8FAFC) : Colors.white),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: isActive
-                              ? themeColor.withValues(alpha: 0.4)
-                              : (isEnded ? const Color(0xFFF1F5F9) : const Color(0xFFE2E8F0)),
-                          width: isActive ? 1.5 : 1,
-                        ),
-                      ),
+                      
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -772,8 +764,9 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -823,8 +816,9 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
+                    
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

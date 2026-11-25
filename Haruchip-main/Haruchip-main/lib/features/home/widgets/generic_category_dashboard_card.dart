@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../categories/models/category.dart';
@@ -70,7 +71,10 @@ class GenericCategoryDashboardCard extends StatelessWidget {
                   color: AppColors.surfaceMuted,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(category.emoji, style: const TextStyle(fontSize: 14)),
+                child: HaruChipIconViewer(
+                  iconKey: category.emoji,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(

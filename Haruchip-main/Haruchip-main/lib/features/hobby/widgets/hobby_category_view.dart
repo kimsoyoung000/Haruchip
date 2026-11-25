@@ -135,7 +135,6 @@ class HobbyCategoryView extends ConsumerWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF4F7F4), // 소프트 세이지 배경
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFDDE7DD), width: 1.3),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0A000000),
@@ -326,8 +325,9 @@ class HobbyCategoryView extends ConsumerWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF4F7F4),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFDDE7DD), width: 1.5),
-      ),
+      
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
       padding: const EdgeInsets.all(24),
       alignment: Alignment.center,
       child: Column(
@@ -466,10 +466,6 @@ class HobbyCategoryView extends ConsumerWidget {
         decoration: BoxDecoration(
           color: isDone ? const Color(0xFFFAFAFA) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDone ? const Color(0xFFE5E7EB) : const Color(0xFFE2E8F0),
-            width: 1,
-          ),
           boxShadow: isDone
               ? null
               : const [
@@ -618,8 +614,9 @@ class HobbyCategoryView extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
+      
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
       alignment: Alignment.center,
       child: Column(
         children: [

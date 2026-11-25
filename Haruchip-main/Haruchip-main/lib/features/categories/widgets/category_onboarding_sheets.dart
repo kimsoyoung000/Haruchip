@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/icons/haruchip_icon_picker.dart';
+import '../../../core/icons/haruchip_icon_registry.dart';
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../military/models/military_rank.dart';
 import '../../military/providers/military_provider.dart';
@@ -2259,11 +2262,6 @@ class _CustomOnboardingSheetState extends ConsumerState<_CustomOnboardingSheet> 
   late bool _showVisualCard;
   late DateTime _startDate;
 
-  static const List<String> _emojiPresets = [
-    '✨', '📌', '🚀', '💼', '🏡', '🏖️', '🎨', '🍿',
-    '✈️', '🎮', '🏋️', '📚', '☕', '💎', '🍀', '💡',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -2365,16 +2363,44 @@ class _CustomOnboardingSheetState extends ConsumerState<_CustomOnboardingSheet> 
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                // 이모지 선택
-                const Text('대표 이모지', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
+                // 대표 아이콘 선택 (신규 HaruChipIconPicker 연동)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('대표 아이콘', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading)),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final picked = await showHaruChipIconPicker(
+                          context,
+                          initialIconKey: _selectedEmoji,
+                          title: '카테고리 아이콘 선택',
+                        );
+                        if (picked != null && mounted) {
+                          setState(() => _selectedEmoji = picked);
+                        }
+                      },
+                      icon: const Icon(Icons.grid_view_rounded, size: 15),
+                      label: const Text('전체 아이콘 · 사진', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.protoStepLabel,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
-                  children: _emojiPresets.map((emoji) {
-                    final isSel = _selectedEmoji == emoji;
+                  children: <String>{
+                    _selectedEmoji,
+                    ...HaruChipIconRegistry.quickPresetKeys,
+                  }.map((iconKey) {
+                    final isSel = _selectedEmoji == iconKey;
                     return InkWell(
-                      onTap: () => setState(() => _selectedEmoji = emoji),
+                      onTap: () => setState(() => _selectedEmoji = iconKey),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         width: 42,
@@ -2388,7 +2414,7 @@ class _CustomOnboardingSheetState extends ConsumerState<_CustomOnboardingSheet> 
                             width: isSel ? 1.5 : 1.0,
                           ),
                         ),
-                        child: Text(emoji, style: const TextStyle(fontSize: 20)),
+                        child: HaruChipIconViewer(iconKey: iconKey, size: 22),
                       ),
                     );
                   }).toList(),

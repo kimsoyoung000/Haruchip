@@ -104,7 +104,6 @@ class _BabyVaccineTimelineWidgetState extends State<BabyVaccineTimelineWidget> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -229,13 +228,9 @@ class _BabyVaccineTimelineWidgetState extends State<BabyVaccineTimelineWidget> {
                         ? const Color(0xFFF8FAFC)
                         : (isDdayOrPast ? const Color(0xFFFFFBEB) : Colors.white),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: dose.isCompleted
-                          ? const Color(0xFFCBD5E1)
-                          : (isDdayOrPast ? const Color(0xFFFDE68A) : const Color(0xFFF1F5F9)),
-                      width: dose.isCompleted ? 1.2 : 1,
-                    ),
-                  ),
+                  
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                   child: Row(
                     children: [
                       // 체크박스 (완료/미접종 토글)

@@ -26,6 +26,7 @@ class CategoryListNotifier extends Notifier<List<Category>> {
     required String emoji,
     required String colorHex,
     String? backgroundImageUrl,
+    bool fillCalendarLabelBg = false,
   }) {
     final category = newDraft(
       categoryKey: categoryKey,
@@ -33,6 +34,7 @@ class CategoryListNotifier extends Notifier<List<Category>> {
       emoji: emoji,
       colorHex: colorHex,
       backgroundImageUrl: backgroundImageUrl,
+      fillCalendarLabelBg: fillCalendarLabelBg,
     );
     state = [...state, category];
     return category;
@@ -46,6 +48,7 @@ class CategoryListNotifier extends Notifier<List<Category>> {
     required String emoji,
     required String colorHex,
     String? backgroundImageUrl,
+    bool fillCalendarLabelBg = false,
   }) {
     return Category(
       id: 'cat-${DateTime.now().microsecondsSinceEpoch}-${++_idCounter}',
@@ -55,6 +58,9 @@ class CategoryListNotifier extends Notifier<List<Category>> {
       colorHex: colorHex,
       createdAt: DateTime.now(),
       backgroundImageUrl: backgroundImageUrl,
+      metadata: fillCalendarLabelBg
+          ? const <String, dynamic>{'fillCalendarLabelBg': true}
+          : null,
     );
   }
 
@@ -99,13 +105,14 @@ class CategoryListNotifier extends Notifier<List<Category>> {
     state = state.map((c) => c.id == category.id ? category : c).toList();
   }
 
-  /// 카테고리 고유 색상 즉시 변경 (로컬 + Firestore 자동 동기화 및 칩 캘린더 전역 색상 일괄 갱신)
+  /// 카테고리 고유 색상 및 라벨 배경 채우기 옵션 즉시 변경 (로컬 + Firestore 자동 동기화)
   void updateCategoryColor({
     required String categoryKey,
     String? id,
     required String name,
     required String emoji,
     required String colorHex,
+    bool? fillCalendarLabelBg,
   }) {
     final normalizedHex = colorHex.startsWith('#') ? colorHex : '#$colorHex';
     final hasMatch = state.any(
@@ -115,7 +122,14 @@ class CategoryListNotifier extends Notifier<List<Category>> {
       state = state.map((c) {
         final matches = (id != null && id.isNotEmpty && c.id == id) ||
             c.categoryKey == categoryKey;
-        return matches ? c.copyWith(colorHex: normalizedHex) : c;
+        if (!matches) return c;
+        final nextMeta = fillCalendarLabelBg != null
+            ? <String, dynamic>{
+                ...?c.metadata,
+                'fillCalendarLabelBg': fillCalendarLabelBg,
+              }
+            : c.metadata;
+        return c.copyWith(colorHex: normalizedHex, metadata: nextMeta);
       }).toList();
     } else {
       addCategory(
@@ -123,6 +137,7 @@ class CategoryListNotifier extends Notifier<List<Category>> {
         name: name,
         emoji: emoji,
         colorHex: normalizedHex,
+        fillCalendarLabelBg: fillCalendarLabelBg ?? false,
       );
     }
   }

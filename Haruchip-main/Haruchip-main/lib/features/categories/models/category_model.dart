@@ -289,6 +289,10 @@ class CategoryModel {
   String? get backgroundImageUrl => background.imageUrl;
   bool get showVisualCard => metadata?['showVisualCard'] as bool? ?? true;
 
+  /// 캘린더 라벨 배경 채우기 토글 (기본 false: 투명 배경 + 좌측 세로 컬러 바)
+  bool get fillCalendarLabelBg =>
+      metadata?['fillCalendarLabelBg'] as bool? ?? false;
+
   /// Y2K 블로그형 스킨/테마 게터
   CategorySkinTheme? get skinTheme {
     final raw = metadata?['skinTheme'];

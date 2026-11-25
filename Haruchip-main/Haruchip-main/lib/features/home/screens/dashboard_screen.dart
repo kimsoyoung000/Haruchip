@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../categories/models/category_model.dart';
@@ -95,7 +96,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       color: Color(0xFFF3F4F6),
                       shape: BoxShape.circle,
                     ),
-                    child: Text(category.icon, style: const TextStyle(fontSize: 16)),
+                    child: HaruChipIconViewer(
+                      iconKey: category.icon,
+                      size: 20,
+                      circular: true,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(

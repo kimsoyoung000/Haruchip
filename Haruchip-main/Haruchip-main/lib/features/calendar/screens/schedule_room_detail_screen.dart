@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
@@ -543,7 +544,7 @@ class _ScheduleRoomDetailScreenState
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(m.icon, style: const TextStyle(fontSize: 14)),
+                    HaruChipIconViewer(iconKey: m.icon, size: 16, circular: true),
                     const SizedBox(width: 4),
                     Text(
                       m.name,
@@ -1066,7 +1067,7 @@ class _ScheduleRoomDetailScreenState
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(c.authorIcon, style: const TextStyle(fontSize: 14)),
+                  HaruChipIconViewer(iconKey: c.authorIcon, size: 16, circular: true),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text.rich(
@@ -1418,7 +1419,7 @@ class _ScheduleRoomDetailScreenState
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(c.authorIcon, style: const TextStyle(fontSize: 13)),
+                    HaruChipIconViewer(iconKey: c.authorIcon, size: 15, circular: true),
                     const SizedBox(width: 6),
                     Expanded(
                       child: RichText(
@@ -1988,7 +1989,7 @@ class _ScheduleRoomDetailScreenState
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(member.icon, style: const TextStyle(fontSize: 12)),
+                      HaruChipIconViewer(iconKey: member.icon, size: 15, circular: true),
                       const SizedBox(width: 4),
                       Text(
                         member.name,

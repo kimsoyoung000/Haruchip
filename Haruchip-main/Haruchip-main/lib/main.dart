@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/theme/app_font_settings_provider.dart';
 import 'design_system/colors.dart';
 import 'features/calendar/data/room_remote.dart';
 import 'features/onboarding/screens/splash_screen.dart';
@@ -83,28 +84,37 @@ void main() async {
   runApp(UncontrolledProviderScope(container: container, child: const HaruChipApp()));
 }
 
-class HaruChipApp extends StatelessWidget {
+class HaruChipApp extends ConsumerWidget {
   const HaruChipApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fontSettings = ref.watch(appFontSettingsProvider);
+
     return MaterialApp(
       title: '하루칩',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const HaruAppScrollBehavior(),
-      // 폰 글씨 크기 설정은 따르되 최대 1.3배까지만 — 그 이상은 레이아웃이 깨진다.
+      // 폰 글씨 크기 설정 + 앱 내 글자 크기 설정을 합산하되 최대 1.3배까지만 — 그 이상은 레이아웃이 깨진다.
       // (반응형 점검 테스트도 1.3배 기준: test/responsive/)
-      builder: (context, child) => MediaQuery.withClampedTextScaling(
-        maxScaleFactor: 1.3,
-        child: child!,
-      ),
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        final combinedScale =
+            (mq.textScaler.scale(1.0) * fontSettings.fontSize.scale)
+                .clamp(0.85, 1.3);
+        return MediaQuery(
+          data: mq.copyWith(textScaler: TextScaler.linear(combinedScale)),
+          child: child!,
+        );
+      },
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: AppColors.background,
+        fontFamily: fontSettings.fontFamily.fontFamily,
+        scaffoldBackgroundColor: AppColors.cleanCanvasBg,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          primary: AppColors.primary,
-          surface: AppColors.surface,
+          seedColor: AppColors.chipGoldOutline,
+          primary: AppColors.chipYellowText,
+          surface: AppColors.cleanWhiteBg,
         ),
       ),
       home: const AuthGate(),

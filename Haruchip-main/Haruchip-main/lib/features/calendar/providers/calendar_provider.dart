@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_registry.dart';
 import '../../categories/data/category_types.dart' as cat_types;
 import '../../categories/providers/category_provider.dart';
 import '../../hobby/providers/hobby_provider.dart';
@@ -133,17 +134,37 @@ final allUnfilteredCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) 
     return matches.isNotEmpty ? matches.first.colorHex : fallbackHex;
   }
 
+  bool resolveCategoryFillBg(String categoryKey) {
+    final matches = categories.where(
+      (c) => c.categoryKey == categoryKey || c.id == categoryKey,
+    );
+    return matches.isNotEmpty ? matches.first.fillCalendarLabelBg : false;
+  }
+
+  String safeInlineEmoji(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty ||
+        trimmed.startsWith(HaruChipIconRegistry.filePrefix) ||
+        HaruChipIconRegistry.isSafeRegistryKey(trimmed) ||
+        HaruChipIconRegistry.isAssetKeyAttempt(trimmed)) {
+      return '';
+    }
+    return '$trimmed ';
+  }
+
   final dynamicEvents = planItems.map((item) {
     final colorHex = resolveCategoryColor(
       item.categoryKey,
       getCategoryColorHex(item.categoryKey),
     );
+    final fillBg = resolveCategoryFillBg(item.categoryKey);
 
     return CalendarEvent(
       id: item.id,
       date: item.date,
+      endDate: item.endDate,
       title: item.title,
-      time: item.deadlineTime != null
+      time: item.deadlineTime != null && !item.isAllDay
           ? '${item.deadlineTime!.hour.toString().padLeft(2, '0')}:${item.deadlineTime!.minute.toString().padLeft(2, '0')}'
           : null,
       source: item.calendarSync.google
@@ -152,32 +173,33 @@ final allUnfilteredCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) 
       colorHex: colorHex,
       categoryKey: item.categoryKey,
       isPublic: false,
+      fillLabelBackground: fillBg,
+      planItemId: item.id,
     );
   }).toList();
 
   final travelColorHex = resolveCategoryColor('travel', '#0284C7');
+  final travelFillBg = resolveCategoryFillBg('travel');
   final travelEvents = <CalendarEvent>[];
   for (final trip in travelTrips) {
     final s = _dateOnly(trip.startDate);
     final e = _dateOnly(trip.endDate);
-    final days = e.difference(s).inDays + 1;
     final hasCustomTravelCat =
         categories.any((c) => c.categoryKey == 'travel');
     final tripColor = hasCustomTravelCat ? travelColorHex : trip.themeColorHex;
-    for (int d = 0; d < days; d++) {
-      final curDate = s.add(Duration(days: d));
-      final dayLabel = days > 1 ? ' (${d + 1}/$days일차)' : '';
-      travelEvents.add(CalendarEvent(
-        id: 'cal-trip-${trip.id}-$d',
-        date: curDate,
-        title: '${trip.emoji} ${trip.destination}$dayLabel',
-        time: null,
-        source: 'personal',
-        colorHex: tripColor,
-        categoryKey: 'travel',
-        isPublic: false,
-      ));
-    }
+    final prefix = safeInlineEmoji(trip.emoji);
+    travelEvents.add(CalendarEvent(
+      id: 'cal-trip-${trip.id}',
+      date: s,
+      endDate: e,
+      title: '$prefix${trip.destination}',
+      time: null,
+      source: 'personal',
+      colorHex: tripColor,
+      categoryKey: 'travel',
+      isPublic: false,
+      fillLabelBackground: travelFillBg || e.isAfter(s),
+    ));
   }
 
   for (final plan in interPlans) {
@@ -190,15 +212,17 @@ final allUnfilteredCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) 
       colorHex: travelColorHex,
       categoryKey: 'travel',
       isPublic: false,
+      fillLabelBackground: travelFillBg,
     ));
   }
 
   final hobbyColorHex = resolveCategoryColor('hobby', '#354235');
+  final hobbyFillBg = resolveCategoryFillBg('hobby');
   final hobbyEvents = <CalendarEvent>[];
   for (final sched in hobbySchedules) {
     final matching = hobbyList.where((h) => h.id == sched.hobbyId);
     final hobby = matching.isNotEmpty ? matching.first : null;
-    final icon = hobby?.icon ?? '🎨';
+    final prefix = safeInlineEmoji(hobby?.icon ?? '🎨');
     final timeStr = sched.hasTime
         ? '${sched.date.hour.toString().padLeft(2, '0')}:${sched.date.minute.toString().padLeft(2, '0')}'
         : null;
@@ -206,27 +230,30 @@ final allUnfilteredCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) 
     hobbyEvents.add(CalendarEvent(
       id: 'cal-hobby-${sched.id}',
       date: sched.date,
-      title: '$icon ${sched.title}',
+      title: '$prefix${sched.title}',
       time: timeStr,
       source: 'personal',
       colorHex: hobbyColorHex,
       categoryKey: 'hobby',
       isPublic: false,
+      fillLabelBackground: hobbyFillBg,
     ));
   }
 
   final syncedMockEvents = mockCalendarEvents.map((ev) {
     final resolvedHex = resolveCategoryColor(ev.categoryKey, ev.colorHex);
-    if (resolvedHex == ev.colorHex) return ev;
+    final fillBg = resolveCategoryFillBg(ev.categoryKey);
     return CalendarEvent(
       id: ev.id,
       date: ev.date,
+      endDate: ev.endDate,
       title: ev.title,
       time: ev.time,
       source: ev.source,
       colorHex: resolvedHex,
       categoryKey: ev.categoryKey,
       isPublic: ev.isPublic,
+      fillLabelBackground: fillBg,
     );
   }).toList();
 
@@ -248,11 +275,15 @@ final allCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) {
   return all;
 });
 
-/// 주어진 날짜의 CalendarEvent 목록.
+/// 주어진 날짜의 CalendarEvent 목록 (다일 연속 일정의 시작~종료 범위 포함).
 final eventsForDateProvider =
     Provider.family<List<CalendarEvent>, DateTime>((ref, date) {
   final target = _dateOnly(date);
   final allEvents = ref.watch(allCalendarEventsProvider);
-  return allEvents.where((e) => _dateOnly(e.date) == target).toList();
+  return allEvents.where((e) {
+    final start = e.startDateOnly;
+    final end = e.effectiveEndDate;
+    return !target.isBefore(start) && !target.isAfter(end);
+  }).toList();
 });
 

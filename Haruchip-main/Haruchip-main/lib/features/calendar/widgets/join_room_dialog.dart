@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_picker.dart';
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../models/schedule_room.dart';
@@ -25,10 +27,8 @@ class _JoinRoomDialog extends ConsumerStatefulWidget {
 class _JoinRoomDialogState extends ConsumerState<_JoinRoomDialog> {
   final _codeController = TextEditingController();
   final _nicknameController = TextEditingController(text: '나');
-  String _selectedEmoji = '🐱';
+  String _selectedEmoji = 'simple_cat';
   String _selectedColor = kPreset50PastelColors[3];
-
-  final List<String> _emojis = ['🐥', '🐶', '🐱', '🦊', '🐻', '🐰', '🦁', '🐼', '🐨', '🦄', '🐯', '🐧'];
 
   @override
   void dispose() {
@@ -142,18 +142,36 @@ class _JoinRoomDialogState extends ConsumerState<_JoinRoomDialog> {
             const SizedBox(height: 6),
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Color(int.parse('0xFF${_selectedColor.replaceAll('#', '')}')),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedEmoji,
-                      items: _emojis.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 20)))).toList(),
-                      onChanged: (v) => setState(() => _selectedEmoji = v ?? _selectedEmoji),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showHaruChipIconPicker(
+                      context,
+                      initialIconKey: _selectedEmoji,
+                      title: '모임 프로필 아이콘 선택',
+                    );
+                    if (picked != null && mounted) {
+                      setState(() => _selectedEmoji = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Color(int.parse('0xFF${_selectedColor.replaceAll('#', '')}')),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        HaruChipIconViewer(
+                          iconKey: _selectedEmoji,
+                          size: 24,
+                          circular: true,
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF334155)),
+                      ],
                     ),
                   ),
                 ),
@@ -214,8 +232,10 @@ class _JoinRoomDialogState extends ConsumerState<_JoinRoomDialog> {
               child: ElevatedButton(
                 onPressed: _handleJoin,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F172A),
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.chipYellowBg,
+                  foregroundColor: AppColors.chipYellowText,
+                  overlayColor: const Color(0xFFF7D779),
+                  elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: const Text('모임 방 입장하기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),

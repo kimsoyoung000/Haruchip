@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_picker.dart';
+import '../../../core/icons/haruchip_icon_registry.dart';
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../shared/widgets/common_date_time_picker.dart';
 import '../models/group_category_item.dart';
 import '../providers/group_category_provider.dart';
@@ -28,15 +31,11 @@ class _AddGroupModalState extends ConsumerState<AddGroupModal> {
   final _regularInfoController = TextEditingController();
   final _memoController = TextEditingController();
 
-  String _selectedIcon = '👥';
+  String _selectedIcon = 'simple_beer';
   late DateTime _foundationDate;
   int _memberCount = 5;
 
-  final List<String> _availableIcons = [
-    '👥', '🍻', '⚽', '☕', '🎮', '🏕️',
-    '🎸', '📚', '🍕', '🏸', '🎬', '🧗',
-    '🎳', '🍣', '🍷', '🚴', '🎤', '🏓',
-  ];
+  final List<String> _availableIcons = HaruChipIconRegistry.groupQuickPresetKeys;
 
   final List<String> _regularPresets = [
     '매월 둘째 주 토요일',
@@ -168,19 +167,70 @@ class _AddGroupModalState extends ConsumerState<AddGroupModal> {
                 const SizedBox(height: 16),
 
                 // 1. 모임 대표 아이콘 선택
-                const Text(
-                  '모임 대표 아이콘',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF6B7280)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      '모임 대표 아이콘',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF6B7280)),
+                    ),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final picked = await showHaruChipIconPicker(
+                          context,
+                          initialIconKey: _selectedIcon,
+                          title: '모임 대표 아이콘 선택',
+                        );
+                        if (picked != null && mounted) {
+                          setState(() => _selectedIcon = picked);
+                        }
+                      },
+                      icon: const Icon(Icons.grid_view_rounded, size: 15),
+                      label: const Text('전체 · 사진', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFE56B48),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 48,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    itemCount: _availableIcons.length,
+                    itemCount: _availableIcons.length + 1,
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (context, index) {
-                      final ic = _availableIcons[index];
+                      if (index == 0) {
+                        return InkWell(
+                          onTap: () async {
+                            final picked = await showHaruChipIconPicker(
+                              context,
+                              initialIconKey: _selectedIcon,
+                              title: '모임 대표 아이콘 선택',
+                            );
+                            if (picked != null && mounted) {
+                              setState(() => _selectedIcon = picked);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFE2D9),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE56B48), width: 2),
+                            ),
+                            child: HaruChipIconViewer(iconKey: _selectedIcon, size: 26),
+                          ),
+                        );
+                      }
+                      final ic = _availableIcons[index - 1];
                       final isSelected = ic == _selectedIcon;
                       return InkWell(
                         onTap: () => setState(() => _selectedIcon = ic),
@@ -197,7 +247,7 @@ class _AddGroupModalState extends ConsumerState<AddGroupModal> {
                               width: isSelected ? 2 : 1,
                             ),
                           ),
-                          child: Text(ic, style: const TextStyle(fontSize: 22)),
+                          child: HaruChipIconViewer(iconKey: ic, size: 26),
                         ),
                       );
                     },

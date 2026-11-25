@@ -118,8 +118,9 @@ class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: Column(
               children: [
                 const Text('💍', style: TextStyle(fontSize: 36)),
@@ -178,12 +179,6 @@ class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: item.isCompleted
-              ? const Color(0xFFE2E8F0)
-              : (isExpanded ? const Color(0xFFE53E3E) : const Color(0xFFFED7D7)),
-          width: isExpanded ? 1.5 : 1.1,
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isExpanded ? 0.03 : 0.015),
@@ -337,8 +332,9 @@ class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFEDF2F7)),
-                    ),
+                    
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

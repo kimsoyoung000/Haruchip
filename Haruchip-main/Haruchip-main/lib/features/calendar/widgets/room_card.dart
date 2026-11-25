@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../models/schedule_room.dart';
 
@@ -107,15 +109,15 @@ class RoomCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.chipYellowBg,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     '${room.members.length}명 참여 중',
                     style: const TextStyle(
                       fontSize: 10.5,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.chipYellowText,
                     ),
                   ),
                 ),
@@ -162,8 +164,14 @@ class RoomCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 4),
+                        HaruChipIconViewer(
+                          iconKey: m.icon,
+                          size: 13,
+                          circular: true,
+                        ),
+                        const SizedBox(width: 3),
                         Text(
-                          '${m.icon} ${m.name}${m.isHost ? ' (방장)' : ''}',
+                          '${m.name}${m.isHost ? ' (방장)' : ''}',
                           style: const TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,

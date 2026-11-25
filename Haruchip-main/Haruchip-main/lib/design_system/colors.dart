@@ -14,11 +14,18 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Base
-  static const Color background = Color(0xFFFFFBF8);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceMuted = Color(0xFFF5F0EC);
-  static const Color border = Color(0xFFE7DFD8);
+  // Base — 클린 화이트 & 소프트 그레이 통일 캔버스
+  static const Color cleanWhiteBg = Color(0xFFFFFFFF);
+  static const Color cleanCanvasBg = Color(0xFFF8F9FA);
+  static const Color background = cleanCanvasBg;
+  static const Color surface = cleanWhiteBg;
+  static const Color surfaceMuted = Color(0xFFF3F4F6);
+  static const Color border = Color(0xFFE5E7EB);
+
+  // 하루칩 시그니처 옐로우 컬러 시스템 (전역 포인트)
+  static const Color chipYellowBg = Color(0xFFFFE699); // 선택일/활성 하이라이트 배경
+  static const Color chipYellowText = Color(0xFF3A2E1A); // 선택일/강조 내부 폰트
+  static const Color chipGoldOutline = Color(0xFFF2B84B); // 오늘 날짜 테두리/인디케이터
 
   // Text
   static const Color textPrimary = Color(0xFF2B2320);
@@ -43,18 +50,18 @@ class AppColors {
   // 그 파일이 쓰는 Tailwind yellow/amber/gray 스케일 값을 그대로 옮겨왔다.
   // 아직 이 팔레트로 옮겨가지 않은 기존 화면(로그인 등)은 위 코랄 계열
   // 토큰을 계속 쓴다 — 전면 리테마는 이번 범위 밖이라 별도로 진행한다.
-  static const Color protoBackground = Color(0xFFFFFDF4);
-  static const Color protoStepLabel = Color(0xFFD97706); // amber-600
+  static const Color protoBackground = cleanCanvasBg;
+  static const Color protoStepLabel = Color(0xFFC58B1E); // 칩 골드 다크 포인트
   static const Color protoHeading = Color(0xFF111827); // gray-900
   static const Color protoSubtitle = Color(0xFF6B7280); // gray-500
-  static const Color protoCardBg = Color(0xFFFFFFFF); // white
+  static const Color protoCardBg = cleanWhiteBg; // white
   static const Color protoCardBorder = Color(0xFFF3F4F6); // gray-100
   static const Color protoCardText = Color(0xFF4B5563); // gray-600
-  static const Color protoCardSelectedBg = Color(0xFFFEFCE8); // yellow-50
-  static const Color protoCardSelectedBorder = Color(0xFFFACC15); // yellow-400
-  static const Color protoCardSelectedText = Color(0xFF78350F); // amber-900
-  static const Color protoButtonBg = Color(0xFFFACC15); // yellow-400
-  static const Color protoButtonText = Color(0xFF451A03); // amber-950
+  static const Color protoCardSelectedBg = chipYellowBg; // #FFE699
+  static const Color protoCardSelectedBorder = chipGoldOutline; // #F2B84B
+  static const Color protoCardSelectedText = chipYellowText; // #3A2E1A
+  static const Color protoButtonBg = chipYellowBg; // #FFE699
+  static const Color protoButtonText = chipYellowText; // #3A2E1A
 
   // 대시보드 뷰모드 선택 화면(라디오형 카드)은 카테고리 카드와 선택 테두리
   // 색이 다르다 — haruchip_app.html에서 그 화면만 border-yellow-300을 쓴다.

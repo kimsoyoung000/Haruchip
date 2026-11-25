@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 
@@ -109,7 +110,10 @@ class DashboardGreetingCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: Text(avatarEmoji, style: const TextStyle(fontSize: 22)),
+            child: HaruChipIconViewer(
+              iconKey: avatarEmoji,
+              size: 26,
+            ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../categories/providers/category_provider.dart';
@@ -106,7 +107,11 @@ class HiddenCategoriesScreen extends ConsumerWidget {
                                 color: Color(0xFFF3F4F6),
                                 shape: BoxShape.circle,
                               ),
-                              child: Text(category.icon, style: const TextStyle(fontSize: 20)),
+                              child: HaruChipIconViewer(
+                                iconKey: category.icon,
+                                size: 24,
+                                circular: true,
+                              ),
                             ),
                             const SizedBox(width: 14),
                             Expanded(

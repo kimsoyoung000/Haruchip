@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../models/category_skin_theme.dart';
+import 'skin_theme_card_container.dart';
 
 /// 2D 플랫 라인 및 레트로 픽셀/미니멀 심볼 프리셋
 const List<String> kMinimalEmoticonPresets = [
@@ -52,6 +55,8 @@ class UnifiedCategoryTopCard extends StatelessWidget {
     this.backgroundColor,
     this.borderColor,
     this.textColor,
+    this.skinTheme,
+    this.backgroundImageUrl,
   });
 
   final String categoryKey;
@@ -70,6 +75,8 @@ class UnifiedCategoryTopCard extends StatelessWidget {
   final Color? backgroundColor;
   final Color? borderColor;
   final Color? textColor;
+  final CategorySkinTheme? skinTheme;
+  final String? backgroundImageUrl;
 
   bool get _isCouple => categoryKey == 'couple';
 
@@ -115,22 +122,7 @@ class UnifiedCategoryTopCard extends StatelessWidget {
     final bColor = _resolvedBorder;
     final tColor = _resolvedText;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: bColor, width: 1.3),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.025),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
+    final innerContent = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -155,9 +147,10 @@ class UnifiedCategoryTopCard extends StatelessWidget {
                         : CircleAvatar(
                             radius: 21,
                             backgroundColor: Colors.white,
-                            child: Text(
-                              _resolvedFallbackEmoji,
-                              style: const TextStyle(fontSize: 19),
+                            child: HaruChipIconViewer(
+                              iconKey: _resolvedFallbackEmoji,
+                              size: 24,
+                              circular: true,
                             ),
                           ),
                   ),
@@ -215,9 +208,9 @@ class UnifiedCategoryTopCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          symbol,
-                          style: const TextStyle(fontSize: 12.5),
+                        HaruChipIconViewer(
+                          iconKey: symbol,
+                          size: 16,
                         ),
                         if (onHideCard != null) ...[
                           const Spacer(),
@@ -367,7 +360,34 @@ class UnifiedCategoryTopCard extends StatelessWidget {
             ],
           ),
         ],
+      );
+
+    if (skinTheme != null) {
+      return SkinThemeCardContainer(
+        theme: skinTheme!,
+        width: double.infinity,
+        borderless: true,
+        backgroundImageUrl: backgroundImageUrl,
+        padding: const EdgeInsets.all(12),
+        child: innerContent,
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
+      child: innerContent,
     );
   }
 }

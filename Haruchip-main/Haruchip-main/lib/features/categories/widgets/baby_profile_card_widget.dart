@@ -36,7 +36,6 @@ class BabyProfileCardWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.protoCardBg,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.protoCardSelectedBg, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),

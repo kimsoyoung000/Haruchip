@@ -65,7 +65,6 @@ class FandomMemberListWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -209,13 +208,9 @@ class FandomMemberListWidget extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: member.biasRank == BiasRank.first
-                ? const Color(0xFFFACC15)
-                : const Color(0xFFF3F4F6),
-            width: member.biasRank == BiasRank.first ? 1.5 : 1.0,
-          ),
-        ),
+        
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -500,8 +495,9 @@ class _MemberEditSheetState extends State<_MemberEditSheet> {
                   decoration: BoxDecoration(
                     color: const Color(0xFFF9FAFB),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
+                  
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [

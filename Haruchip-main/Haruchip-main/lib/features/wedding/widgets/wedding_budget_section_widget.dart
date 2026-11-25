@@ -87,7 +87,6 @@ class _WeddingBudgetSectionWidgetState extends ConsumerState<WeddingBudgetSectio
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFFED7D7), width: 1.5),
             boxShadow: [
               BoxShadow(
                 color: const Color(0xFFE53E3E).withValues(alpha: 0.05),
@@ -256,8 +255,9 @@ class _WeddingBudgetSectionWidgetState extends ConsumerState<WeddingBudgetSectio
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: Column(
               children: [
                 const Text('📝', style: TextStyle(fontSize: 28)),
@@ -300,7 +300,6 @@ class _WeddingBudgetSectionWidgetState extends ConsumerState<WeddingBudgetSectio
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -402,8 +401,9 @@ class _WeddingBudgetSectionWidgetState extends ConsumerState<WeddingBudgetSectio
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFEDF2F7)),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: Row(
               children: [
                 Expanded(child: _buildAmountColumn('예상 예산', item.estimatedBudget, const Color(0xFF64748B))),

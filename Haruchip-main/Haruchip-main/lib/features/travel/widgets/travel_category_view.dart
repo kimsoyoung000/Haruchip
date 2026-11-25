@@ -100,7 +100,7 @@ class TravelCategoryView extends ConsumerWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF0F8FF), // 파스텔 스카이 블루 배경
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD6ECFF), width: 1.3), // 소프트 스카이 테두리
+ // 소프트 스카이 테두리
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0284C7).withValues(alpha: 0.04),
@@ -185,8 +185,9 @@ class TravelCategoryView extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
       child: Column(
         children: [
           const Text('🏖️', style: TextStyle(fontSize: 40)),
@@ -268,7 +269,6 @@ class TravelCategoryView extends ConsumerWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFD6ECFF), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: trip.themeColor.withValues(alpha: 0.08),
@@ -499,11 +499,9 @@ class TravelCategoryView extends ConsumerWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFCBD5E1),
-                width: 1.2,
-              ),
-            ),
+            
+boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

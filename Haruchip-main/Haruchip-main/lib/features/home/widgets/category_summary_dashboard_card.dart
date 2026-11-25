@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../categories/controllers/baby_category_controller.dart';
@@ -70,9 +71,9 @@ class CategoryThemePalette {
       case 'solo':
       case 'custom':
         return const CategoryThemePalette(
-          bg: Color(0xFFF8F9FA),
+          bg: Color(0xFFFFFFFF),
           border: Color(0xFFE9ECEF),
-          chipBg: Color(0xFFE9ECEF),
+          chipBg: Color(0xFFF3F4F6),
           primary: Color(0xFF6C757D),
           text: Color(0xFF343A40),
         );
@@ -308,7 +309,11 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
                 color: palette.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: Text(displayIcon, style: const TextStyle(fontSize: 12.5)),
+              child: HaruChipIconViewer(
+                iconKey: displayIcon,
+                size: 16,
+                circular: true,
+              ),
             ),
             const SizedBox(width: 7),
             Expanded(
@@ -357,35 +362,38 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
         child: InkWell(
           onTap: isEditMode ? null : onTap,
           onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(skinTheme.borderRadius),
+          borderRadius: BorderRadius.circular(18),
           child: SkinThemeCardContainer(
             theme: skinTheme,
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            borderless: true,
+            backgroundImageUrl: category.background.type == BackgroundType.image
+                ? category.background.imageUrl
+                : null,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             child: cardContent,
           ),
         ),
       );
     }
 
+    // 무테두리 플랫 라운드 카드 (BorderRadius 18 + 은은한 파스텔 배경 + 미세 그림자)
+    final softenedBg = Color.lerp(Colors.white, palette.bg, 0.85) ?? palette.bg;
+
     return SizedBox(
       height: kFixedCardHeight,
       child: InkWell(
         onTap: isEditMode ? null : onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
-            color: palette.bg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isEditMode ? palette.primary : palette.border,
-              width: isEditMode ? 1.6 : 1.2,
-            ),
+            color: softenedBg,
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: palette.primary.withValues(alpha: 0.04),
-                blurRadius: 6,
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
             ],
