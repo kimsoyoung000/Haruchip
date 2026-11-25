@@ -29,9 +29,7 @@ class _CalendarCategoryFilterSheet extends ConsumerWidget {
       _kDefaultCategories = [
     (key: 'plan', label: '내 일정', color: Color(0xFF60A5FA), emoji: '📝'),
     (key: 'couple', label: '커플', color: Color(0xFFFF8DA1), emoji: '❤️'),
-    (key: 'solo', label: '솔로', color: Color(0xFFC084FC), emoji: '🌟'),
     (key: 'fandom', label: '덕질', color: Color(0xFFFBBF24), emoji: '⭐'),
-    (key: 'group', label: '모임', color: Color(0xFF34D399), emoji: '👥'),
     (key: 'exam', label: '시험', color: Color(0xFF818CF8), emoji: '📚'),
     (key: 'birthday', label: '생일', color: Color(0xFFF472B6), emoji: '🎂'),
     (key: 'baby', label: '아기', color: Color(0xFFFDE047), emoji: '👶'),
@@ -51,7 +49,10 @@ class _CalendarCategoryFilterSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userCategories = ref.watch(categoryListProvider);
+    final userCategories = ref
+        .watch(categoryListProvider)
+        .where((c) => !kRemovedDdayCategoryKeys.contains(c.categoryKey))
+        .toList();
     final selectedCategories = ref.watch(calendarSelectedCategoriesProvider);
     final mediaQuery = MediaQuery.of(context);
 

@@ -16,7 +16,7 @@ import 'services/storage/user_data_remote.dart';
 import 'services/storage/user_scoped_local_store.dart';
 import 'services/storage/user_session.dart';
 
-/// 전역 스크롤 및 마우스/터치 드래그 제스처 인에이블러
+/// 전역 스크롤바 비노출 및 마우스/터치 드래그 제스처 인에이블러
 class HaruAppScrollBehavior extends MaterialScrollBehavior {
   const HaruAppScrollBehavior();
 
@@ -31,6 +31,15 @@ class HaruAppScrollBehavior extends MaterialScrollBehavior {
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
     return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+  }
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
   }
 }
 

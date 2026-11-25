@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../design_system/colors.dart';
 import '../models/baby_profile.dart';
 
-/// 독립된 아기 신체 성장 기록 카드 위젯 (키, 몸무게, 머리둘레 CRUD 및 수정/삭제 팝업 연동)
-class BabyGrowthRecordsWidget extends StatelessWidget {
+/// 독립된 아기 신체 성장 기록 카드 위젯 (간략히 보기/펼치기 아코디언 + 하루칩 옐로우 기록 추가 버튼)
+class BabyGrowthRecordsWidget extends StatefulWidget {
   const BabyGrowthRecordsWidget({
     super.key,
     required this.profile,
@@ -16,22 +16,30 @@ class BabyGrowthRecordsWidget extends StatelessWidget {
   final VoidCallback onOpenAddGrowthRecord;
   final ValueChanged<GrowthRecord> onEditGrowthRecord;
 
+  @override
+  State<BabyGrowthRecordsWidget> createState() =>
+      _BabyGrowthRecordsWidgetState();
+}
+
+class _BabyGrowthRecordsWidgetState extends State<BabyGrowthRecordsWidget> {
+  bool _isExpanded = false; // 기본값: 간략히 보기
+
   String _formatDate(DateTime d) =>
       '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    final records = List<GrowthRecord>.from(profile.growthRecords)
+    final records = List<GrowthRecord>.from(widget.profile.growthRecords)
       ..sort((a, b) => b.date.compareTo(a.date));
 
     final latest = records.isNotEmpty ? records.first : null;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -43,294 +51,188 @@ class BabyGrowthRecordsWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. 헤더 (타이틀 + 기록 추가 버튼)
+          // 1. 헤더 (타이틀 + [기록 추가] 옐로우 버튼 + [펼치기/간략히 보기] 토글)
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Row(
-                children: [
-                  const Text('📏', style: TextStyle(fontSize: 18)),
-                  const SizedBox(width: 8),
-                  const Flexible(
-                    child: Text(
-                    '신체 성장 기록',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
+              const Text('📏', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  '신체 성장 기록',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.protoHeading,
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                key: const Key('baby_add_growth_button'),
+                onPressed: widget.onOpenAddGrowthRecord,
+                icon: const Icon(Icons.add_rounded, size: 14),
+                label: const Text(
+                  '기록 추가',
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.chipYellowBg,
+                  foregroundColor: AppColors.chipYellowText,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9)),
+                  elevation: 0,
+                ),
+              ),
+              if (records.length > 1) ...[
+                const SizedBox(width: 4),
+                TextButton(
+                  key: const Key('baby_growth_toggle_button'),
+                  onPressed: () => setState(() => _isExpanded = !_isExpanded),
+                  style: TextButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: AppColors.chipYellowText,
+                  ),
+                  child: Text(
+                    _isExpanded ? '간략히 보기' : '펼치기',
+                    style: const TextStyle(
+                      fontSize: 12,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.protoHeading,
+                      color: AppColors.chipYellowText,
                     ),
                   ),
-                  ),
-                  const SizedBox(width: 6),
+                ),
+              ],
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // 2. 아코디언 본문 (간략히 보기: 최근 1건 슬림 바 / 펼치기: 전체 기록)
+          if (records.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                '등록된 신체 성장 기록이 없습니다.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+              ),
+            )
+          else
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              alignment: Alignment.topCenter,
+              child: !_isExpanded
+                  ? _buildSlimGrowthRow(latest!)
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: records.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (context, index) =>
+                          _buildSlimGrowthRow(records[index]),
+                    ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlimGrowthRow(GrowthRecord record) {
+    return InkWell(
+      onTap: () => widget.onEditGrowthRecord(record),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Text(
+              _formatDate(record.date),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF334155),
+              ),
+            ),
+            const Spacer(),
+            Wrap(
+              spacing: 5,
+              children: [
+                if (record.heightCm != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0F2FE),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '키 ${record.heightCm}cm',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0284C7),
+                      ),
+                    ),
+                  ),
+                if (record.weightKg != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFEF3C7),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '총 ${records.length}회',
+                      '${record.weightKg}kg',
                       style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFB45309),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFD97706),
                       ),
                     ),
                   ),
-                ],
-              ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: onOpenAddGrowthRecord,
-                icon: const Icon(Icons.add_rounded, size: 14),
-                label: const Text('기록 추가', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD97706),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // 2. 가장 최근 측정 요약 배너
-          if (latest != null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(14),
-              
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '최근 측정치',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF92400E),
-                        ),
-                      ),
-                      Text(
-                        _formatDate(latest.date),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.amber.shade900,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (latest.heightCm != null)
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('키', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                              Text(
-                                '${latest.heightCm} cm',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF0284C7),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (latest.weightKg != null)
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('몸무게', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                              Text(
-                                '${latest.weightKg} kg',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFFD97706),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (latest.headCircumferenceCm != null)
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('머리둘레', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                              Text(
-                                '${latest.headCircumferenceCm} cm',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF16A34A),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // 3. 기록 목록
-          if (records.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(14),
-              
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-              alignment: Alignment.center,
-              child: const Text(
-                '아직 등록된 신체 측정 기록이 없습니다.\n상단의 [+ 기록 추가] 버튼을 눌러 아기의 키와 몸무게를 기록해보세요.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12.5, color: Colors.grey, height: 1.5),
-              ),
-            )
-          else ...[
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: records.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final record = records[index];
-
-                return InkWell(
-                  onTap: () => onEditGrowthRecord(record),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                if (record.headCircumferenceCm != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(14),
-                    
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-                    child: Row(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _formatDate(record.date),
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF334155),
-                              ),
-                            ),
-                            if (record.memo != null && record.memo!.isNotEmpty) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                record.memo!,
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ],
-                        ),
-                        const Spacer(),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            if (record.heightCm != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE0F2FE),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '키 ${record.heightCm}cm',
-                                  style: const TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF0284C7),
-                                  ),
-                                ),
-                              ),
-                            if (record.weightKg != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF3C7),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '몸무게 ${record.weightKg}kg',
-                                  style: const TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFFD97706),
-                                  ),
-                                ),
-                              ),
-                            if (record.headCircumferenceCm != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFDCFCE7),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '머리 ${record.headCircumferenceCm}cm',
-                                  style: const TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF16A34A),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.edit_note_rounded, size: 18, color: Color(0xFF94A3B8)),
-                      ],
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '머리 ${record.headCircumferenceCm}cm',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF16A34A),
+                      ),
                     ),
                   ),
-                );
-              },
+              ],
             ),
-            const SizedBox(height: 8),
-            Center(
-              child: Text(
-                '💡 항목을 탭하여 수치 및 날짜를 수정하거나 삭제할 수 있습니다.',
-                style: TextStyle(fontSize: 10.5, color: Colors.grey.shade500),
-              ),
-            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded,
+                size: 16, color: Color(0xFF94A3B8)),
           ],
-        ],
+        ),
       ),
     );
   }

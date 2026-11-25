@@ -7,12 +7,14 @@ Future<DateTime?> showHaruDatePicker(
   required DateTime initialDate,
   DateTime? firstDate,
   DateTime? lastDate,
+  String title = '날짜 선택',
 }) async {
   return showCommonDatePickerModal(
     context,
     initialDate: initialDate,
     firstDate: firstDate,
     lastDate: lastDate,
+    title: title,
   );
 }
 

@@ -334,6 +334,7 @@ class BabyProfile {
     this.bloodType,
     this.photoUrl,
     this.feedingIntervalHours = 3,
+    this.feedingIntervalMinutes,
     this.careLogs = const [],
     this.vaccineDoses = const [],
     this.checkupDoses = const [],
@@ -346,8 +347,24 @@ class BabyProfile {
   final BabyGender gender;
   final String? bloodType; // 'A', 'B', 'O', 'AB'
   final String? photoUrl;
-  final int feedingIntervalHours; // default 3 hours
+  final int feedingIntervalHours; // default 3 hours (0 = 수유 텀 없음)
+  final int? feedingIntervalMinutes; // 2.5시간(150분), 3.5시간(210분), 0(없음) 등 정밀 간격
   final List<BabyCareLogItem> careLogs;
+
+  /// 분 단위로 정규화된 수유 텀 (0이면 '수유 텀 없음')
+  int get effectiveFeedingIntervalMinutes =>
+      feedingIntervalMinutes ?? (feedingIntervalHours * 60);
+
+  /// 수유 텀 알람/카운트다운 사용 여부
+  bool get hasFeedingInterval => effectiveFeedingIntervalMinutes > 0;
+
+  /// 표시용 수유 텀 라벨 (예: '수유 텀 없음', '2.5시간', '3시간')
+  String get feedingIntervalLabel {
+    final mins = effectiveFeedingIntervalMinutes;
+    if (mins <= 0) return '수유 텀 없음';
+    if (mins % 60 == 0) return '${mins ~/ 60}시간';
+    return '${(mins / 60).toStringAsFixed(1)}시간';
+  }
   final List<VaccineDose> vaccineDoses;
   final List<HealthCheckupDose> checkupDoses;
   final List<GrowthRecord> growthRecords;
@@ -360,6 +377,7 @@ class BabyProfile {
     String? bloodType,
     String? photoUrl,
     int? feedingIntervalHours,
+    int? feedingIntervalMinutes,
     List<BabyCareLogItem>? careLogs,
     List<VaccineDose>? vaccineDoses,
     List<HealthCheckupDose>? checkupDoses,
@@ -373,6 +391,7 @@ class BabyProfile {
       bloodType: bloodType ?? this.bloodType,
       photoUrl: photoUrl ?? this.photoUrl,
       feedingIntervalHours: feedingIntervalHours ?? this.feedingIntervalHours,
+      feedingIntervalMinutes: feedingIntervalMinutes ?? this.feedingIntervalMinutes,
       careLogs: careLogs ?? this.careLogs,
       vaccineDoses: vaccineDoses ?? this.vaccineDoses,
       checkupDoses: checkupDoses ?? this.checkupDoses,
@@ -388,6 +407,8 @@ class BabyProfile {
         if (bloodType != null) 'bloodType': bloodType,
         if (photoUrl != null) 'photoUrl': photoUrl,
         'feedingIntervalHours': feedingIntervalHours,
+        if (feedingIntervalMinutes != null)
+          'feedingIntervalMinutes': feedingIntervalMinutes,
         'careLogs': careLogs.map((c) => c.toJson()).toList(),
         'vaccineDoses': vaccineDoses.map((v) => v.toJson()).toList(),
         'checkupDoses': checkupDoses.map((h) => h.toJson()).toList(),
@@ -405,6 +426,7 @@ class BabyProfile {
       bloodType: json['bloodType'] as String?,
       photoUrl: json['photoUrl'] as String?,
       feedingIntervalHours: json['feedingIntervalHours'] as int? ?? 3,
+      feedingIntervalMinutes: json['feedingIntervalMinutes'] as int?,
       careLogs: (json['careLogs'] as List<dynamic>?)
               ?.map((e) => BabyCareLogItem.fromJson(e as Map<String, dynamic>))
               .toList() ??

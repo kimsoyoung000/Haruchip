@@ -4,6 +4,9 @@ import '../../../services/storage/local_store.dart';
 import '../data/category_types.dart';
 import '../models/category.dart';
 
+/// D-Day 카테고리 프리셋에서 영구 제거된 키 ('group'/'meeting', 'solo')
+const Set<String> kRemovedDdayCategoryKeys = <String>{'group', 'meeting', 'solo'};
+
 /// 사용자가 만든 카테고리 인스턴스 전체 목록 및 순서/숨김 상태 관리
 class CategoryListNotifier extends Notifier<List<Category>> {
   /// 로컬 저장소에서 복원(첫 실행이면 빈 목록), 변경 시마다 저장한다.
@@ -14,8 +17,12 @@ class CategoryListNotifier extends Notifier<List<Category>> {
     listenSelf((_, next) {
       writeJsonList(store, LocalStoreKeys.categories, next, (c) => c.toJson());
     });
-    return readJsonList(store, LocalStoreKeys.categories, Category.fromJson) ??
-        const <Category>[];
+    final restored =
+        readJsonList(store, LocalStoreKeys.categories, Category.fromJson) ??
+            const <Category>[];
+    return restored
+        .where((c) => !kRemovedDdayCategoryKeys.contains(c.categoryKey))
+        .toList();
   }
 
   static int _idCounter = 0;
@@ -80,6 +87,7 @@ class CategoryListNotifier extends Notifier<List<Category>> {
     final existingKeys = state.map((c) => c.categoryKey).toSet();
     final seeded = <Category>[];
     for (final type in types) {
+      if (kRemovedDdayCategoryKeys.contains(type.key)) continue;
       if (existingKeys.contains(type.key)) continue;
       seeded.add(
         Category(
@@ -195,12 +203,22 @@ final categoryListProvider =
 
 /// 대시보드에 정상 노출되는 (숨겨지지 않은) 카테고리 목록
 final visibleCategoriesProvider = Provider<List<Category>>((ref) {
-  return ref.watch(categoryListProvider).where((c) => !c.isDashboardHidden).toList();
+  return ref
+      .watch(categoryListProvider)
+      .where((c) =>
+          !c.isDashboardHidden &&
+          !kRemovedDdayCategoryKeys.contains(c.categoryKey))
+      .toList();
 });
 
 /// 대시보드에서 숨김 처리된 카테고리 보관함 목록
 final hiddenCategoriesProvider = Provider<List<Category>>((ref) {
-  return ref.watch(categoryListProvider).where((c) => c.isDashboardHidden).toList();
+  return ref
+      .watch(categoryListProvider)
+      .where((c) =>
+          c.isDashboardHidden &&
+          !kRemovedDdayCategoryKeys.contains(c.categoryKey))
+      .toList();
 });
 
 /// categoryKey별로 필터링한 인스턴스 목록

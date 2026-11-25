@@ -9,6 +9,7 @@ import 'package:haruchip/features/onboarding/providers/dashboard_view_mode_provi
 import 'package:haruchip/features/settings/screens/profile_settings_screen.dart';
 import 'package:haruchip/features/trash/models/trash_item.dart';
 import 'package:haruchip/features/trash/providers/trash_provider.dart';
+import 'package:haruchip/main.dart';
 
 void main() {
   Widget buildTestApp({Widget? child}) {
@@ -37,32 +38,51 @@ void main() {
       await tester.pumpWidget(buildTestApp());
       await tester.pumpAndSettle();
 
-      // 헤더 및 프로필
+      // 헤더 및 프로필 (보안: 고유 유저 식별 코드 HARU-8921-X9 영구 삭제 확인)
       expect(find.text('프로필 & 설정'), findsOneWidget);
       expect(find.text('하루칩 여행자'), findsOneWidget);
-      expect(find.text('HARU-8921-X9'), findsOneWidget);
+      expect(find.text('HARU-8921-X9'), findsNothing);
       expect(find.text('프로필 수정'), findsOneWidget);
 
-      // 데이터 관리 (휴지통, 캘린더 동기화, 백업)
-      expect(find.text('데이터 관리'), findsOneWidget);
-      expect(find.text('휴지통 (삭제된 D-Day 복구/영구삭제)'), findsOneWidget);
-      expect(find.text('1개 보관 중'), findsOneWidget);
-      expect(find.text('외부 캘린더 동기화 설정'), findsOneWidget);
-      expect(find.text('Google 캘린더 연동'), findsOneWidget);
-      expect(find.text('네이버 캘린더 연동'), findsOneWidget);
-      expect(find.text('전체 데이터 백업 내보내기'), findsOneWidget);
-
-      // 앱 환경설정 (뷰 모드, 권한, 위젯)
-      expect(find.text('앱 환경설정'), findsOneWidget);
+      // 7대 도메인 섹션 확인
+      expect(find.text('대시보드 (디데이) 설정'), findsOneWidget);
       expect(find.text('대시보드 뷰 모드 설정'), findsOneWidget);
       expect(find.text('타임라인 뷰'), findsOneWidget);
       expect(find.text('칩 모아보기 뷰'), findsOneWidget);
-      expect(find.text('앱 접근 권한 재설정'), findsOneWidget);
 
-      // 계정 및 보안 (로그아웃, 회원 탈퇴)
+      expect(find.text('칩 캘린더 설정'), findsOneWidget);
+      expect(find.text('외부 캘린더 동기화 설정'), findsOneWidget);
+      expect(find.text('Google 캘린더 연동'), findsOneWidget);
+      expect(find.text('네이버 캘린더 연동'), findsOneWidget);
+
+      expect(find.text('칩 모임 설정'), findsOneWidget);
+      expect(find.text('위젯 설정'), findsOneWidget);
+      expect(find.text('화면 & 글꼴 설정'), findsOneWidget);
+
+      expect(find.text('데이터 관리 & 백업'), findsOneWidget);
+      expect(find.text('휴지통 (삭제된 D-Day 복구/영구삭제)'), findsOneWidget);
+      expect(find.text('1개 보관 중'), findsOneWidget);
+      expect(find.text('전체 데이터 백업 내보내기'), findsOneWidget);
+
+      // 계정 및 보안 (위험 영역 최하단 격리) + 버전 정보
       expect(find.text('계정 및 보안'), findsOneWidget);
+      expect(find.text('앱 접근 권한 재설정'), findsOneWidget);
+      expect(find.text('화면 잠금 설정'), findsOneWidget);
       expect(find.text('로그아웃'), findsOneWidget);
       expect(find.text('회원 탈퇴 (계정 영구 삭제)'), findsOneWidget);
+      expect(find.text('HaruChip v2.5.0'), findsOneWidget);
+
+      // 전역 스크롤바 숨김 확인
+      const behavior = HaruAppScrollBehavior();
+      const child = SizedBox();
+      expect(
+        behavior.buildScrollbar(
+          tester.element(find.byType(ProfileSettingsScreen)),
+          child,
+          ScrollableDetails.vertical(),
+        ),
+        same(child),
+      );
     });
 
     testWidgets('modifies nickname through edit profile dialog', (tester) async {
@@ -204,7 +224,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ProfileSettingsScreen), findsOneWidget);
-      expect(find.text('HARU-8921-X9'), findsOneWidget);
+      expect(find.text('HARU-8921-X9'), findsNothing);
+      expect(find.text('대시보드 (디데이) 설정'), findsOneWidget);
     });
   });
 }

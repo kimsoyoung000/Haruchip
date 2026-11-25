@@ -1,10 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../design_system/colors.dart';
 import '../../design_system/typography.dart';
+import '../utils/safe_image_widget.dart';
 import 'haruchip_icon_registry.dart';
 import 'haruchip_icon_viewer.dart';
 
@@ -71,10 +73,11 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
         ? HaruChipIconStyle.line
         : HaruChipIconStyle.simple;
 
-    final initialTabIndex =
-        widget.enablePhotoTab && initial.startsWith(HaruChipIconRegistry.filePrefix)
-            ? 1
-            : 0;
+    final initialTabIndex = widget.enablePhotoTab &&
+            (initial.startsWith(HaruChipIconRegistry.filePrefix) ||
+                isDataImageUri(initial))
+        ? 1
+        : 0;
     _tabController = TabController(
       length: widget.enablePhotoTab ? 2 : 1,
       vsync: this,
@@ -100,6 +103,13 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
       );
       if (picked == null) {
         if (mounted) setState(() => _isPickingPhoto = false);
+        return;
+      }
+
+      if (kIsWeb) {
+        final safeDataUri = await xFileToSafeImageSource(picked);
+        if (!mounted) return;
+        Navigator.of(context).pop(safeDataUri);
         return;
       }
 

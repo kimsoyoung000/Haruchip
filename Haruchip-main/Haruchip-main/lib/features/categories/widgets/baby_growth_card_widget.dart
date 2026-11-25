@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/safe_image_widget.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../controllers/baby_category_controller.dart';
@@ -23,11 +23,7 @@ class BabyGrowthCardWidget extends StatelessWidget {
   static const _controller = BabyCategoryController();
 
   ImageProvider? _getAvatarImage(String? url) {
-    if (url == null || url.isEmpty) return null;
-    if (url.startsWith('http')) return NetworkImage(url);
-    final file = File(url);
-    if (file.existsSync()) return FileImage(file);
-    return null;
+    return resolveSafeImageProvider(url);
   }
 
   @override
@@ -230,40 +226,6 @@ class BabyGrowthCardWidget extends StatelessWidget {
                       ),
                   ],
                 ),
-
-                if (onTapManageSections != null) ...[
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: InkWell(
-                      onTap: onTapManageSections,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFCBD5E1), width: 0.8),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.tune_rounded, size: 11, color: Color(0xFF475569)),
-                            SizedBox(width: 3),
-                            Text(
-                              '섹션 순서 관리',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF475569),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

@@ -123,10 +123,10 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     return s.remote.joinWithCode(user: s.user, rawCode: inviteCode, me: member);
   }
 
-  /// 8~10자리 보안 랜덤 초대코드 생성
+  /// 암호학적 난수(CSPRNG) 기반 보안 모임 초대 코드 생성
   String _generateSecurityCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final random = Random();
+    final random = Random.secure();
     final buffer = StringBuffer('HC-');
     for (var i = 0; i < 6; i++) {
       buffer.write(chars[random.nextInt(chars.length)]);

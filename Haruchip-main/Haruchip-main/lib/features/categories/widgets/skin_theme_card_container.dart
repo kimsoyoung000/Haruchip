@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/safe_image_widget.dart';
 import '../models/category_skin_theme.dart';
 
 /// HEX 컬러 문자열 변환 도우미
@@ -352,23 +352,13 @@ class SkinThemeCardContainer extends StatelessWidget {
     final borderColor = _hexToColor(theme.borderColor);
     final radius = Radius.circular(borderless ? 18.0 : theme.borderRadius);
 
-    DecorationImage? photoImage;
-    if (backgroundImageUrl != null && backgroundImageUrl!.isNotEmpty) {
-      if (backgroundImageUrl!.startsWith('http')) {
-        photoImage = DecorationImage(
-          image: NetworkImage(backgroundImageUrl!),
-          fit: BoxFit.cover,
-        );
-      } else {
-        final file = File(backgroundImageUrl!);
-        if (file.existsSync()) {
-          photoImage = DecorationImage(
-            image: FileImage(file),
+    final resolvedPhotoProvider = resolveSafeImageProvider(backgroundImageUrl);
+    final DecorationImage? photoImage = resolvedPhotoProvider != null
+        ? DecorationImage(
+            image: resolvedPhotoProvider,
             fit: BoxFit.cover,
-          );
-        }
-      }
-    }
+          )
+        : null;
 
     Widget container = Container(
       width: width,

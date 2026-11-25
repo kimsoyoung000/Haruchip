@@ -33,8 +33,6 @@ class CategorySelectionCard extends StatelessWidget {
         return const Color(0xFF34D399);
       case 'exam':
         return const Color(0xFF60A5FA);
-      case 'meeting':
-        return const Color(0xFF818CF8);
       case 'pet':
         return const Color(0xFFFB923C);
       case 'birthday':

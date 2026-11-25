@@ -5,6 +5,7 @@ import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../categories/controllers/baby_category_controller.dart';
+import '../../categories/data/baby_health_database.dart';
 import '../../categories/logic/repeat_rule.dart';
 import '../../categories/models/baby_profile.dart';
 import '../../categories/models/category.dart';
@@ -417,11 +418,11 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
 
     final chips = <String>[];
 
+    BabyProfile? babyProfile;
     if (key == 'couple') {
       final totalDays = ref.watch(totalDaysTogetherProvider);
-      chips.add('함께한 지 $totalDays일째');
+      chips.add('함께한 지 ${(totalDays < 0 ? 0 : totalDays) + 1}일째');
     } else if (key == 'baby') {
-      BabyProfile? babyProfile;
       if (category.metadata?['babyProfile'] != null) {
         try {
           babyProfile = BabyProfile.fromJson(
@@ -432,9 +433,15 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
       const babyController = BabyCategoryController();
       if (babyProfile != null) {
         chips.add(babyController.formatBabyDaysCount(babyProfile.birthDate));
-        chips.add(babyController.formatBabyAgeDetailed(babyProfile.birthDate));
+        final rawAge =
+            babyController.formatBabyAgeDetailed(babyProfile.birthDate);
+        final compactAge = rawAge.contains('(')
+            ? rawAge.substring(0, rawAge.indexOf('(')).trim()
+            : rawAge;
+        chips.add(compactAge);
       } else {
         chips.add('태어난 지 1일째');
+        chips.add('생후 0개월 1일차');
       }
     } else if (key == 'solo') {
       SoloProfile? soloProfile;
@@ -461,18 +468,73 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
       chips.add(customCountUpText!);
     }
 
-    for (final item in countUpItems) {
-      if (chips.length >= 3) break;
-      final text = '${item.title} ${_formatDaysCount(item.date)}';
-      if (!chips.contains(text)) {
-        chips.add(text);
+    // 아기 카드는 '태어난 지 N일째' + '생후 N개월 N일차' 핵심 2개 뱃지만 깔끔하게 노출
+    if (key != 'baby') {
+      for (final item in countUpItems) {
+        if (chips.length >= 3) break;
+        final text = '${item.title} ${_formatDaysCount(item.date)}';
+        if (!chips.contains(text)) {
+          chips.add(text);
+        }
       }
     }
 
-    final limitedChips = chips.take(3).toList();
-    final upcoming = _upcomingFromPlanItems(countDownItems, now, today)
-        .take(2)
-        .toList();
+    final limitedChips = key == 'baby' ? chips.take(2).toList() : chips.take(3).toList();
+    final upcomingEntries = <_UpcomingDdayEntry>[
+      ..._upcomingFromPlanItems(countDownItems, now, today),
+    ];
+
+    if (key == 'couple') {
+      final anniversaries = ref.watch(upcomingAnniversariesProvider);
+      for (final anniv in anniversaries.take(5)) {
+        final d = DateTime(anniv.date.year, anniv.date.month, anniv.date.day);
+        if (d.isBefore(today)) continue;
+        upcomingEntries.add(_UpcomingDdayEntry(
+          title: anniv.label,
+          dDayBadge: _formatUpcomingDday(d, today),
+          sortDateTime: DateTime(d.year, d.month, d.day, 23, 59),
+        ));
+      }
+      upcomingEntries.sort((a, b) => a.sortDateTime.compareTo(b.sortDateTime));
+    } else if (key == 'baby' && babyProfile != null) {
+      const babyController = BabyCategoryController();
+      final vaccines = babyProfile.vaccineDoses.isNotEmpty
+          ? babyProfile.vaccineDoses
+          : kDefaultVaccineDoses;
+      for (final v in vaccines) {
+        if (v.isCompleted) continue;
+        final target =
+            babyController.calculateVaccineDoseTargetDate(babyProfile.birthDate, v);
+        final d = DateTime(target.year, target.month, target.day);
+        if (d.isBefore(today)) continue;
+        upcomingEntries.add(_UpcomingDdayEntry(
+          title: '💉 ${v.name}',
+          dDayBadge: _formatUpcomingDday(d, today),
+          sortDateTime: DateTime(d.year, d.month, d.day, 12, 0),
+        ));
+      }
+
+      final checkups = babyProfile.checkupDoses.isNotEmpty
+          ? babyProfile.checkupDoses
+          : kDefaultHealthCheckupDoses;
+      for (final c in checkups) {
+        if (c.isCompleted) continue;
+        final start = babyProfile.birthDate.add(Duration(days: c.startDays));
+        final end = babyProfile.birthDate.add(Duration(days: c.endDays));
+        final startDay = DateTime(start.year, start.month, start.day);
+        final endDay = DateTime(end.year, end.month, end.day);
+        if (endDay.isBefore(today)) continue;
+        final targetDay = startDay.isBefore(today) ? endDay : startDay;
+        upcomingEntries.add(_UpcomingDdayEntry(
+          title: '🩺 ${c.stage}차 영유아 건강검진',
+          dDayBadge: _formatUpcomingDday(targetDay, today),
+          sortDateTime: DateTime(targetDay.year, targetDay.month, targetDay.day, 12, 0),
+        ));
+      }
+      upcomingEntries.sort((a, b) => a.sortDateTime.compareTo(b.sortDateTime));
+    }
+
+    final upcoming = upcomingEntries.take(2).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

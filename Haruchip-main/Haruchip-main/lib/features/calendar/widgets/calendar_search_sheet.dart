@@ -74,9 +74,7 @@ class _CalendarSearchSheetState extends ConsumerState<_CalendarSearchSheet> {
       const fallback = {
         'plan': '내 일정',
         'couple': '커플',
-        'solo': '솔로',
         'fandom': '덕질',
-        'group': '모임',
         'exam': '시험',
         'birthday': '생일',
         'baby': '아기',

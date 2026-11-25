@@ -137,63 +137,111 @@ class BabyCareQuickBarWidget extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // 수유 텀 카운트다운 인디케이터
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: feedingStatus.isOverdue
-                  ? const Color(0xFFFEF2F2)
-                  : (feedingStatus.isDueNow
-                      ? const Color(0xFFFFFBEB)
-                      : const Color(0xFFF0FDF4)),
-              borderRadius: BorderRadius.circular(14),
-            
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-            child: Row(
-              children: [
-                Text(
-                  feedingStatus.isOverdue
-                      ? '⚠️'
-                      : (feedingStatus.isDueNow ? '⏰' : '🍼'),
-                  style: const TextStyle(fontSize: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        feedingStatus.statusText,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: feedingStatus.isOverdue
-                              ? const Color(0xFFDC2626)
-                              : (feedingStatus.isDueNow
-                                  ? const Color(0xFFD97706)
-                                  : const Color(0xFF16A34A)),
-                        ),
-                      ),
-                      if (feedingStatus.lastFeedingTime != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            '마지막 수유: ${_formatTime(feedingStatus.lastFeedingTime!)} (텀 ${profile.feedingIntervalHours}시간 기준)',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade600,
-                            ),
+          // 수유 텀 카운트다운 인디케이터 (수유 텀 없음 선택 시 자율 수유 안내)
+          if (!profile.hasFeedingInterval)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFDF2),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Text('🍼', style: TextStyle(fontSize: 18)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '자율 수유 중 (수유 텀 없음)',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.chipYellowText,
                           ),
                         ),
-                    ],
+                        if (feedingStatus.lastFeedingTime != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              '마지막 수유: ${_formatTime(feedingStatus.lastFeedingTime!)}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: feedingStatus.isOverdue
+                    ? const Color(0xFFFEF2F2)
+                    : (feedingStatus.isDueNow
+                        ? const Color(0xFFFFFBEB)
+                        : const Color(0xFFF0FDF4)),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    feedingStatus.isOverdue
+                        ? '⚠️'
+                        : (feedingStatus.isDueNow ? '⏰' : '🍼'),
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          feedingStatus.statusText,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: feedingStatus.isOverdue
+                                ? const Color(0xFFDC2626)
+                                : (feedingStatus.isDueNow
+                                    ? const Color(0xFFD97706)
+                                    : const Color(0xFF16A34A)),
+                          ),
+                        ),
+                        if (feedingStatus.lastFeedingTime != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              '마지막 수유: ${_formatTime(feedingStatus.lastFeedingTime!)} (텀 ${profile.feedingIntervalLabel} 기준)',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
 
           const SizedBox(height: 14),
 

@@ -2,18 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../../core/utils/safe_image_widget.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../couple/models/couple_relationship.dart';
 import '../../couple/providers/couple_provider.dart';
+import '../../couple/widgets/couple_relationship_setup_sheet.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../../shared/widgets/add_event_bottom_sheet.dart';
-import '../../shared/widgets/haru_calendar_picker.dart';
 import '../models/category.dart';
 import '../providers/category_provider.dart';
 import '../widgets/category_edit_modal.dart';
-import '../widgets/unified_category_top_card.dart';
+import '../widgets/skin_theme_card_container.dart';
 
 class CoupleCategoryDetailScreen extends ConsumerStatefulWidget {
   const CoupleCategoryDetailScreen({
@@ -24,17 +25,15 @@ class CoupleCategoryDetailScreen extends ConsumerStatefulWidget {
   final CategoryModel category;
 
   @override
-  ConsumerState<CoupleCategoryDetailScreen> createState() => _CoupleCategoryDetailScreenState();
+  ConsumerState<CoupleCategoryDetailScreen> createState() =>
+      _CoupleCategoryDetailScreenState();
 }
 
-class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetailScreen> {
+class _CoupleCategoryDetailScreenState
+    extends ConsumerState<CoupleCategoryDetailScreen> {
   late CategoryModel _category;
   bool _isTitleEditing = false;
   late TextEditingController _titleController;
-
-  // Edit / Reordering mode for 'N일째' items
-  bool _isReorderingMode = false;
-  List<PlanItem> _customCountUpOrder = [];
 
   @override
   void initState() {
@@ -59,337 +58,28 @@ class _CoupleCategoryDetailScreenState extends ConsumerState<CoupleCategoryDetai
     if (isInitialized) return;
 
     final couple = ref.read(coupleProvider);
-    // If it's the mock date or not initialized
-    if (!isInitialized || (couple.startDate.year == 2024 && couple.startDate.month == 5 && couple.startDate.day == 14)) {
+    if (!isInitialized ||
+        (couple.startDate.year == 2024 &&
+            couple.startDate.month == 5 &&
+            couple.startDate.day == 14)) {
       _showRelationshipSetupModal();
     }
   }
 
   Future<void> _showRelationshipSetupModal() async {
-    final couple = ref.read(coupleProvider);
-    DateTime tempStartDate = couple.startDate;
-    List<ReunionPeriod> tempReunions = couple.reunions.map((r) => r.copyWith()).toList();
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final mediaQuery = MediaQuery.of(context);
-            // Calculate total days preview
-            final now = DateTime.now();
-            final totalElapsed = DateTime(now.year, now.month, now.day)
-                .difference(DateTime(tempStartDate.year, tempStartDate.month, tempStartDate.day))
-                .inDays;
-            final breakupDays = tempReunions.fold<int>(0, (sum, r) => sum + r.length.inDays);
-            final previewDays = (totalElapsed - breakupDays).clamp(0, 99999);
-
-            return Container(
-              height: mediaQuery.size.height * 0.88,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                children: [
-                  // Drag Handle
-                  Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD1D1D6),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  // Header
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          '만난 날 및 재회 설정',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.grey),
-                          onPressed: () => Navigator.pop(ctx),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(20),
-                      children: [
-                        // Calculated Preview Card
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF7F2),
-                            borderRadius: BorderRadius.circular(16),
-                          
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.favorite, color: Color(0xFFFF7A59), size: 28),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('현재 연애 일수', style: TextStyle(fontSize: 12, color: Color(0xFF8A7F78))),
-                                  Text(
-                                    '${previewDays + 1}일째',
-                                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFFFF7A59)),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Section 1: 처음 만난 날
-                        const Text('처음 만난 날 (시작일)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        InkWell(
-                          onTap: () async {
-                            final picked = await showHaruDatePicker(
-                              context,
-                              initialDate: tempStartDate,
-                              firstDate: DateTime(1900),
-                              lastDate: DateTime(2100),
-                            );
-                            if (picked != null) {
-                              setModalState(() => tempStartDate = picked);
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF2F2F7),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '${tempStartDate.year}.${tempStartDate.month.toString().padLeft(2, '0')}.${tempStartDate.day.toString().padLeft(2, '0')}',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF007AFF)),
-                                ),
-                                const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF007AFF)),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 28),
-
-                        // Section 2: 재회 및 이별 기간 목록
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              '이별 / 재회 이력',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                            ),
-                            TextButton.icon(
-                              onPressed: () {
-                                setModalState(() {
-                                  tempReunions.add(
-                                    ReunionPeriod(
-                                      breakupDate: tempStartDate.add(const Duration(days: 100)),
-                                      reuniteDate: tempStartDate.add(const Duration(days: 130)),
-                                    ),
-                                  );
-                                });
-                              },
-                              icon: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF007AFF)),
-                              label: const Text('+ 재회 추가', style: TextStyle(color: Color(0xFF007AFF), fontWeight: FontWeight.bold, fontSize: 13)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          '이별했던 기간만큼 총 연애 일수에서 정확히 제외됩니다.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                        const SizedBox(height: 12),
-
-                        if (tempReunions.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFAFAFA),
-                              borderRadius: BorderRadius.circular(12),
-                            
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-                            child: const Text('등록된 이별/재회 기간이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                          )
-                        else
-                          for (int i = 0; i < tempReunions.length; i++)
-                            Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF9F9FB),
-                                borderRadius: BorderRadius.circular(14),
-                              
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text('기간 #${i + 1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF3A3A3C))),
-                                      IconButton(
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        icon: const Icon(Icons.remove_circle_outline, color: Color(0xFFEF4444), size: 18),
-                                        onPressed: () {
-                                          setModalState(() {
-                                            tempReunions.removeAt(i);
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      // Breakup date button
-                                      Expanded(
-                                        child: InkWell(
-                                          onTap: () async {
-                                            final picked = await showHaruDatePicker(
-                                              context,
-                                              initialDate: tempReunions[i].breakupDate,
-                                              firstDate: DateTime(1900),
-                                              lastDate: DateTime(2100),
-                                            );
-                                            if (picked != null) {
-                                              setModalState(() {
-                                                tempReunions[i] = tempReunions[i].copyWith(breakupDate: picked);
-                                              });
-                                            }
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: const Color(0xFFD1D1D6)),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                const Text('이별일', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                                                Text(
-                                                  '${tempReunions[i].breakupDate.year}.${tempReunions[i].breakupDate.month.toString().padLeft(2, '0')}.${tempReunions[i].breakupDate.day.toString().padLeft(2, '0')}',
-                                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const Padding(
-                                        padding: EdgeInsets.symmetric(horizontal: 6),
-                                        child: Text('~', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                      ),
-                                      // Reunite date button
-                                      Expanded(
-                                        child: InkWell(
-                                          onTap: () async {
-                                            final picked = await showHaruDatePicker(
-                                              context,
-                                              initialDate: tempReunions[i].reuniteDate ?? tempReunions[i].breakupDate.add(const Duration(days: 30)),
-                                              firstDate: DateTime(1900),
-                                              lastDate: DateTime(2100),
-                                            );
-                                            if (picked != null) {
-                                              setModalState(() {
-                                                tempReunions[i] = tempReunions[i].copyWith(reuniteDate: picked);
-                                              });
-                                            }
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: const Color(0xFFD1D1D6)),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                const Text('재회일', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                                                Text(
-                                                  tempReunions[i].reuniteDate != null
-                                                      ? '${tempReunions[i].reuniteDate!.year}.${tempReunions[i].reuniteDate!.month.toString().padLeft(2, '0')}.${tempReunions[i].reuniteDate!.day.toString().padLeft(2, '0')}'
-                                                      : '미재회 (현재 이별 중)',
-                                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                      ],
-                    ),
-                  ),
-                  // Bottom Submit Button
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF007AFF),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        onPressed: () {
-                          ref.read(coupleProvider.notifier).updateRelationship(
-                                startDate: tempStartDate,
-                                reunions: tempReunions,
-                              );
-                          final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
-                          currentMeta['isInitialized'] = true;
-                          final updatedCat = _category.copyWith(metadata: currentMeta);
-                          ref.read(categoryListProvider.notifier).updateCategory(updatedCat);
-                          if (mounted) setState(() => _category = updatedCat);
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text(
-                          '설정 완료',
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+    final isInitialized = _category.metadata?['isInitialized'] == true;
+    final saved = await showCoupleRelationshipSetupSheet(
+      context,
+      ref,
+      isInitialized: isInitialized,
     );
+    if (saved && mounted) {
+      final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
+      currentMeta['isInitialized'] = true;
+      final updatedCat = _category.copyWith(metadata: currentMeta);
+      ref.read(categoryListProvider.notifier).updateCategory(updatedCat);
+      setState(() => _category = updatedCat);
+    }
   }
 
   Future<void> _openEditModal() async {
@@ -408,9 +98,222 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
 
   void _saveTitle() {
     setState(() => _isTitleEditing = false);
-    final updated = _category.copyWith(name: _titleController.text.trim());
+    final trimmed = _titleController.text.trim();
+    if (trimmed.isEmpty) return;
+    final updated = _category.copyWith(name: trimmed);
     setState(() => _category = updated);
     ref.read(categoryListProvider.notifier).updateCategory(updated);
+  }
+
+  Widget _buildCoupleHeroCard({
+    required CoupleRelationship couple,
+    required int totalDays,
+    required bool hasImage,
+    required String? imageUrl,
+  }) {
+    final startDateStr =
+        '${couple.startDate.year}.${couple.startDate.month.toString().padLeft(2, '0')}.${couple.startDate.day.toString().padLeft(2, '0')} ~';
+    final displayTitle =
+        _category.name.isNotEmpty ? _category.name : '우리 사랑한 지';
+    final iconKey =
+        _category.icon.isNotEmpty ? _category.icon : 'simple_heart';
+    final skinTheme = _category.skinTheme;
+
+    final Color textColor = skinTheme != null
+        ? colorFromHex(skinTheme.textColor)
+        : const Color(0xFF4A2C35);
+    final Color subtitleColor = textColor.withValues(alpha: 0.72);
+
+    final avatarProvider = hasImage ? resolveSafeImageProvider(imageUrl) : null;
+
+    final Widget heroBody = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 138),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // 좌측 프로필 아바타 (펜슬 버튼 탭 시 꾸미기 모달 오픈)
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2.5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: avatarProvider != null
+                    ? CircleAvatar(
+                        radius: 28,
+                        backgroundImage: avatarProvider,
+                      )
+                    : CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Colors.white,
+                        child: HaruChipIconViewer(
+                          iconKey: iconKey,
+                          size: 30,
+                          circular: true,
+                        ),
+                      ),
+              ),
+              Positioned(
+                bottom: -2,
+                right: -2,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openEditModal,
+                  child: Container(
+                    padding: const EdgeInsets.all(4.5),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.10),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.edit_rounded,
+                      size: 11,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+
+          // 우측 정보 영역: 상단 닉네임 -> 중앙 대형 "866일" -> 하단 "2024.05.14 ~"
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        displayTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.cardLabel.copyWith(
+                          color: subtitleColor,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    HaruChipIconViewer(
+                      iconKey: iconKey,
+                      size: 15,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${(totalDays < 0 ? 0 : totalDays) + 1}일',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.heading1.copyWith(
+                    color: textColor,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.8,
+                    height: 1.12,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  startDateStr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: subtitleColor,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // 카드 박스 전체 터치 -> 만난 날 및 재회 설정 모달 즉시 오픈
+    if (skinTheme != null || hasImage) {
+      final effectiveTheme = skinTheme ??
+          const CategorySkinTheme(
+            id: 'couple_default_hero',
+            name: '커플 기본',
+            backgroundColor: '#FFF5F7',
+            patternType: 'none',
+            patternColor: '#FFFFFF',
+            patternOpacity: 0.0,
+            borderStyle: 'none',
+            borderColor: '#FFF5F7',
+            borderWidth: 0.0,
+            borderRadius: 20.0,
+            textColor: '#4A2C35',
+            accentEmoji: 'simple_heart',
+          );
+
+      return SkinThemeCardContainer(
+        key: const Key('couple_hero_summary_card'),
+        theme: effectiveTheme,
+        width: double.infinity,
+        borderless: true,
+        backgroundImageUrl: hasImage ? imageUrl : null,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        onTap: _showRelationshipSetupModal,
+        child: heroBody,
+      );
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const Key('couple_hero_summary_card'),
+        onTap: _showRelationshipSetupModal,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFFFF5F7),
+                Color(0xFFFFFAF5),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD6336C).withValues(alpha: 0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: heroBody,
+        ),
+      ),
+    );
   }
 
   @override
@@ -418,19 +321,18 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
     final couple = ref.watch(coupleProvider);
     final totalDays = ref.watch(totalDaysTogetherProvider);
     final anniversaries = ref.watch(upcomingAnniversariesProvider);
-    final customItems = ref.watch(planItemsByCategoryProvider(_category.categoryKey));
+    final customItems =
+        ref.watch(planItemsByCategoryProvider(_category.categoryKey));
 
     final bgConfig = _category.background;
-    final hasImage = bgConfig.type == BackgroundType.image && bgConfig.imageUrl != null;
+    final hasImage = bgConfig.type == BackgroundType.image &&
+        bgConfig.imageUrl != null &&
+        bgConfig.imageUrl!.isNotEmpty;
 
-    // Filter count-up items (N일째)
-    final countUpItems = customItems.where((item) => item.displayMode == DdayDisplayMode.daysCount).toList();
-    if (_customCountUpOrder.length != countUpItems.length) {
-      _customCountUpOrder = List.from(countUpItems);
-    }
-
-    // Filter countdown items (D-Day & Milestones)
-    final countDownItems = customItems.where((item) => item.displayMode != DdayDisplayMode.daysCount).toList();
+    // 세부 D-Day 리스트 항목 (직접 추가한 카운트다운 + 자동 계산 기념일)
+    final countDownItems = customItems
+        .where((item) => item.displayMode != DdayDisplayMode.daysCount)
+        .toList();
 
     return Scaffold(
       backgroundColor: AppColors.cleanCanvasBg,
@@ -452,7 +354,8 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                 child: TextField(
                   controller: _titleController,
                   autofocus: true,
-                  style: AppTypography.heading2.copyWith(color: AppColors.protoHeading),
+                  style: AppTypography.heading2
+                      .copyWith(color: AppColors.protoHeading),
                   decoration: const InputDecoration(
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
@@ -462,11 +365,16 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                 ),
               )
             else
-              GestureDetector(
-                onTap: () => setState(() => _isTitleEditing = true),
-                child: Text(
-                  _category.name,
-                  style: AppTypography.heading2.copyWith(color: AppColors.protoHeading),
+              Flexible(
+                child: GestureDetector(
+                  onTap: () => setState(() => _isTitleEditing = true),
+                  child: Text(
+                    _category.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.heading2
+                        .copyWith(color: AppColors.protoHeading),
+                  ),
                 ),
               ),
           ],
@@ -474,338 +382,97 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
         actions: [
           if (_isTitleEditing)
             IconButton(
-              icon: const Icon(Icons.check, color: Color(0xFF3B82F6)),
+              icon: const Icon(Icons.check_rounded,
+                  color: AppColors.chipYellowText),
               onPressed: _saveTitle,
             )
           else ...[
             TextButton.icon(
               key: const Key('category_decorate_button'),
               onPressed: _openEditModal,
-              icon: const Icon(Icons.palette_outlined, size: 18, color: AppColors.protoHeading),
-              label: Text('꾸미기', style: AppTypography.caption.copyWith(color: AppColors.protoHeading, fontWeight: FontWeight.bold)),
+              icon: const Icon(
+                Icons.palette_outlined,
+                size: 18,
+                color: AppColors.protoHeading,
+              ),
+              label: Text(
+                '꾸미기',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.protoHeading,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-            // Header Action: '+ 항목 추가' button text
             TextButton.icon(
               onPressed: () => showAddEventBottomSheet(
                 context,
                 categoryKey: _category.categoryKey,
               ),
-              icon: const Icon(Icons.add, size: 18, color: Color(0xFF007AFF)),
+              icon: const Icon(
+                Icons.add_rounded,
+                size: 18,
+                color: AppColors.chipYellowText,
+              ),
               label: const Text(
                 '항목 추가',
-                style: TextStyle(color: Color(0xFF007AFF), fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-          ]
-        ],
-      ),
-      body: Stack(
-        children: [
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. Top Custom Main Card (아기 카드와 1:1 통일된 네추럴 미니멀 폼 팩터)
-                  Builder(
-                    builder: (context) {
-                      final breakupDays = couple.reunions.fold<int>(0, (sum, r) => sum + r.length.inDays);
-                      final startDateStr = '시작일: ${couple.startDate.year}.${couple.startDate.month.toString().padLeft(2, '0')}.${couple.startDate.day.toString().padLeft(2, '0')}';
-                      final reunionStr = breakupDays > 0 ? '재회 기간 제외: $breakupDays일' : '연애 진행 중 ing';
-
-                      return UnifiedCategoryTopCard(
-                        categoryKey: 'couple',
-                        title: _category.name.isNotEmpty ? _category.name : '우리 사랑한 지',
-                        symbol: _category.icon.isNotEmpty ? _category.icon : 'simple_heart',
-                        coreDDayText: '사랑한 지 ${totalDays + 1}일째',
-                        startDateText: startDateStr,
-                        reunionOrExtraBadge: reunionStr,
-                        photoUrl: hasImage ? bgConfig.imageUrl : null,
-                        skinTheme: _category.skinTheme,
-                        backgroundImageUrl: hasImage ? bgConfig.imageUrl : null,
-                        fallbackEmoji: _category.icon.isNotEmpty ? _category.icon : 'simple_heart',
-                        onEditAvatar: () async {
-                          final updated = await showCategoryEditModal(context, category: _category);
-                          if (updated != null) {
-                            setState(() => _category = updated);
-                            ref.read(categoryListProvider.notifier).updateCategory(updated);
-                          }
-                        },
-                        onManageSection: _showRelationshipSetupModal,
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // 2. Zone A: 'N일째 리스트' (Count-up List)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.trending_up_rounded, size: 18, color: AppColors.protoHeading),
-                          const SizedBox(width: 6),
-                          Text(
-                            'N일째 리스트',
-                            style: AppTypography.cardLabel.copyWith(color: AppColors.protoHeading, fontSize: 15, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _customCountUpOrder = List.from(countUpItems);
-                            _isReorderingMode = true;
-                          });
-                        },
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          '편집',
-                          style: TextStyle(color: Color(0xFF007AFF), fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Base Initial Meeting Date Item
-                  _buildCountUpCard(
-                    title: '처음 만난 날',
-                    subtext: '${couple.startDate.year}.${couple.startDate.month.toString().padLeft(2, '0')}.${couple.startDate.day.toString().padLeft(2, '0')}',
-                    dDayLabel: '${totalDays + 1}일째',
-                    onTap: _showRelationshipSetupModal,
-                  ),
-
-                  // Custom Count-up Items
-                  for (final item in _customCountUpOrder)
-                    _buildCountUpCard(
-                      title: item.title,
-                      subtext: '${item.date.year}.${item.date.month.toString().padLeft(2, '0')}.${item.date.day.toString().padLeft(2, '0')}',
-                      dDayLabel: '${DateTime.now().difference(item.date).inDays + 1}일째',
-                      onTap: () => showAddEventBottomSheet(
-                        context,
-                        categoryKey: _category.categoryKey,
-                        existingItem: item,
-                      ),
-                    ),
-
-                  const SizedBox(height: 28),
-
-                  // 3. Zone B: '세부 D-Day 리스트' (Countdown List)
-                  Row(
-                    children: [
-                      const Icon(Icons.event_note_rounded, size: 18, color: AppColors.protoHeading),
-                      const SizedBox(width: 6),
-                      Text(
-                        '세부 D-Day 리스트',
-                        style: AppTypography.cardLabel.copyWith(color: AppColors.protoHeading, fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ..._buildCountDownItems(countDownItems, anniversaries),
-                ],
-              ),
-            ),
-          ),
-
-          // Reordering Modal Overlay for Zone A
-          if (_isReorderingMode)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.65),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Header Notification
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            children: [
-                              const Text(
-                                'N일째 항목 순서 변경',
-                                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                '💡 상단 2개 항목만 메인 화면에 우선 표시됩니다.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 13, color: Color(0xFF007AFF), fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Reorderable list
-                        Expanded(
-                          child: Theme(
-                            data: Theme.of(context).copyWith(
-                              canvasColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                            ),
-                            child: ReorderableListView(
-                              // ignore: deprecated_member_use
-                              onReorder: (oldIndex, newIndex) {
-                                setState(() {
-                                  if (oldIndex < newIndex) newIndex -= 1;
-                                  final item = _customCountUpOrder.removeAt(oldIndex);
-                                  _customCountUpOrder.insert(newIndex, item);
-                                });
-                              },
-                              children: [
-                                for (int i = 0; i < _customCountUpOrder.length; i++)
-                                  Container(
-                                    key: ValueKey(_customCountUpOrder[i].id),
-                                    margin: const EdgeInsets.only(bottom: 10),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: i < 2
-                                          ? Border.all(color: const Color(0xFF007AFF), width: 2)
-                                          : Border.all(color: const Color(0xFFE5E5EA)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 24,
-                                          height: 24,
-                                          alignment: Alignment.center,
-                                          decoration: BoxDecoration(
-                                            color: i < 2 ? const Color(0xFF007AFF) : const Color(0xFFE5E5EA),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Text(
-                                            '${i + 1}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: i < 2 ? Colors.white : const Color(0xFF8E8E93),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            _customCountUpOrder[i].title,
-                                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-                                          ),
-                                        ),
-                                        const Icon(Icons.drag_handle_rounded, color: Color(0xFF8E8E93)),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF007AFF),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _isReorderingMode = false;
-                            });
-                          },
-                          child: const Text('수정 완료', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCountUpCard({
-    required String title,
-    required String subtext,
-    required String dDayLabel,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.protoHeading,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtext,
-                    style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3D6),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                dDayLabel,
-                style: const TextStyle(
-                  color: Color(0xFFB45309),
+                style: TextStyle(
+                  color: AppColors.chipYellowText,
                   fontWeight: FontWeight.bold,
-                  fontSize: 13,
+                  fontSize: 13.5,
                 ),
               ),
             ),
           ],
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. 상단 대표 요약 카드 (카드 전체 탭 -> 만난 날 및 재회 설정 모달 오픈)
+              _buildCoupleHeroCard(
+                couple: couple,
+                totalDays: totalDays,
+                hasImage: hasImage,
+                imageUrl: bgConfig.imageUrl,
+              ),
+
+              const SizedBox(height: 24),
+
+              // 2. 하단 단일 리스트: '세부 D-Day 리스트' (중복 'N일째 리스트' 완전 제거)
+              Row(
+                children: [
+                  const Icon(
+                    Icons.event_note_rounded,
+                    size: 18,
+                    color: AppColors.protoHeading,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '세부 D-Day 리스트',
+                    style: AppTypography.cardLabel.copyWith(
+                      color: AppColors.protoHeading,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ..._buildCountDownItems(countDownItems, anniversaries),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  List<Widget> _buildCountDownItems(List<PlanItem> customItems, List<AnniversaryMilestone> autoAnniv) {
+  List<Widget> _buildCountDownItems(
+    List<PlanItem> customItems,
+    List<AnniversaryMilestone> autoAnniv,
+  ) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
@@ -817,7 +484,8 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
       final diff = itemDate.difference(today).inDays;
       merged.add(_CountDownListItem(
         title: item.title,
-        subtext: '${item.date.year}.${item.date.month.toString().padLeft(2, '0')}.${item.date.day.toString().padLeft(2, '0')}',
+        subtext:
+            '${item.date.year}.${item.date.month.toString().padLeft(2, '0')}.${item.date.day.toString().padLeft(2, '0')}',
         date: item.date,
         isPast: isPast,
         dDayLabel: diff == 0 ? 'D-Day' : (diff > 0 ? 'D-$diff' : 'D+${-diff}'),
@@ -826,11 +494,12 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
       ));
     }
 
-    for (final anniv in autoAnniv) {
+    for (final anniv in autoAnniv.take(15)) {
       final diff = anniv.date.difference(today).inDays;
       merged.add(_CountDownListItem(
         title: anniv.label,
-        subtext: '${anniv.date.year}.${anniv.date.month.toString().padLeft(2, '0')}.${anniv.date.day.toString().padLeft(2, '0')}',
+        subtext:
+            '${anniv.date.year}.${anniv.date.month.toString().padLeft(2, '0')}.${anniv.date.day.toString().padLeft(2, '0')}',
         date: anniv.date,
         isPast: false,
         dDayLabel: diff == 0 ? 'D-Day' : 'D-$diff',
@@ -845,6 +514,7 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
     });
 
     return merged.map((m) {
+      final isPastBadge = m.dDayLabel.startsWith('D+');
       return GestureDetector(
         onTap: () {
           if (m.rawItem != null) {
@@ -856,16 +526,16 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
           }
         },
         child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 4,
-                offset: const Offset(0, 2),
+                offset: const Offset(0, 1.5),
               ),
             ],
           ),
@@ -877,40 +547,57 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                   children: [
                     Row(
                       children: [
-                        Text(
-                          m.title,
-                          style: AppTypography.body.copyWith(
-                            color: AppColors.protoHeading,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
+                        Flexible(
+                          child: Text(
+                            m.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.body.copyWith(
+                              color: AppColors.protoHeading,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                            ),
                           ),
                         ),
                         if (m.isCoupleSpecial) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.auto_awesome, size: 14, color: Color(0xFFFF7F50)),
-                        ]
+                          const SizedBox(width: 5),
+                          const Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 13,
+                            color: Color(0xFFFF7F50),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       m.subtext,
-                      style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.protoSubtitle,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: m.dDayLabel.startsWith('D+') ? const Color(0xFFFFEAEA) : const Color(0xFFF2F2F7),
-                  borderRadius: BorderRadius.circular(14),
+                  color: isPastBadge
+                      ? const Color(0xFFFFEAEA)
+                      : AppColors.chipYellowBg.withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   m.dDayLabel,
                   style: TextStyle(
-                    color: m.dDayLabel.startsWith('D+') ? const Color(0xFFEF4444) : const Color(0xFF007AFF),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                    color: isPastBadge
+                        ? const Color(0xFFEF4444)
+                        : AppColors.chipYellowText,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11.5,
                   ),
                 ),
               ),

@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../utils/safe_image_widget.dart';
 import 'haruchip_icon_registry.dart';
 
 /// 앱 전역 아이콘 렌더링 일원화 보안 래퍼 컴포넌트
@@ -36,8 +38,31 @@ class HaruChipIconViewer extends StatelessWidget {
       return _buildFallbackSvg();
     }
 
-    // 1) 'file:' -> 앱 샌드박스 내부 경로 유효성 검사 후 Image.file() 렌더링
+    // 0-1) 'data:image/...' -> Web/Mobile 공용 메모리 이미지 렌더링
+    if (isDataImageUri(trimmed)) {
+      final bytes = decodeDataImageUri(trimmed);
+      if (bytes == null || bytes.isEmpty) {
+        return _buildFallbackSvg();
+      }
+      final image = Image.memory(
+        bytes,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildFallbackSvg(),
+      );
+      if (circular) return ClipOval(child: image);
+      return ClipRRect(
+        borderRadius: borderRadius ?? BorderRadius.circular(size * 0.25),
+        child: image,
+      );
+    }
+
+    // 1) 'file:' -> 앱 샌드박스 내부 경로 유효성 검사 후 렌더링 (Web에서는 Image.file 미호출)
     if (trimmed.startsWith(HaruChipIconRegistry.filePrefix)) {
+      if (kIsWeb) {
+        return _buildFallbackSvg();
+      }
       final syncFile = HaruChipIconSandbox.resolveSafeSandboxFileSync(trimmed);
       if (syncFile != null) {
         return _buildClippedFileImage(syncFile);
@@ -107,6 +132,9 @@ class HaruChipIconViewer extends StatelessWidget {
   }
 
   Widget _buildClippedFileImage(File file) {
+    if (kIsWeb) {
+      return _buildFallbackSvg();
+    }
     final image = Image.file(
       file,
       width: size,

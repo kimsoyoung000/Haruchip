@@ -4,10 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:haruchip/core/icons/haruchip_icon_viewer.dart';
 import 'package:haruchip/core/theme/app_font_settings_provider.dart';
 import 'package:haruchip/design_system/colors.dart';
+import 'package:haruchip/features/calendar/widgets/calendar_category_filter_sheet.dart';
 import 'package:haruchip/features/calendar/widgets/themed_color_palette_sheet.dart';
+import 'package:haruchip/features/categories/data/category_types.dart';
 import 'package:haruchip/features/categories/models/category.dart';
+import 'package:haruchip/features/categories/providers/category_provider.dart';
 import 'package:haruchip/features/categories/screens/category_detail_screen.dart';
 import 'package:haruchip/features/categories/widgets/category_edit_modal.dart';
+import 'package:haruchip/features/home/screens/main_shell_screen.dart';
 import 'package:haruchip/features/home/widgets/add_category_dashboard_modal.dart';
 import 'package:haruchip/features/settings/screens/profile_settings_screen.dart';
 
@@ -175,6 +179,72 @@ void main() {
           reason: 'Missing common decorate button for categoryKey=$key',
         );
       }
+    });
+
+    testWidgets('D-Day 카테고리 프리셋·필터에서 모임(group/meeting)이 영구 삭제되고 3번째 탭 칩 모임은 보존된다', (tester) async {
+      // 1. 프리셋 시드에서 'meeting'/'group'/'모임' 및 'solo'/'솔로' 완전 제거 확인
+      expect(
+        kCategoryTypes.any(
+          (c) =>
+              c.key == 'meeting' ||
+              c.key == 'group' ||
+              c.labelKo == '모임' ||
+              c.key == 'solo' ||
+              c.labelKo == '솔로',
+        ),
+        isFalse,
+      );
+      expect(kCategoryTypes.length, 14);
+
+      // 2. 레거시 'group'/'meeting' 데이터가 있어도 visible/hidden 리스트에서 제외
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container.read(categoryListProvider.notifier).addCategory(
+            categoryKey: 'group',
+            name: '모임',
+            emoji: '👥',
+            colorHex: '#34D399',
+          );
+      container.read(categoryListProvider.notifier).addCategory(
+            categoryKey: 'couple',
+            name: '커플',
+            emoji: 'simple_heart',
+            colorHex: '#FF8DA1',
+          );
+
+      final visible = container.read(visibleCategoriesProvider);
+      expect(visible.any((c) => c.categoryKey == 'group'), isFalse);
+      expect(visible.any((c) => c.categoryKey == 'couple'), isTrue);
+
+      // 3. 캘린더 카테고리 필터 바텀시트에 '모임' 미노출 확인
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () => showCalendarCategoryFilterSheet(context),
+                  child: const Text('필터 열기'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('필터 열기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('모임'), findsNothing);
+      expect(find.text('커플'), findsOneWidget);
+
+      // 4. 3번째 하단 탭 '칩 모임' 정상 보존 확인
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: MainShellScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('칩 모임'), findsOneWidget);
     });
   });
 }

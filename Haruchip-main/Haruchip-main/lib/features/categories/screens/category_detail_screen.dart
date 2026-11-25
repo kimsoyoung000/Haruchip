@@ -105,32 +105,32 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     'careQuickBar': (
       label: '원터치 케어 타임로그',
       icon: Icons.timer_outlined,
-      subtitle: '수유, 수면, 배변 원터치 기록 및 히스토리',
+      subtitle: '수유, 이유식, 수면, 기저귀를 원터치로 기록하고 길게 눌러 상세 입력해요',
     ),
     'vaccineTimeline': (
       label: '국가 표준 필수 예방접종',
       icon: Icons.vaccines_outlined,
-      subtitle: '질병관리청 KCDA 표준 일정 및 완료 관리',
+      subtitle: '질병관리청 35회 표준 일정을 확인하고 접종 완료를 체크할 수 있어요',
     ),
     'healthCheckup': (
       label: '국가 영유아 건강검진',
       icon: Icons.medical_services_outlined,
-      subtitle: '생후 14일~71개월 (1~8차) 건강검진',
+      subtitle: '건강보험공단 1~8차 검진 기간과 마감 D-Day를 한눈에 관리해요',
     ),
     'growthRecords': (
       label: '신체 성장 기록',
       icon: Icons.straighten_rounded,
-      subtitle: '키, 몸무게 측정치 및 성장 변화 기록',
+      subtitle: '키, 몸무게를 기록하고 항목을 탭하여 수치를 수정·삭제할 수 있어요',
     ),
     'countUpList': (
       label: 'N일째 리스트',
       icon: Icons.trending_up_rounded,
-      subtitle: '생후 일수 및 성장 기념일 카운트업',
+      subtitle: '생후 일수 및 성장 기념일을 카운트업으로 확인해요',
     ),
     'dDayList': (
       label: '세부 D-Day 리스트',
       icon: Icons.event_note_rounded,
-      subtitle: '돌잔치, 백일, 병원 예약 등 다가오는 일정',
+      subtitle: '백일, 첫돌, 병원 예약 등 다가오는 일정을 모아봐요',
     ),
   };
 
@@ -188,6 +188,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     final currentMeta = Map<String, dynamic>.from(_category.metadata ?? {});
     currentMeta['babySectionOrder'] = order;
     currentMeta['babyHiddenSections'] = hidden.toList();
+    currentMeta['babySectionGuideShown'] = true;
     currentMeta['isInitialized'] = true;
 
     final updated = _category.copyWith(metadata: currentMeta);
@@ -206,7 +207,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     } catch (_) {}
   }
 
-  void _openBabySectionManagementModal() {
+  void _openBabySectionManagementModal({bool isInitialGuide = false}) {
     final currentOrder = List<String>.from(_getBabySectionOrder());
     final currentHidden = Set<String>.from(_getBabyHiddenSections());
 
@@ -220,53 +221,68 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             return Container(
               height: MediaQuery.of(sheetContext).size.height * 0.78,
               decoration: const BoxDecoration(
-                color: Color(0xFFFAF9F6),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 14, 12),
                     decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+                      border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEFF6FF),
-                                borderRadius: BorderRadius.circular(10),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: AppColors.chipYellowBg,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.tune_rounded,
+                                  size: 19,
+                                  color: AppColors.chipYellowText,
+                                ),
                               ),
-                              child: const Icon(Icons.tune_rounded, size: 20, color: Color(0xFF2563EB)),
-                            ),
-                            const SizedBox(width: 10),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '아기 메인 섹션 관리',
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.protoHeading,
-                                  ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isInitialGuide ? '시작 섹션 가이드' : '아기 메인 섹션 관리',
+                                      style: const TextStyle(
+                                        fontSize: 16.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.protoHeading,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      isInitialGuide
+                                          ? '사용할 섹션을 체크해 켜고 각 기능을 확인해보세요'
+                                          : '체크박스로 표시/숨김 및 순서 재배치 · 섹션별 안내',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(height: 2),
-                                Text(
-                                  '체크박스로 숨김/표시, 순서 재배치',
-                                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                                ),
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
                         IconButton(
                           onPressed: () => Navigator.pop(sheetContext),
-                          icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFF9CA3AF)),
                         ),
                       ],
                     ),
@@ -429,8 +445,9 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                         const Spacer(),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            foregroundColor: Colors.white,
+                            backgroundColor: AppColors.chipYellowBg,
+                            foregroundColor: AppColors.chipYellowText,
+                            elevation: 0,
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
@@ -444,7 +461,10 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                               ),
                             );
                           },
-                          child: const Text('저장 완료', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          child: Text(
+                            isInitialGuide ? '시작하기' : '저장 완료',
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                          ),
                         ),
                       ],
                     ),
@@ -490,7 +510,17 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
         break;
       case 'baby':
         showBabyOnboardingSheet(context, category: _category, ref: ref).then((updated) {
-          if (updated == true && mounted) _reloadCategory();
+          if (updated == true && mounted) {
+            _reloadCategory();
+            final guideShown = _category.metadata?['babySectionGuideShown'] == true;
+            if (!guideShown) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _openBabySectionManagementModal(isInitialGuide: true);
+                }
+              });
+            }
+          }
         });
         break;
       case 'solo':
@@ -1807,7 +1837,6 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                         );
                         if (updated == true && mounted) _reloadCategory();
                       },
-                      onTapManageSections: _openBabySectionManagementModal,
                     ),
                     const SizedBox(height: 16),
                     for (final secKey in _getBabySectionOrder())
@@ -2394,7 +2423,7 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                 existingItem: item,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 5),
           ],
       ],
     );
@@ -2412,19 +2441,19 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
       final imgProvider = getPetAvatarImageProvider(pet.photoUrl);
       if (imgProvider != null) {
         avatarWidget = CircleAvatar(
-          radius: 17,
+          radius: 15,
           backgroundImage: imgProvider,
         );
       } else {
         avatarWidget = Container(
-          width: 34,
-          height: 34,
+          width: 30,
+          height: 30,
           decoration: const BoxDecoration(
             color: Color(0xFFFFECE8),
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
-          child: Text(pet.icon, style: const TextStyle(fontSize: 17)),
+          child: Text(pet.icon, style: const TextStyle(fontSize: 15)),
         );
       }
     }
@@ -2432,16 +2461,16 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin: const EdgeInsets.only(bottom: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 4,
-              offset: const Offset(0, 2),
+              offset: const Offset(0, 1.5),
             ),
           ],
         ),
@@ -2449,7 +2478,7 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
           children: [
             if (avatarWidget != null) ...[
               avatarWidget,
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
             ],
             Expanded(
               child: Column(
@@ -2459,21 +2488,21 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                     children: [
                       if (_category.categoryKey == 'pet' && pet != null) ...[
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFECE8),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
                             pet.name,
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFFFF6B4A),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                       ],
                       Expanded(
                         child: Text(
@@ -2481,7 +2510,7 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                           style: AppTypography.body.copyWith(
                             color: AppColors.protoHeading,
                             fontWeight: FontWeight.w800,
-                            fontSize: 15,
+                            fontSize: 13.5,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -2489,27 +2518,30 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                       ),
                     ],
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     _formatDate(item.date),
-                    style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.protoSubtitle,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF3D6),
-                borderRadius: BorderRadius.circular(14),
+                color: AppColors.chipYellowBg.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 dDayText,
                 style: const TextStyle(
-                  color: Color(0xFFB45309),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+                  color: AppColors.chipYellowText,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11.5,
                 ),
               ),
             ),
@@ -2599,19 +2631,19 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
       final imgProvider = getPetAvatarImageProvider(pet.photoUrl);
       if (imgProvider != null) {
         avatarWidget = CircleAvatar(
-          radius: 17,
+          radius: 15,
           backgroundImage: imgProvider,
         );
       } else {
         avatarWidget = Container(
-          width: 34,
-          height: 34,
+          width: 30,
+          height: 30,
           decoration: const BoxDecoration(
             color: Color(0xFFFFECE8),
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
-          child: Text(pet.icon, style: const TextStyle(fontSize: 17)),
+          child: Text(pet.icon, style: const TextStyle(fontSize: 15)),
         );
       }
     }
@@ -2619,15 +2651,15 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 4,
-              offset: const Offset(0, 2),
+              offset: const Offset(0, 1.5),
             ),
           ],
         ),
@@ -2635,7 +2667,7 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
           children: [
             if (avatarWidget != null) ...[
               avatarWidget,
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
             ],
             Expanded(
               child: Column(
@@ -2645,21 +2677,21 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                     children: [
                       if (_category.categoryKey == 'pet' && pet != null) ...[
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFECE8),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
                             pet.name,
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFFFF6B4A),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                       ],
                       Expanded(
                         child: Text(
@@ -2667,7 +2699,7 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                           style: AppTypography.body.copyWith(
                             color: AppColors.protoHeading,
                             fontWeight: FontWeight.w800,
-                            fontSize: 15,
+                            fontSize: 13.5,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -2675,23 +2707,27 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                       ),
                     ],
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     dateText,
-                    style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.protoSubtitle,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
                 color: isPast
                     ? const Color(0xFFFFEAEA)
-                    : (countdownSubText != null ? const Color(0xFFEFF6FF) : const Color(0xFFF2F2F7)),
-                borderRadius: BorderRadius.circular(14),
-                border: countdownSubText != null ? Border.all(color: const Color(0xFF93C5FD), width: 1) : null,
+                    : (countdownSubText != null
+                        ? const Color(0xFFEFF6FF)
+                        : AppColors.chipYellowBg.withValues(alpha: 0.75)),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2701,17 +2737,19 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                     style: TextStyle(
                       color: isPast
                           ? const Color(0xFFEF4444)
-                          : (countdownSubText != null ? const Color(0xFF1D4ED8) : const Color(0xFF007AFF)),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                          : (countdownSubText != null
+                              ? const Color(0xFF1D4ED8)
+                              : AppColors.chipYellowText),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11.5,
                     ),
                   ),
                   if (countdownSubText != null) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
                       countdownSubText,
                       style: const TextStyle(
-                        fontSize: 10.5,
+                        fontSize: 9.5,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF2563EB),
                       ),

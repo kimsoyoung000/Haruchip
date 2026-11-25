@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/icons/haruchip_icon_picker.dart';
 import '../../../core/icons/haruchip_icon_registry.dart';
 import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../../core/utils/safe_image_widget.dart';
 import '../../../design_system/colors.dart';
 import '../../calendar/widgets/themed_color_palette_sheet.dart';
 import '../models/category.dart';
@@ -99,10 +98,13 @@ class _CategoryEditModalState extends State<CategoryEditModal>
         maxHeight: 1200,
         imageQuality: 85,
       );
-      if (picked != null && mounted) {
-        setState(() {
-          _photoBgPath = picked.path;
-        });
+      if (picked != null) {
+        final safeImageSource = await xFileToSafeImageSource(picked);
+        if (mounted) {
+          setState(() {
+            _photoBgPath = safeImageSource;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -721,9 +723,10 @@ class _CategoryEditModalState extends State<CategoryEditModal>
                   borderRadius: BorderRadius.circular(14),
                   child: AspectRatio(
                     aspectRatio: 2.6,
-                    child: _photoBgPath!.startsWith('http')
-                        ? Image.network(_photoBgPath!, fit: BoxFit.cover)
-                        : Image.file(File(_photoBgPath!), fit: BoxFit.cover),
+                    child: buildUserImage(
+                      _photoBgPath,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),

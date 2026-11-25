@@ -894,28 +894,118 @@ class _CommonDateTimePickerState extends State<CommonDateTimePicker> {
   }
 }
 
-/// 공통 날짜 단일 선택 모달 바텀시트
+/// 공통 날짜 단일 선택 모달 바텀시트 (중간 단계 없이 연·월·일 인라인 휠 피커 직행)
 Future<DateTime?> showCommonDatePickerModal(
   BuildContext context, {
   required DateTime initialDate,
   DateTime? firstDate,
   DateTime? lastDate,
   String title = '날짜 선택',
-  Color accentColor = const Color(0xFFFF5A5F),
+  Color accentColor = const Color(0xFF3A2E1A),
 }) async {
-  DateTime selected = initialDate;
-
   return showModalBottomSheet<DateTime>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) {
-      return Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    builder: (ctx) => _DirectWheelDatePickerSheet(
+      initialDate: initialDate,
+      firstDate: firstDate ?? DateTime(1950, 1, 1),
+      lastDate: lastDate ?? DateTime(2050, 12, 31),
+      title: title,
+      accentColor: accentColor,
+    ),
+  );
+}
+
+class _DirectWheelDatePickerSheet extends StatefulWidget {
+  const _DirectWheelDatePickerSheet({
+    required this.initialDate,
+    required this.firstDate,
+    required this.lastDate,
+    required this.title,
+    required this.accentColor,
+  });
+
+  final DateTime initialDate;
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final String title;
+  final Color accentColor;
+
+  @override
+  State<_DirectWheelDatePickerSheet> createState() =>
+      _DirectWheelDatePickerSheetState();
+}
+
+class _DirectWheelDatePickerSheetState
+    extends State<_DirectWheelDatePickerSheet> {
+  late int _firstYear;
+  late int _lastYear;
+  late DateTime _selected;
+  late FixedExtentScrollController _yearController;
+  late FixedExtentScrollController _monthController;
+  late FixedExtentScrollController _dayController;
+
+  @override
+  void initState() {
+    super.initState();
+    _firstYear = widget.firstDate.year;
+    _lastYear = widget.lastDate.year;
+    if (widget.initialDate.year < _firstYear) {
+      _firstYear = widget.initialDate.year;
+    }
+    if (widget.initialDate.year > _lastYear) {
+      _lastYear = widget.initialDate.year;
+    }
+    _selected = DateTime(
+      widget.initialDate.year,
+      widget.initialDate.month,
+      widget.initialDate.day,
+    );
+
+    final yearIndex = (_selected.year - _firstYear).clamp(0, _lastYear - _firstYear);
+    final monthIndex = (_selected.month - 1).clamp(0, 11);
+    final maxDay = _daysInMonth(_selected.year, _selected.month);
+    final dayIndex = (_selected.day - 1).clamp(0, maxDay - 1);
+
+    _yearController = FixedExtentScrollController(initialItem: yearIndex);
+    _monthController = FixedExtentScrollController(initialItem: monthIndex);
+    _dayController = FixedExtentScrollController(initialItem: dayIndex);
+  }
+
+  @override
+  void dispose() {
+    _yearController.dispose();
+    _monthController.dispose();
+    _dayController.dispose();
+    super.dispose();
+  }
+
+  int _daysInMonth(int year, int month) => DateTime(year, month + 1, 0).day;
+
+  void _updateDate({int? year, int? month, int? day}) {
+    final newYear = year ?? _selected.year;
+    final newMonth = month ?? _selected.month;
+    final maxDays = _daysInMonth(newYear, newMonth);
+    final newDay = (day ?? _selected.day).clamp(1, maxDays);
+    setState(() {
+      _selected = DateTime(newYear, newMonth, newDay);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalYears = _lastYear - _firstYear + 1;
+    final maxDays = _daysInMonth(_selected.year, _selected.month);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      child: SafeArea(
+        top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -925,47 +1015,162 @@ Future<DateTime?> showCommonDatePickerModal(
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: const Color(0xFFE5E7EB),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  title,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                  widget.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                Text(
+                  '${_selected.year}. ${_selected.month}. ${_selected.day}.',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
+                  ),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx, selected),
-                  child: Text(
+                  onPressed: () => Navigator.pop(context, _selected),
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFE699),
+                    foregroundColor: const Color(0xFF3A2E1A),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
                     '완료',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: accentColor),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            CommonDateTimePicker(
-              initialStartDate: initialDate,
-              hasEndDate: false,
-              isAllDay: true,
-              showAllDayToggle: false,
-              firstDate: firstDate,
-              lastDate: lastDate,
-              accentColor: accentColor,
-              onDateTimeChanged: (start, _, __) {
-                selected = start;
-              },
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: SizedBox(
+                height: 176,
+                child: Stack(
+                  children: [
+                    Center(
+                      child: Container(
+                        height: 36,
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFE699).withValues(alpha: 0.45),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        // [연도] 휠
+                        Expanded(
+                          flex: 3,
+                          child: CupertinoPicker.builder(
+                            scrollController: _yearController,
+                            itemExtent: 36,
+                            selectionOverlay: const SizedBox.shrink(),
+                            childCount: totalYears,
+                            onSelectedItemChanged: (index) {
+                              _updateDate(year: _firstYear + index);
+                            },
+                            itemBuilder: (context, index) {
+                              final yr = _firstYear + index;
+                              return Center(
+                                child: Text(
+                                  '$yr년',
+                                  style: const TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        // [월] 휠
+                        Expanded(
+                          flex: 2,
+                          child: CupertinoPicker.builder(
+                            scrollController: _monthController,
+                            itemExtent: 36,
+                            selectionOverlay: const SizedBox.shrink(),
+                            childCount: 12,
+                            onSelectedItemChanged: (index) {
+                              _updateDate(month: index + 1);
+                            },
+                            itemBuilder: (context, index) {
+                              final m = index + 1;
+                              return Center(
+                                child: Text(
+                                  '$m월',
+                                  style: const TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        // [일] 휠
+                        Expanded(
+                          flex: 2,
+                          child: CupertinoPicker.builder(
+                            scrollController: _dayController,
+                            itemExtent: 36,
+                            selectionOverlay: const SizedBox.shrink(),
+                            childCount: maxDays,
+                            onSelectedItemChanged: (index) {
+                              _updateDate(day: index + 1);
+                            },
+                            itemBuilder: (context, index) {
+                              final d = index + 1;
+                              return Center(
+                                child: Text(
+                                  '$d일',
+                                  style: const TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
           ],
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
 
 /// 공통 날짜 & 시간 선택 모달 바텀시트

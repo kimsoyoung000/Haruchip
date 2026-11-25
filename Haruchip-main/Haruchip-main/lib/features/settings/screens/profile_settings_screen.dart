@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,9 +12,11 @@ import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../calendar/providers/calendar_display_settings_provider.dart';
+import '../../calendar/providers/schedule_room_provider.dart';
 import '../../calendar/widgets/calendar_display_settings_sheet.dart';
 import '../../categories/models/category.dart';
 import '../../categories/providers/category_provider.dart';
+import '../../home/providers/main_tab_provider.dart';
 import '../../home/screens/trash_bin_screen.dart';
 import '../../home/widgets/dashboard_category_filter_sheet.dart';
 import '../../onboarding/providers/calendar_integration_provider.dart';
@@ -27,19 +30,24 @@ import '../../widgets/screens/widget_simulator_screen.dart';
 import 'hidden_categories_screen.dart';
 import 'storage_manager_screen.dart';
 
-/// 올인원 [프로필 & 설정] 화면 (하단 네비게이션 4번째 탭 코어 뷰)
+/// 메인 셸의 4번째 탭 "프로필 & 설정"
 ///
-/// 1. 내 프로필 (아바타 변경, 닉네임 수정, 이메일/제공자 배지, 고유 유저 코드)
-/// 2. 데이터 관리 (휴지통 30일 보관함 연동, 외부 캘린더 동기화 설정, JSON 백업/복원)
-/// 3. 앱 환경설정 (접근 권한 재설정, 대시보드 뷰 모드 설정, 숨김 보관함, 위젯 시뮬레이터)
-/// 4. 계정 및 보안 (로그아웃, 애플 심사 Guideline 5.1.1(v) 즉시 회원 탈퇴)
+/// 단일 수직 계층 구조:
+/// - [구역 1: 최상단] 내 프로필 요약 카드 (소셜 연동 계정, 고유 유저 코드 노출 영구 제거)
+/// - [구역 2: 중간 영역] 6대 도메인 독립 화이트 라운드 카드 그룹
+///   1) 대시보드 (디데이) 설정
+///   2) 칩 캘린더 설정
+///   3) 칩 모임 설정
+///   4) 위젯 설정
+///   5) 화면 & 글꼴 설정
+///   6) 데이터 관리 & 백업
+/// - [구역 3: 최하단] 계정 및 보안 (위험 영역 격리) + 앱 버전/카피라이트
 class ProfileSettingsScreen extends ConsumerStatefulWidget {
   const ProfileSettingsScreen({super.key});
 
-  static const String userUniqueCode = 'HARU-8921-X9';
-
   @override
-  ConsumerState<ProfileSettingsScreen> createState() => _ProfileSettingsScreenState();
+  ConsumerState<ProfileSettingsScreen> createState() =>
+      _ProfileSettingsScreenState();
 }
 
 class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
@@ -47,6 +55,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   String _nickname = '하루칩 여행자';
   String _selectedAvatarEmoji = 'simple_chick';
   bool _isSyncing = false;
+
+  // 모임 공유 캘린더 알림 & 화면 잠금 토글 상태
+  bool _groupSharedAlarmEnabled = true;
+  bool _screenLockEnabled = false;
 
   @override
   void initState() {
@@ -61,18 +73,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     });
   }
 
-  void _copyUserCode() {
-    Clipboard.setData(const ClipboardData(text: ProfileSettingsScreen.userUniqueCode));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✨ 고유 유저 코드가 클립보드에 복사되었습니다! (${ProfileSettingsScreen.userUniqueCode})'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
-  /// 프로필 아이콘/사진 변경 바텀시트 (신규 HaruChipIconPicker 연동)
+  /// 프로필 아이콘/사진 변경 바텀시트 (HaruChipIconPicker 연동)
   Future<void> _openAvatarPicker() async {
     final picked = await showHaruChipIconPicker(
       context,
@@ -84,7 +85,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final label = HaruChipIconRegistry.labelForKey(picked);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('🎉 프로필 아바타가 [$label]로 변경되었습니다.'),
+        content: Text('프로필 아바타가 [$label](으)로 변경되었습니다.'),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 1),
       ),
@@ -97,14 +98,19 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     showDialog<void>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            const Icon(Icons.edit_note_rounded, color: AppColors.primary),
+            const Icon(Icons.edit_note_rounded, color: AppColors.chipYellowText),
             const SizedBox(width: 8),
             Text(
               '프로필 수정',
-              style: AppTypography.heading2.copyWith(fontSize: 18, color: AppColors.protoHeading),
+              style: AppTypography.heading2.copyWith(
+                fontSize: 18,
+                color: AppColors.protoHeading,
+              ),
             ),
           ],
         ),
@@ -114,7 +120,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           children: [
             Text(
               '하루칩에서 사용할 닉네임을 입력해 주세요.',
-              style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.protoSubtitle,
+              ),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -124,15 +132,21 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               decoration: InputDecoration(
                 hintText: '새 닉네임 입력 (최대 12자)',
                 filled: true,
-                fillColor: const Color(0xFFF9FAFB),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                fillColor: AppColors.cleanCanvasBg,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                  borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppColors.chipGoldOutline,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -141,7 +155,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('취소', style: TextStyle(color: AppColors.protoSubtitle)),
+            child: const Text(
+              '취소',
+              style: TextStyle(color: AppColors.protoSubtitle),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -151,18 +168,24 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                 Navigator.pop(dialogCtx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('✨ 닉네임이 "$newName"(으)로 변경되었습니다.'),
+                    content: Text('닉네임이 "$newName"(으)로 변경되었습니다.'),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              backgroundColor: AppColors.chipYellowBg,
+              foregroundColor: AppColors.chipYellowText,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: const Text('저장'),
+            child: const Text(
+              '저장',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
@@ -177,14 +200,14 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     setState(() => _isSyncing = false);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('✅ 구글/네이버 캘린더와 모든 D-Day 및 일정이 성공적으로 동기화되었습니다.'),
+        content: Text('구글/네이버 캘린더와 모든 D-Day 및 일정이 동기화되었습니다.'),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
       ),
     );
   }
 
-  /// 전체 데이터 백업 내보내기 (JSON Export)
+  /// 전체 데이터 백업 내보내기 (JSON Export — 민감한 내부 UID/유저코드 미포함)
   void _exportBackupData() {
     final categories = ref.read(categoryListProvider);
     final plans = ref.read(planListProvider);
@@ -192,7 +215,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final backupMap = <String, dynamic>{
       'appName': 'Haruchip',
       'version': '2.5.0',
-      'userCode': ProfileSettingsScreen.userUniqueCode,
       'exportedAt': DateTime.now().toIso8601String(),
       'categories': categories.map((c) => c.toJson()).toList(),
       'plans': plans.map((p) => p.toJson()).toList(),
@@ -217,19 +239,13 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Text('📦', style: TextStyle(fontSize: 22)),
-                    const SizedBox(width: 8),
-                    Text(
-                      '전체 데이터 백업 내보내기',
-                      style: AppTypography.heading2.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.protoHeading,
-                      ),
-                    ),
-                  ],
+                Text(
+                  '전체 데이터 백업 내보내기',
+                  style: AppTypography.heading2.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.protoHeading,
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded),
@@ -240,7 +256,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             const SizedBox(height: 8),
             Text(
               '카테고리 ${categories.length}개, 일정 및 D-Day ${plans.length}개가 백업 데이터로 추출되었습니다.',
-              style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.protoSubtitle,
+              ),
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -248,14 +266,17 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
+                  color: AppColors.cleanCanvasBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
                 child: SingleChildScrollView(
                   child: SelectableText(
                     jsonStr,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFF374151)),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: Color(0xFF374151),
+                    ),
                   ),
                 ),
               ),
@@ -270,7 +291,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       Navigator.of(ctx).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('📋 백업 JSON 데이터가 클립보드에 복사되었습니다.'),
+                          content: Text('백업 JSON 데이터가 클립보드에 복사되었습니다.'),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
@@ -280,7 +301,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.protoHeading,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                 ),
@@ -291,7 +314,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       Navigator.of(ctx).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('💾 haruchip_backup_latest.json 파일로 안전하게 내보냈습니다.'),
+                          content: Text(
+                            'haruchip_backup_latest.json 파일로 안전하게 내보냈습니다.',
+                          ),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
@@ -299,10 +324,13 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                     icon: const Icon(Icons.download_rounded, size: 18),
                     label: const Text('백업 파일 저장'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF007AFF),
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppColors.chipYellowBg,
+                      foregroundColor: AppColors.chipYellowText,
+                      elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                 ),
@@ -320,16 +348,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     showDialog<void>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Text('📥', style: TextStyle(fontSize: 22)),
-            const SizedBox(width: 8),
-            Text(
-              '백업 데이터 복원하기',
-              style: AppTypography.heading2.copyWith(fontSize: 18, color: AppColors.protoHeading),
-            ),
-          ],
+        title: Text(
+          '백업 데이터 복원하기',
+          style: AppTypography.heading2.copyWith(
+            fontSize: 18,
+            color: AppColors.protoHeading,
+          ),
         ),
         content: SizedBox(
           width: double.maxFinite,
@@ -339,7 +366,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             children: [
               Text(
                 '이전에 복사한 Haruchip 백업 JSON 텍스트를 아래에 붙여넣어 주세요.',
-                style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle),
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.protoSubtitle,
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -347,12 +376,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                 maxLines: 7,
                 decoration: InputDecoration(
                   hintText: '{\n  "appName": "Haruchip",\n  ...\n}',
-                  hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF9CA3AF),
+                  ),
                   filled: true,
-                  fillColor: const Color(0xFFF9FAFB),
+                  fillColor: AppColors.cleanCanvasBg,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    borderSide: BorderSide.none,
                   ),
                 ),
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
@@ -363,21 +395,28 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('취소', style: TextStyle(color: AppColors.protoSubtitle)),
+            child: const Text(
+              '취소',
+              style: TextStyle(color: AppColors.protoSubtitle),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
               final raw = textController.text.trim();
               if (raw.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('⚠️ JSON 데이터를 입력해주세요.'), behavior: SnackBarBehavior.floating),
+                  const SnackBar(
+                    content: Text('JSON 데이터를 입력해주세요.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
                 );
                 return;
               }
 
               try {
                 final dynamic parsed = jsonDecode(raw);
-                if (parsed is! Map<String, dynamic> || parsed['appName'] != 'Haruchip') {
+                if (parsed is! Map<String, dynamic> ||
+                    parsed['appName'] != 'Haruchip') {
                   throw const FormatException('유효하지 않은 Haruchip 백업 포맷입니다.');
                 }
 
@@ -409,14 +448,16 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                 Navigator.of(dialogCtx).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('🎉 백업 복원 완료! 카테고리 $restoredCategoriesCount개, 일정 $restoredPlansCount개가 성공적으로 복원되었습니다.'),
+                    content: Text(
+                      '백업 복원 완료! 카테고리 $restoredCategoriesCount개, 일정 $restoredPlansCount개가 복원되었습니다.',
+                    ),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('❌ 복원 실패: 올바른 JSON 데이터인지 확인해주세요. ($e)'),
+                    content: Text('복원 실패: 올바른 JSON 데이터인지 확인해주세요. ($e)'),
                     backgroundColor: Colors.redAccent,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -424,13 +465,91 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF007AFF),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              backgroundColor: AppColors.chipYellowBg,
+              foregroundColor: AppColors.chipYellowText,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: const Text('데이터 복원 적용'),
+            child: const Text(
+              '데이터 복원 적용',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 약관 / 개인정보 / 연동 계정 안내 모달
+  void _showPolicyInfoSheet(String title, String body) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD1D5DB),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                title,
+                style: AppTypography.heading2.copyWith(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.protoHeading,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                body,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  color: Color(0xFF4B5563),
+                  height: 1.55,
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.chipYellowBg,
+                    foregroundColor: AppColors.chipYellowText,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    '확인',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -440,8 +559,13 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('로그아웃', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          '로그아웃',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         content: const Text('현재 계정에서 로그아웃하시겠습니까?'),
         actions: [
           TextButton(
@@ -451,11 +575,17 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              backgroundColor: AppColors.chipYellowBg,
+              foregroundColor: AppColors.chipYellowText,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('로그아웃'),
+            child: const Text(
+              '로그아웃',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
@@ -465,7 +595,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       await ref.read(authServiceProvider).signOut();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그아웃되었습니다.'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text('로그아웃되었습니다.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const SplashScreen()),
@@ -479,12 +612,21 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: Color(0xFFE11D48)),
             SizedBox(width: 8),
-            Text('회원 탈퇴 (계정 삭제)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFFE11D48))),
+            Text(
+              '회원 탈퇴 (계정 삭제)',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Color(0xFFE11D48),
+              ),
+            ),
           ],
         ),
         content: const Text(
@@ -502,7 +644,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFE11D48),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('즉시 탈퇴'),
           ),
@@ -515,7 +660,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         await ref.read(authServiceProvider).deleteAccount();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('계정이 영구히 삭제되었습니다.'), behavior: SnackBarBehavior.floating),
+          const SnackBar(
+            content: Text('계정이 영구히 삭제되었습니다.'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const SplashScreen()),
@@ -524,33 +672,51 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('탈퇴 처리 중 오류가 발생했습니다: $e'), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text('탈퇴 처리 중 오류가 발생했습니다: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
+  }
+
+  String _resolveProviderLabel(String? providerId) {
+    if (providerId == null || providerId.isEmpty) return '소셜 계정 연동됨';
+    if (providerId.contains('google')) return 'Google 연동됨';
+    if (providerId.contains('apple')) return 'Apple 연동됨';
+    if (providerId.contains('kakao')) return '카카오 연동됨';
+    return '소셜 계정 연동됨';
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
     final userEmail = currentUser?.email ?? 'haruchip_user@gmail.com';
+    final providerId = (currentUser?.providerData.isNotEmpty ?? false)
+        ? currentUser!.providerData.first.providerId
+        : null;
+    final providerBadgeLabel = _resolveProviderLabel(providerId);
+
     final trashItems = ref.watch(trashBinProvider);
     final hiddenCategories = ref.watch(hiddenCategoriesProvider);
     final selectedViewMode = ref.watch(resolvedDashboardViewModeProvider);
     final calendarDisplaySettings = ref.watch(calendarDisplaySettingsProvider);
+    final fontSettings = ref.watch(appFontSettingsProvider);
+    final rooms = ref.watch(scheduleRoomsProvider);
     final calendarSet = ref.watch(calendarIntegrationProvider);
     final isGoogleSync = calendarSet.contains('google');
     final isNaverSync = calendarSet.contains('naver');
 
     return Scaffold(
-      backgroundColor: AppColors.protoBackground,
+      backgroundColor: AppColors.cleanCanvasBg,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 32),
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 36),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 헤더 타이틀
+              // 상단 화면 타이틀
               Text(
                 '프로필 & 설정',
                 style: AppTypography.heading1.copyWith(
@@ -560,383 +726,141 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '계정 정보, 데이터 동기화 및 앱 환경을 한곳에서 관리하세요.',
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.protoSubtitle,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
 
-              // 1. 내 프로필 카드 (슬림화: 아바타 52x52, 패딩 13, 닉네임 15sp)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(13),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.025),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
+              // ===============================================================
+              // [구역 1: 최상단] 내 프로필 요약 카드 (고유 유저 코드 영구 제거)
+              // ===============================================================
+              _buildWhiteGroupCard(
+                padding: const EdgeInsets.all(16),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        // 아바타 (터치 시 이모지 피커)
-                        GestureDetector(
-                          onTap: _openAvatarPicker,
-                          child: Stack(
-                            children: [
-                              Container(
-                                width: 52,
-                                height: 52,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF3F4F6),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFFE5E7EB), width: 1.3),
-                                ),
-                                alignment: Alignment.center,
-                                child: HaruChipIconViewer(
-                                  iconKey: _selectedAvatarEmoji,
-                                  size: 32,
-                                  circular: true,
-                                ),
-                              ),
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(3.5),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF3B82F6),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.camera_alt_rounded, size: 10, color: Colors.white),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // 닉네임 & 계정 정보
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      _nickname,
-                                      style: AppTypography.heading2.copyWith(
-                                        fontSize: 15.5,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.protoHeading,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEFF6FF),
-                                      borderRadius: BorderRadius.circular(5),
-                                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                                    ),
-                                    child: const Text(
-                                      '인증 회원',
-                                      style: TextStyle(
-                                        color: Color(0xFF1D4ED8),
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                userEmail,
-                                style: const TextStyle(
-                                  color: Color(0xFF6B7280),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Wrap(
-                                spacing: 4,
-                                runSpacing: 2,
-                                children: [
-                                  _buildSocialBadge('Google', const Color(0xFFEA4335)),
-                                  _buildSocialBadge('Apple', Colors.black),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        // 프로필 수정 버튼
-                        OutlinedButton(
-                          onPressed: _openEditProfileDialog,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.protoHeading,
-                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                            side: const BorderSide(color: Color(0xFFD1D5DB)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Text('프로필 수정', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 18, color: Color(0xFFF3F4F6)),
-                    // 고유 유저 식별 코드
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              const Icon(Icons.qr_code_rounded, size: 14, color: Color(0xFF6B7280)),
-                              const SizedBox(width: 5),
-                              const Text(
-                                '고유 유저 식별 코드',
-                                style: TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  ProfileSettingsScreen.userUniqueCode,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        InkWell(
-                          onTap: _copyUserCode,
-                          borderRadius: BorderRadius.circular(6),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                            child: Row(
-                              children: [
-                                Icon(Icons.copy_rounded, size: 12, color: Color(0xFF3B82F6)),
-                                SizedBox(width: 2.5),
-                                Text(
-                                  '복사',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF3B82F6)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // 2. 데이터 관리 섹션
-              _buildSectionHeader('데이터 관리'),
-              Material(
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  side: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    // 저장공간 관리 (카카오톡 스타일)
-                    _buildSettingsTile(
-                      icon: Icons.pie_chart_outline_rounded,
-                      iconColor: const Color(0xFF2563EB),
-                      title: '저장공간 관리',
-                      subtitle: '기록 데이터 및 카테고리별 지난 일정을 정리합니다.',
-                      badgeText: '관리하기',
-                      badgeColor: const Color(0xFFEFF6FF),
-                      badgeTextColor: const Color(0xFF2563EB),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const StorageManagerScreen()),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 휴지통 (30일 보관함)
-                    _buildSettingsTile(
-                      icon: Icons.delete_outline_rounded,
-                      iconColor: const Color(0xFFE11D48),
-                      title: '휴지통 (삭제된 D-Day 복구/영구삭제)',
-                      subtitle: '실수로 삭제된 모든 데이터를 30일간 안전하게 보관합니다.',
-                      badgeText: '${trashItems.length}개 보관 중',
-                      badgeColor: const Color(0xFFFEE2E2),
-                      badgeTextColor: const Color(0xFFDC2626),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const TrashBinScreen()),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 외부 캘린더 동기화 설정 (Google / Naver 스위치)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    GestureDetector(
+                      onTap: _openAvatarPicker,
+                      child: Stack(
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEFF6FF),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.sync_alt_rounded, size: 18, color: Color(0xFF3B82F6)),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      '외부 캘린더 동기화 설정',
-                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '디데이 및 일정을 스마트폰 기본 캘린더와 양방향 동기화합니다.',
-                                      style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF9FAFB),
-                              borderRadius: BorderRadius.circular(12),
+                            width: 54,
+                            height: 54,
+                            decoration: const BoxDecoration(
+                              color: AppColors.cleanCanvasBg,
+                              shape: BoxShape.circle,
                             ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Row(
-                                      children: [
-                                        Text('📅', style: TextStyle(fontSize: 14)),
-                                        SizedBox(width: 8),
-                                        Text('Google 캘린더 연동', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
-                                    Switch(
-                                      value: isGoogleSync,
-                                      activeThumbColor: const Color(0xFF3B82F6),
-                                      onChanged: (val) {
-                                        ref.read(calendarIntegrationProvider.notifier).toggle('google');
-                                      },
-                                    ),
-                                  ],
-                                ),
-                                const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Row(
-                                      children: [
-                                        Text('🟢', style: TextStyle(fontSize: 14)),
-                                        SizedBox(width: 8),
-                                        Text('네이버 캘린더 연동', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
-                                    Switch(
-                                      value: isNaverSync,
-                                      activeThumbColor: const Color(0xFF03C75A),
-                                      onChanged: (val) {
-                                        ref.read(calendarIntegrationProvider.notifier).toggle('naver');
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ],
+                            alignment: Alignment.center,
+                            child: HaruChipIconViewer(
+                              iconKey: _selectedAvatarEmoji,
+                              size: 32,
+                              circular: true,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: _isSyncing ? null : _triggerManualSync,
-                              icon: _isSyncing
-                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                                  : const Icon(Icons.refresh_rounded, size: 16),
-                              label: Text(_isSyncing ? '동기화 진행 중...' : '지금 즉시 캘린더 동기화'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF3B82F6),
-                                side: const BorderSide(color: Color(0xFFBFDBFE)),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: AppColors.chipYellowBg,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt_rounded,
+                                size: 11,
+                                color: AppColors.chipYellowText,
                               ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 전체 데이터 백업 내보내기
-                    _buildSettingsTile(
-                      icon: Icons.cloud_upload_outlined,
-                      iconColor: const Color(0xFF0284C7),
-                      title: '전체 데이터 백업 내보내기',
-                      subtitle: '카테고리 및 D-Day 일정을 JSON 파일로 안전하게 백업합니다.',
-                      onTap: _exportBackupData,
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  _nickname,
+                                  style: AppTypography.heading2.copyWith(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.protoHeading,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2.5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.chipYellowBg,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  providerBadgeLabel,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.chipYellowText,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            userEmail,
+                            style: AppTypography.caption.copyWith(
+                              fontSize: 12,
+                              color: AppColors.protoSubtitle,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 백업 데이터 복원하기
-                    _buildSettingsTile(
-                      icon: Icons.cloud_download_outlined,
-                      iconColor: const Color(0xFF10B981),
-                      title: '백업 데이터 복원하기',
-                      subtitle: '저장해둔 JSON 백업 텍스트로 데이터를 즉시 복원합니다.',
-                      onTap: _importBackupData,
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _openEditProfileDialog,
+                      style: TextButton.styleFrom(
+                        backgroundColor: AppColors.cleanCanvasBg,
+                        foregroundColor: AppColors.protoHeading,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 7,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        '프로필 수정',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 22),
 
-              // 3. 앱 환경설정 섹션
-              _buildSectionHeader('앱 환경설정'),
-              Material(
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  side: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                clipBehavior: Clip.antiAlias,
+              // ===============================================================
+              // [구역 2-1] 대시보드 (디데이) 설정
+              // ===============================================================
+              _buildSectionHeader('대시보드 (디데이) 설정'),
+              const SizedBox(height: 8),
+              _buildWhiteGroupCard(
                 child: Column(
                   children: [
-                    // 대시보드 뷰 모드 설정 (타임라인 vs 칩 모아보기)
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -944,15 +868,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                         children: [
                           Row(
                             children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF5F3FF),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.dashboard_customize_outlined, size: 18, color: Color(0xFF8B5CF6)),
+                              _buildLeadingIconBox(
+                                Icons.dashboard_customize_outlined,
+                                AppColors.chipYellowText,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -961,12 +879,19 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                                   children: [
                                     const Text(
                                       '대시보드 뷰 모드 설정',
-                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.protoHeading,
+                                      ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '홈 화면에서 카테고리와 D-Day를 노출하는 기본 레이아웃 스타일',
-                                      style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle, fontSize: 11),
+                                      '홈 화면에서 카테고리와 D-Day를 보여주는 레이아웃',
+                                      style: AppTypography.caption.copyWith(
+                                        color: AppColors.protoSubtitle,
+                                        fontSize: 11,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -977,30 +902,28 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                           Row(
                             children: [
                               Expanded(
-                                child: _buildViewModeButton(
+                                child: _buildSegmentOptionButton(
                                   title: '타임라인 뷰',
                                   subtitle: '세로 스크롤형',
                                   icon: Icons.view_agenda_outlined,
                                   isSelected: selectedViewMode == 'vertical',
-                                  onTap: () {
-                                    ref.read(dashboardViewModeProvider.notifier).select('vertical');
-                                  },
+                                  onTap: () => ref
+                                      .read(dashboardViewModeProvider.notifier)
+                                      .select('vertical'),
                                 ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: _buildViewModeButton(
+                                child: _buildSegmentOptionButton(
                                   title: '칩 모아보기 뷰',
                                   subtitle: '2열 박스형',
                                   icon: Icons.grid_view_rounded,
                                   isSelected: selectedViewMode == 'box' ||
                                       selectedViewMode == 'horizontal' ||
                                       selectedViewMode == 'grid',
-                                  onTap: () {
-                                    ref
-                                        .read(dashboardViewModeProvider.notifier)
-                                        .select('grid');
-                                  },
+                                  onTap: () => ref
+                                      .read(dashboardViewModeProvider.notifier)
+                                      .select('grid'),
                                 ),
                               ),
                             ],
@@ -1008,79 +931,52 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                         ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 카테고리 순서 편집 (메인 대시보드에서 이관)
+                    _buildDivider(),
                     _buildSettingsTile(
                       icon: Icons.sort_rounded,
-                      iconColor: const Color(0xFF8B5CF6),
                       title: '카테고리 순서 편집',
-                      subtitle: '칩 데이 메인 화면에 표시되는 카테고리 카드 순서를 변경합니다.',
+                      subtitle: '칩 데이 메인 화면의 카테고리 카드 순서를 변경합니다.',
                       badgeText: '순서 변경',
-                      badgeColor: const Color(0xFFF5F3FF),
-                      badgeTextColor: const Color(0xFF7C3AED),
                       onTap: () => showCategoryOrderEditSheet(context),
                     ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 글꼴 및 글자 크기 설정 (카테고리 꾸미기에서 앱 전역 환경설정으로 이관)
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final fontSettings = ref.watch(appFontSettingsProvider);
-                        return _buildSettingsTile(
-                          icon: Icons.text_fields_rounded,
-                          iconColor: AppColors.chipYellowText,
-                          title: '글꼴 및 글자 크기 설정',
-                          subtitle:
-                              '${fontSettings.fontFamily.labelKo} · 글자 크기 ${fontSettings.fontSize.labelKo}',
-                          badgeText: '전역 폰트',
-                          badgeColor: AppColors.chipYellowBg,
-                          badgeTextColor: AppColors.chipYellowText,
-                          onTap: () => showAppFontSettingsSheet(context),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.visibility_off_outlined,
+                      title: '대시보드 숨김 카드 보관함',
+                      subtitle: '숨겨둔 카테고리 카드를 언제든 다시 복구할 수 있습니다.',
+                      badgeText: '${hiddenCategories.length}개',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const HiddenCategoriesScreen(),
+                          ),
                         );
                       },
                     ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
 
-                    // 칩 캘린더 표시 설정 (글꼴 크기, 굵기, 라벨 형식)
-                    _buildSettingsTile(
-                      icon: Icons.calendar_view_month_rounded,
-                      iconColor: const Color(0xFFD99B26),
-                      title: '캘린더 표시 설정',
-                      subtitle:
-                          '글꼴 ${calendarDisplaySettings.fontSize.labelKo} · 굵기 ${calendarDisplaySettings.fontWeight.labelKo}',
-                      badgeText: '맞춤 설정',
-                      badgeColor: const Color(0xFFFFF3D6),
-                      badgeTextColor: const Color(0xFF785112),
-                      onTap: () => showCalendarDisplaySettingsSheet(
-                        context,
-                        isOnboarding: false,
-                      ),
-                    ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 캘린더 주 시작 요일 설정 (일요일부터 시작 / 월요일부터 시작)
+              // ===============================================================
+              // [구역 2-2] 칩 캘린더 설정
+              // ===============================================================
+              _buildSectionHeader('칩 캘린더 설정'),
+              const SizedBox(height: 8),
+              _buildWhiteGroupCard(
+                child: Column(
+                  children: [
+                    // 캘린더 시작 요일 (일요일 / 월요일)
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF3F4F6),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.date_range_rounded,
-                                  size: 18,
-                                  color: Color(0xFF374151),
-                                ),
+                              _buildLeadingIconBox(
+                                Icons.date_range_rounded,
+                                AppColors.chipYellowText,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -1091,15 +987,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                                       '캘린더 시작 요일',
                                       style: TextStyle(
                                         fontSize: 14,
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight: FontWeight.w700,
                                         color: AppColors.protoHeading,
                                       ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
                                       calendarDisplaySettings.startOnMonday
-                                          ? '현재: 월요일부터 시작'
-                                          : '현재: 일요일부터 시작',
+                                          ? '월요일부터 시작 (월~일)'
+                                          : '일요일부터 시작 (일~토)',
                                       style: AppTypography.caption.copyWith(
                                         color: AppColors.protoSubtitle,
                                         fontSize: 11,
@@ -1114,34 +1010,28 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                           Row(
                             children: [
                               Expanded(
-                                child: _buildViewModeButton(
+                                child: _buildSegmentOptionButton(
                                   title: '일요일부터 시작',
                                   subtitle: '일 · 월 · 화 · 수 · 목 · 금 · 토',
-                                  icon: Icons.wb_sunny_outlined,
                                   isSelected:
                                       !calendarDisplaySettings.startOnMonday,
-                                  onTap: () {
-                                    ref
-                                        .read(calendarDisplaySettingsProvider
-                                            .notifier)
-                                        .setStartOnMonday(false);
-                                  },
+                                  onTap: () => ref
+                                      .read(calendarDisplaySettingsProvider
+                                          .notifier)
+                                      .setStartOnMonday(false),
                                 ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: _buildViewModeButton(
+                                child: _buildSegmentOptionButton(
                                   title: '월요일부터 시작',
                                   subtitle: '월 · 화 · 수 · 목 · 금 · 토 · 일',
-                                  icon: Icons.work_outline_rounded,
                                   isSelected:
                                       calendarDisplaySettings.startOnMonday,
-                                  onTap: () {
-                                    ref
-                                        .read(calendarDisplaySettingsProvider
-                                            .notifier)
-                                        .setStartOnMonday(true);
-                                  },
+                                  onTap: () => ref
+                                      .read(calendarDisplaySettingsProvider
+                                          .notifier)
+                                      .setStartOnMonday(true),
                                 ),
                               ),
                             ],
@@ -1149,128 +1039,401 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                         ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 권한 재설정 바로가기
+                    _buildDivider(),
                     _buildSettingsTile(
-                      icon: Icons.security_rounded,
-                      iconColor: const Color(0xFF3B82F6),
-                      title: '앱 접근 권한 재설정',
-                      subtitle: '알림, 사진, 카메라, 캘린더, 간편 정산 등 접근 권한 관리',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const AppPermissionScreen(isSettingsMode: true),
+                      icon: Icons.calendar_view_month_rounded,
+                      title: '캘린더 표시 설정',
+                      subtitle:
+                          '글꼴 ${calendarDisplaySettings.fontSize.labelKo} · 굵기 ${calendarDisplaySettings.fontWeight.labelKo}',
+                      badgeText: '맞춤 설정',
+                      onTap: () => showCalendarDisplaySettingsSheet(
+                        context,
+                        isOnboarding: false,
+                      ),
+                    ),
+                    _buildDivider(),
+                    // 외부 캘린더 동기화 (Google / Naver)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              _buildLeadingIconBox(
+                                Icons.sync_rounded,
+                                AppColors.chipYellowText,
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  '외부 캘린더 동기화 설정',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.protoHeading,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed:
+                                    _isSyncing ? null : _triggerManualSync,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.chipYellowText,
+                                  backgroundColor: AppColors.chipYellowBg,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: Text(
+                                  _isSyncing ? '동기화 중...' : '지금 동기화',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 대시보드 숨김 카드 보관함
-                    _buildSettingsTile(
-                      icon: Icons.visibility_off_outlined,
-                      iconColor: const Color(0xFFF59E0B),
-                      title: '대시보드 숨김 카드 보관함',
-                      subtitle: '홈에서 숨긴 카테고리를 확인하고 원터치로 복구합니다.',
-                      badgeText: '${hiddenCategories.length}개 보관',
-                      badgeColor: const Color(0xFFFEF3C7),
-                      badgeTextColor: const Color(0xFFD97706),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const HiddenCategoriesScreen()),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 모바일 위젯 시뮬레이터
-                    _buildSettingsTile(
-                      icon: Icons.widgets_outlined,
-                      iconColor: const Color(0xFF8B5CF6),
-                      title: '모바일 홈/잠금화면 위젯 시뮬레이터',
-                      subtitle: '잠금화면 미니, 2x2 감성, 4x2 스마트 캘린더 위젯 미리보기',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const WidgetSimulatorScreen()),
-                        );
-                      },
+                          const SizedBox(height: 8),
+                          _buildToggleRow(
+                            title: 'Google 캘린더 연동',
+                            subtitle: '하루칩 일정을 구글 캘린더와 동기화합니다.',
+                            value: isGoogleSync,
+                            onChanged: (_) => ref
+                                .read(calendarIntegrationProvider.notifier)
+                                .toggle('google'),
+                          ),
+                          _buildToggleRow(
+                            title: '네이버 캘린더 연동',
+                            subtitle: '하루칩 일정을 네이버 캘린더와 동기화합니다.',
+                            value: isNaverSync,
+                            onChanged: (_) => ref
+                                .read(calendarIntegrationProvider.notifier)
+                                .toggle('naver'),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // 4. 계정 및 보안 (애플 심사 필수 준수)
-              _buildSectionHeader('계정 및 보안'),
-              Material(
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  side: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                clipBehavior: Clip.antiAlias,
+              // ===============================================================
+              // [구역 2-3] 칩 모임 설정
+              // ===============================================================
+              _buildSectionHeader('칩 모임 설정'),
+              const SizedBox(height: 8),
+              _buildWhiteGroupCard(
                 child: Column(
                   children: [
-                    // 로그아웃
-                    ListTile(
-                      leading: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.logout_rounded, size: 18, color: Color(0xFF4B5563)),
+                    _buildSettingsTile(
+                      icon: Icons.groups_rounded,
+                      title: '참여 중인 모임 목록 바로가기',
+                      subtitle: '현재 참여 중인 모임 방과 정산 내역을 확인합니다.',
+                      badgeText: '${rooms.length}개 모임',
+                      onTap: () {
+                        ref.read(mainTabIndexProvider.notifier).select(2);
+                      },
+                    ),
+                    _buildDivider(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
                       ),
-                      title: const Text(
-                        '로그아웃',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF374151)),
+                      child: Row(
+                        children: [
+                          _buildLeadingIconBox(
+                            Icons.notifications_active_outlined,
+                            AppColors.chipYellowText,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '공유 캘린더 알림 설정',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.protoHeading,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '모임 일정 확정·공지·투표 업데이트 푸시 알림',
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.protoSubtitle,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: _groupSharedAlarmEnabled,
+                            activeTrackColor: AppColors.chipGoldOutline,
+                            onChanged: (v) =>
+                                setState(() => _groupSharedAlarmEnabled = v),
+                          ),
+                        ],
                       ),
-                      subtitle: const Text('현재 기기에서 계정 연결을 해제합니다.', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
-                      trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF9CA3AF)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ===============================================================
+              // [구역 2-4] 위젯 설정
+              // ===============================================================
+              _buildSectionHeader('위젯 설정'),
+              const SizedBox(height: 8),
+              _buildWhiteGroupCard(
+                child: _buildSettingsTile(
+                  icon: Icons.widgets_outlined,
+                  title: '모바일 홈/잠금화면 위젯 시뮬레이터',
+                  subtitle: '2x2 감성 위젯 · 4x2 스마트 캘린더 미리보기',
+                  badgeText: '미리보기',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const WidgetSimulatorScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ===============================================================
+              // [구역 2-5] 화면 & 글꼴 설정
+              // ===============================================================
+              _buildSectionHeader('화면 & 글꼴 설정'),
+              const SizedBox(height: 8),
+              _buildWhiteGroupCard(
+                child: _buildSettingsTile(
+                  icon: Icons.text_fields_rounded,
+                  title: '글꼴 및 글자 크기 설정',
+                  subtitle:
+                      '${fontSettings.fontFamily.labelKo} · 글자 크기 ${fontSettings.fontSize.labelKo}',
+                  badgeText: '전역 폰트',
+                  onTap: () => showAppFontSettingsSheet(context),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ===============================================================
+              // [구역 2-6] 데이터 관리 & 백업
+              // ===============================================================
+              _buildSectionHeader('데이터 관리 & 백업'),
+              const SizedBox(height: 8),
+              _buildWhiteGroupCard(
+                child: Column(
+                  children: [
+                    _buildSettingsTile(
+                      icon: Icons.cleaning_services_outlined,
+                      title: '저장공간 관리',
+                      subtitle: '카테고리별 지난 일정 정리 및 캐시 관리',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const StorageManagerScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.delete_outline_rounded,
+                      title: '휴지통 (삭제된 D-Day 복구/영구삭제)',
+                      subtitle: '삭제 후 30일 이내 일정을 언제든 복구할 수 있습니다.',
+                      badgeText: '${trashItems.length}개 보관 중',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const TrashBinScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.file_upload_outlined,
+                      title: '전체 데이터 백업 내보내기',
+                      subtitle: '카테고리와 D-Day 데이터를 JSON으로 내보냅니다.',
+                      onTap: _exportBackupData,
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.file_download_outlined,
+                      title: '백업 데이터 복원하기',
+                      subtitle: '저장해둔 JSON 백업 데이터를 불러와 복원합니다.',
+                      onTap: _importBackupData,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ===============================================================
+              // [구역 3: 최하단] 계정 및 보안 (위험 영역 격리)
+              // ===============================================================
+              _buildSectionHeader('계정 및 보안'),
+              const SizedBox(height: 8),
+              _buildWhiteGroupCard(
+                child: Column(
+                  children: [
+                    _buildSettingsTile(
+                      icon: Icons.shield_outlined,
+                      title: '앱 접근 권한 재설정',
+                      subtitle: '알림, 사진, 카메라 등 기기 접근 권한을 관리합니다.',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AppPermissionScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildDivider(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          _buildLeadingIconBox(
+                            Icons.lock_outline_rounded,
+                            AppColors.chipYellowText,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '화면 잠금 설정',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.protoHeading,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '생체인증 / PIN으로 내 하루칩 기록 보호',
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.protoSubtitle,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: _screenLockEnabled,
+                            activeTrackColor: AppColors.chipGoldOutline,
+                            onChanged: (v) {
+                              setState(() => _screenLockEnabled = v);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    v
+                                        ? '화면 잠금(생체인증/PIN)이 활성화되었습니다.'
+                                        : '화면 잠금이 해제되었습니다.',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: const Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.manage_accounts_outlined,
+                      title: '연동된 계정 관리',
+                      subtitle: '$providerBadgeLabel ($userEmail)',
+                      onTap: () => _showPolicyInfoSheet(
+                        '연동된 계정 관리',
+                        '현재 계정: $userEmail\n연동 상태: $providerBadgeLabel\n\n하루칩은 소셜 로그인 인증 토큰을 안전하게 암호화하여 관리하며, 내부 UID는 백엔드 인가 용도로만 격리 사용됩니다.',
+                      ),
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.description_outlined,
+                      title: '서비스 이용약관',
+                      subtitle: '하루칩 서비스 이용 규정 안내',
+                      onTap: () => _showPolicyInfoSheet(
+                        '서비스 이용약관',
+                        '하루칩(HaruChip)은 사용자의 D-Day, 일정 및 모임 조율 데이터를 안전하게 보관하며, 동의 없이 제3자에게 제공하지 않습니다.',
+                      ),
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.privacy_tip_outlined,
+                      title: '개인정보 처리방침',
+                      subtitle: '개인정보 수집·보관 및 파기 정책',
+                      onTap: () => _showPolicyInfoSheet(
+                        '개인정보 처리방침',
+                        '수집 항목: 이메일, 닉네임, 사용자가 직접 등록한 일정 및 카테고리 데이터.\n회원 탈퇴 시 모든 개인 데이터는 관련 법령에 따라 지체 없이 파기됩니다.',
+                      ),
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.logout_rounded,
+                      title: '로그아웃',
+                      subtitle: '현재 기기에서 계정 연결을 해제합니다.',
                       onTap: _handleSignOut,
                     ),
-                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-
-                    // 회원 탈퇴 (계정 삭제) - 애플 가이드라인 5.1.1(v) 필수 준수
-                    ListTile(
-                      leading: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEE2E2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.person_remove_rounded, size: 18, color: Color(0xFFE11D48)),
-                      ),
-                      title: const Text(
-                        '회원 탈퇴 (계정 영구 삭제)',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFE11D48)),
-                      ),
-                      subtitle: const Text('모든 D-Day 및 개인 데이터가 즉시 파기되며 복구 불가합니다.', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
-                      trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF9CA3AF)),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.person_remove_outlined,
+                      iconColor: const Color(0xFFE11D48),
+                      iconBgColor: const Color(0xFFFFF1F2),
+                      title: '회원 탈퇴 (계정 영구 삭제)',
+                      titleColor: const Color(0xFFE11D48),
+                      subtitle: '모든 기록과 계정이 즉시 삭제되며 복구할 수 없습니다.',
                       onTap: _handleDeleteAccount,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 30),
 
-              // 앱 버전 푸터
-              Center(
+              const SizedBox(height: 24),
+              // 최하단 앱 버전 & 미니멀 카피라이트
+              const Center(
                 child: Column(
                   children: [
                     Text(
-                      'HaruChip v2.5.0 (Build 2026.11)',
-                      style: AppTypography.caption.copyWith(color: const Color(0xFF9CA3AF), fontSize: 11),
+                      'HaruChip v2.5.0',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF9CA3AF),
+                      ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 3),
                     Text(
-                      '소중한 당신의 모든 순간을 안전하게 지킵니다 💛',
-                      style: AppTypography.caption.copyWith(color: const Color(0xFF9CA3AF), fontSize: 11),
+                      '© 2026 HaruChip. All rights reserved.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFFB0B7C3),
+                      ),
                     ),
                   ],
                 ),
@@ -1284,12 +1447,12 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      padding: const EdgeInsets.only(left: 4),
       child: Text(
         title,
         style: const TextStyle(
           fontSize: 13,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
           color: Color(0xFF6B7280),
           letterSpacing: -0.2,
         ),
@@ -1297,110 +1460,74 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     );
   }
 
-  Widget _buildSettingsTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    String? badgeText,
-    Color? badgeColor,
-    Color? badgeTextColor,
+  /// 무테두리 순백 라운드 카드 그룹 (BorderRadius 18 + 미세 그림자)
+  Widget _buildWhiteGroupCard({
+    required Widget child,
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
   }) {
-    return ListTile(
-      dense: true,
-      visualDensity: const VisualDensity(vertical: -1.5),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-      leading: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Icon(icon, size: 16, color: iconColor),
-      ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
-              overflow: TextOverflow.ellipsis,
-            ),
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-          if (badgeText != null) ...[
-            const SizedBox(width: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-              decoration: BoxDecoration(
-                color: badgeColor ?? const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Text(
-                badgeText,
-                style: TextStyle(
-                  color: badgeTextColor ?? const Color(0xFF1D4ED8),
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
         ],
       ),
-      subtitle: Text(
-        subtitle,
-        style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle, fontSize: 10.5),
-      ),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF9CA3AF)),
-      onTap: onTap,
+      child: child,
     );
   }
 
-  Widget _buildSocialBadge(String label, Color color) {
+  Widget _buildDivider() {
+    return const Divider(
+      height: 1,
+      indent: 60,
+      endIndent: 16,
+      color: Color(0xFFF3F4F6),
+    );
+  }
+
+  Widget _buildLeadingIconBox(
+    IconData icon,
+    Color iconColor, {
+    Color bgColor = const Color(0xFFFFF8E1),
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      width: 34,
+      height: 34,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(4),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
-        '$label 연동',
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
-      ),
+      alignment: Alignment.center,
+      child: Icon(icon, size: 18, color: iconColor),
     );
   }
 
-  Widget _buildViewModeButton({
-    required String title,
-    required String subtitle,
+  Widget _buildSettingsTile({
     required IconData icon,
-    required bool isSelected,
+    Color iconColor = AppColors.chipYellowText,
+    Color iconBgColor = const Color(0xFFFFF8E1),
+    required String title,
+    Color titleColor = AppColors.protoHeading,
+    required String subtitle,
+    String? badgeText,
     required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFE5E7EB),
-            width: isSelected ? 1.8 : 1,
-          ),
-        ),
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         child: Row(
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFF6B7280),
-            ),
-            const SizedBox(width: 8),
+            _buildLeadingIconBox(icon, iconColor, bgColor: iconBgColor),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1408,23 +1535,153 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? const Color(0xFF1D4ED8) : AppColors.protoHeading,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: titleColor,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFF9CA3AF),
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.protoSubtitle,
+                      fontSize: 11.5,
                     ),
                   ),
                 ],
               ),
             ),
-            if (isSelected)
-              const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF3B82F6)),
+            if (badgeText != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.chipYellowBg,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  badgeText,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.chipYellowText,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: Color(0xFFD1D5DB),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleRow({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          const SizedBox(width: 46),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.protoHeading,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.protoSubtitle,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            activeTrackColor: AppColors.chipGoldOutline,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSegmentOptionButton({
+    required String title,
+    required String subtitle,
+    IconData? icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.chipYellowBg : AppColors.cleanCanvasBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.chipGoldOutline : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected
+                    ? AppColors.chipYellowText
+                    : AppColors.protoSubtitle,
+              ),
+              const SizedBox(height: 4),
+            ],
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected
+                    ? AppColors.chipYellowText
+                    : AppColors.protoHeading,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                color: isSelected
+                    ? AppColors.chipYellowText.withValues(alpha: 0.78)
+                    : AppColors.protoSubtitle,
+              ),
+            ),
           ],
         ),
       ),

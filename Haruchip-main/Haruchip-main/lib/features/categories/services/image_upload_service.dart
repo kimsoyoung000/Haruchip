@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -37,7 +38,12 @@ class ImageUploadService {
 
     final fileName = '${DateTime.now().microsecondsSinceEpoch}_${picked.name}';
     final ref = FirebaseStorage.instance.ref('users/$uid/uploads/$folder/$fileName');
-    await ref.putFile(File(picked.path));
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      await ref.putData(bytes);
+    } else {
+      await ref.putFile(File(picked.path));
+    }
     return ref.getDownloadURL();
   }
 }

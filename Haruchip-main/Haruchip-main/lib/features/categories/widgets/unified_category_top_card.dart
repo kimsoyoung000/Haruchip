@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../../core/utils/safe_image_widget.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../models/category_skin_theme.dart';
@@ -139,20 +140,26 @@ class UnifiedCategoryTopCard extends StatelessWidget {
                       border: Border.all(color: bColor, width: 1.3),
                       color: Colors.white,
                     ),
-                    child: photoUrl != null && photoUrl!.isNotEmpty
-                        ? CircleAvatar(
+                    child: Builder(
+                      builder: (context) {
+                        final avatarProvider = resolveSafeImageProvider(photoUrl);
+                        if (avatarProvider != null) {
+                          return CircleAvatar(
                             radius: 21,
-                            backgroundImage: NetworkImage(photoUrl!),
-                          )
-                        : CircleAvatar(
-                            radius: 21,
-                            backgroundColor: Colors.white,
-                            child: HaruChipIconViewer(
-                              iconKey: _resolvedFallbackEmoji,
-                              size: 24,
-                              circular: true,
-                            ),
+                            backgroundImage: avatarProvider,
+                          );
+                        }
+                        return CircleAvatar(
+                          radius: 21,
+                          backgroundColor: Colors.white,
+                          child: HaruChipIconViewer(
+                            iconKey: _resolvedFallbackEmoji,
+                            size: 24,
+                            circular: true,
                           ),
+                        );
+                      },
+                    ),
                   ),
                   if (onEditAvatar != null)
                     Positioned(

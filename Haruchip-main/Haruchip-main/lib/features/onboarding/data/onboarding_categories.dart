@@ -21,12 +21,6 @@ const List<OnboardingCategory> kOnboardingCategories = [
     emoji: '❤️',
   ),
   OnboardingCategory(
-    key: 'solo',
-    labelKo: '솔로',
-    group: CategoryGroup.emotional,
-    emoji: '🌟',
-  ),
-  OnboardingCategory(
     key: 'fandom',
     labelKo: '덕질',
     group: CategoryGroup.emotional,
@@ -55,12 +49,6 @@ const List<OnboardingCategory> kOnboardingCategories = [
     labelKo: '결혼 준비',
     group: CategoryGroup.emotional,
     emoji: '💍',
-  ),
-  OnboardingCategory(
-    key: 'meeting',
-    labelKo: '모임',
-    group: CategoryGroup.practical,
-    emoji: '👥',
   ),
   OnboardingCategory(
     key: 'birthday',

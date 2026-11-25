@@ -416,7 +416,10 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final categoriesState = ref.watch(categoryListProvider);
+    final categoriesState = ref
+        .watch(categoryListProvider)
+        .where((c) => !kRemovedDdayCategoryKeys.contains(c.categoryKey))
+        .toList();
     final List<EventCategoryOption> categories = categoriesState.isNotEmpty
         ? categoriesState
             .map((c) => (
@@ -430,9 +433,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
         : const [
             (key: 'plan', name: '내 일정', emoji: '📝', color: Color(0xFF60A5FA), id: 'plan'),
             (key: 'couple', name: '커플', emoji: '❤️', color: Color(0xFFFF8DA1), id: 'couple'),
-            (key: 'solo', name: '솔로', emoji: '🌟', color: Color(0xFFC084FC), id: 'solo'),
             (key: 'fandom', name: '덕질', emoji: '⭐', color: Color(0xFFFBBF24), id: 'fandom'),
-            (key: 'group', name: '모임', emoji: '👥', color: Color(0xFF34D399), id: 'group'),
             (key: 'exam', name: '시험', emoji: '📚', color: Color(0xFF818CF8), id: 'exam'),
             (key: 'birthday', name: '생일', emoji: '🎂', color: Color(0xFFF472B6), id: 'birthday'),
             (key: 'baby', name: '아기', emoji: '👶', color: Color(0xFFFDE047), id: 'baby'),
