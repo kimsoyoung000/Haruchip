@@ -32,16 +32,16 @@ class BabyProfileCardWidget extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: AppColors.protoCardBg,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.protoCardSelectedBg, width: 2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.protoCardSelectedBg, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -50,9 +50,9 @@ class BabyProfileCardWidget extends StatelessWidget {
         children: [
           Row(
             children: [
-              // 원형 프로필 액자 (인생 컷 컴포넌트)
+              // 원형 프로필 액자 (약 15% 축소: radius 24)
               Container(
-                padding: const EdgeInsets.all(3),
+                padding: const EdgeInsets.all(2.5),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(
@@ -60,24 +60,24 @@ class BabyProfileCardWidget extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFFF9A9E).withValues(alpha: 0.4),
-                      blurRadius: 8,
+                      color: const Color(0xFFFF9A9E).withValues(alpha: 0.35),
+                      blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
                 child: photoUrl != null
                     ? CircleAvatar(
-                        radius: 28,
+                        radius: 24,
                         backgroundImage: NetworkImage(photoUrl!),
                       )
                     : const CircleAvatar(
-                        radius: 28,
+                        radius: 24,
                         backgroundColor: AppColors.protoCardBg,
-                        child: Text('👶', style: TextStyle(fontSize: 26)),
+                        child: Text('👶', style: TextStyle(fontSize: 22)),
                       ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,14 +86,14 @@ class BabyProfileCardWidget extends StatelessWidget {
                       babyName,
                       style: AppTypography.heading2.copyWith(
                         color: AppColors.protoHeading,
-                        fontSize: 17,
+                        fontSize: 15.5,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
 
                     // N일째 (X개월 Y일째) 자동 변환 표시
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                       decoration: BoxDecoration(
                         color: AppColors.protoCardSelectedBg,
                         borderRadius: BorderRadius.circular(999),
@@ -103,7 +103,7 @@ class BabyProfileCardWidget extends StatelessWidget {
                         style: AppTypography.caption.copyWith(
                           color: AppColors.protoCardSelectedText,
                           fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                          fontSize: 11,
                         ),
                       ),
                     ),
@@ -114,32 +114,32 @@ class BabyProfileCardWidget extends StatelessWidget {
           ),
 
           // 100일, 돌(365일) 주요 성장 마일스톤 카드
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
               color: AppColors.protoCoupleBg,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Text('🎉', style: TextStyle(fontSize: 16)),
-                    const SizedBox(width: 6),
+                    const Text('🎉', style: TextStyle(fontSize: 14)),
+                    const SizedBox(width: 5),
                     Text(
                       '성장 마일스톤: ${upcomingMilestone.label}',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.protoCoupleTextStrong,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        fontSize: 11.5,
                       ),
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
                         color: AppColors.protoCoupleTextStrong,
                         borderRadius: BorderRadius.circular(999),
@@ -151,19 +151,19 @@ class BabyProfileCardWidget extends StatelessWidget {
                         style: AppTypography.caption.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 10,
+                          fontSize: 9.5,
                         ),
                       ),
                     ),
                   ],
                 ),
                 if (upcomingMilestone.checklist.isNotEmpty) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     '준비물: ${upcomingMilestone.checklist.join(', ')}',
                     style: AppTypography.caption.copyWith(
                       color: AppColors.protoCoupleTextStrong.withValues(alpha: 0.8),
-                      fontSize: 11,
+                      fontSize: 10.5,
                     ),
                   ),
                 ],

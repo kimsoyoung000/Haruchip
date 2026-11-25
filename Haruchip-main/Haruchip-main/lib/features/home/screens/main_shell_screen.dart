@@ -3,10 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../../calendar/providers/calendar_display_settings_provider.dart';
 import '../../calendar/screens/calendar_screen.dart';
 import '../../calendar/screens/schedule_room_list_screen.dart';
+import '../../calendar/widgets/calendar_display_settings_sheet.dart';
 import '../../settings/screens/profile_settings_screen.dart';
+import '../providers/dashboard_filter_provider.dart';
 import '../providers/main_tab_provider.dart';
+import '../widgets/dashboard_category_filter_sheet.dart';
 import '../widgets/notification_center_modal.dart';
 import 'dashboard_screen.dart';
 
@@ -49,9 +53,17 @@ class MainShellScreen extends ConsumerWidget {
             constraints: const BoxConstraints(maxWidth: 480),
             child: Column(
               children: [
-                _TopAppBar(
-                  onNotificationTap: () => showNotificationCenterModal(context),
-                ),
+                // 알림 센터(종 아이콘) + 카테고리 필터 아이콘은 1번째 탭인 [칩 데이(메인 대시보드)]에만 단독 노출
+                if (tabIndex == 0)
+                  _TopAppBar(
+                    hasActiveFilter: ref
+                        .watch(dashboardCategoryFilterProvider)
+                        .isNotEmpty,
+                    onFilterTap: () =>
+                        showDashboardCategoryFilterSheet(context),
+                    onNotificationTap: () =>
+                        showNotificationCenterModal(context),
+                  ),
                 Expanded(
                   child: IndexedStack(
                     index: tabIndex,
@@ -71,8 +83,22 @@ class MainShellScreen extends ConsumerWidget {
       bottomNavigationBar: _BottomNavBar(
         selectedIndex: tabIndex,
         tabs: _tabs,
-        onSelect: (index) =>
-            ref.read(mainTabIndexProvider.notifier).select(index),
+        onSelect: (index) {
+          ref.read(mainTabIndexProvider.notifier).select(index);
+          if (index == 1) {
+            final calSettings = ref.read(calendarDisplaySettingsProvider);
+            if (!calSettings.hasSeenOnboarding) {
+              ref
+                  .read(calendarDisplaySettingsProvider.notifier)
+                  .markOnboardingSeen();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) {
+                  showCalendarDisplaySettingsSheet(context, isOnboarding: true);
+                }
+              });
+            }
+          }
+        },
       ),
     );
   }
@@ -92,21 +118,63 @@ class _TabSpec {
 
 class _TopAppBar extends StatelessWidget {
   const _TopAppBar({
+    required this.hasActiveFilter,
+    required this.onFilterTap,
     required this.onNotificationTap,
   });
 
+  final bool hasActiveFilter;
+  final VoidCallback onFilterTap;
   final VoidCallback onNotificationTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 4),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
       decoration: const BoxDecoration(
-        color: AppColors.protoCardBg,
+        color: AppColors.protoBackground,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          // 카테고리 필터 아이콘 (칩 캘린더와 동일한 에셋)
+          InkWell(
+            key: const Key('dashboard_category_filter_button'),
+            onTap: onFilterTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 19,
+                    color: Color(0xFF1F2937),
+                  ),
+                  if (hasActiveFilter)
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF4B63),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           _IconButtonBadge(
             icon: Icons.notifications_rounded,
             onTap: onNotificationTap,

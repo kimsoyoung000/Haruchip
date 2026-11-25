@@ -315,57 +315,63 @@ class _WeddingBudgetSectionWidgetState extends ConsumerState<WeddingBudgetSectio
           // 상단: 카테고리 태그 + 진행상황 뱃지 + 부담자 뱃지 + 편집/삭제
           Row(
             children: [
-              // 카테고리
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '${item.category.emoji} ${item.category.labelKo}',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    // 카테고리
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${item.category.emoji} ${item.category.labelKo}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                      ),
+                    ),
+
+                    // 진행 상황 뱃지 (미정 / 예약완료 / 완납)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: item.status.bgColor,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: item.status.color.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        item.status.label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: item.status.color,
+                        ),
+                      ),
+                    ),
+
+                    // 부담자 뱃지
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: item.payer.bgColor,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        item.payer.label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: item.payer.color,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 6),
-
-              // 진행 상황 뱃지 (미정 / 예약완료 / 완납)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: item.status.bgColor,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: item.status.color.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  item.status.label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: item.status.color,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-
-              // 부담자 뱃지
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: item.payer.bgColor,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  item.payer.label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: item.payer.color,
-                  ),
-                ),
-              ),
-
-              const Spacer(),
+              const SizedBox(width: 4),
 
               // 편집(연필) 아이콘
               IconButton(
@@ -399,16 +405,20 @@ class _WeddingBudgetSectionWidgetState extends ConsumerState<WeddingBudgetSectio
               border: Border.all(color: const Color(0xFFEDF2F7)),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildAmountColumn('예상 예산', item.estimatedBudget, const Color(0xFF64748B)),
-                _buildAmountColumn('계약금', item.deposit, const Color(0xFF2563EB)),
-                _buildAmountColumn('남은 잔금', item.remainingBalance, const Color(0xFFE53E3E)),
-                _buildAmountColumn(
-                  '실제 합계',
-                  item.totalActualCost,
-                  const Color(0xFF0F172A),
-                  isBold: true,
+                Expanded(child: _buildAmountColumn('예상 예산', item.estimatedBudget, const Color(0xFF64748B))),
+                const SizedBox(width: 4),
+                Expanded(child: _buildAmountColumn('계약금', item.deposit, const Color(0xFF2563EB))),
+                const SizedBox(width: 4),
+                Expanded(child: _buildAmountColumn('남은 잔금', item.remainingBalance, const Color(0xFFE53E3E))),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _buildAmountColumn(
+                    '실제 합계',
+                    item.totalActualCost,
+                    const Color(0xFF0F172A),
+                    isBold: true,
+                  ),
                 ),
               ],
             ),
@@ -441,15 +451,21 @@ class _WeddingBudgetSectionWidgetState extends ConsumerState<WeddingBudgetSectio
       children: [
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 2),
-        Text(
-          _formatWon(amount),
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: isBold ? FontWeight.w800 : FontWeight.w700,
-            color: color,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _formatWon(amount),
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w700,
+              color: color,
+            ),
           ),
         ),
       ],
@@ -463,23 +479,24 @@ class _WeddingBudgetSectionWidgetState extends ConsumerState<WeddingBudgetSectio
     required Color bg,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
+        runSpacing: 2,
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: color),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
           ),
-          const SizedBox(width: 5),
           Text(
             _formatWon(amount),
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color),
+            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: color),
           ),
         ],
       ),

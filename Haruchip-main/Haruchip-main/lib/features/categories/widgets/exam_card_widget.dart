@@ -93,19 +93,19 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
     final rollingStatus = _controller.getRollingStatus(exam);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: exam.isHidden ? const Color(0xFFF8FAFC) : Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: exam.isHidden ? const Color(0xFFCBD5E1) : const Color(0xFFE2E8F0),
-          width: 1.5,
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -115,9 +115,9 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
           // 1. 헤더 카드 (상단 요약 & 대표 롤링 디데이 뱃지)
           InkWell(
             onTap: () => setState(() => _isExpanded = !_isExpanded),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(16),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -298,7 +298,7 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
                       ],
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
 
                   // 시험 제목 & 대표 롤링 디데이
                   Row(
@@ -311,16 +311,16 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
                             Text(
                               exam.title,
                               style: const TextStyle(
-                                fontSize: 17,
+                                fontSize: 15,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF0F172A),
                               ),
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
                               rollingStatus.subDetailText,
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: 11,
                                 color: Color(0xFF64748B),
                                 fontWeight: FontWeight.w500,
                               ),
@@ -328,23 +328,23 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
 
                       // 대표 실시간 롤링 뱃지
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
                           color: rollingStatus.isAllFinished
                               ? const Color(0xFFF1F5F9)
                               : themeColor,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(10),
                           boxShadow: rollingStatus.isAllFinished
                               ? null
                               : [
                                   BoxShadow(
-                                    color: themeColor.withValues(alpha: 0.3),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
+                                    color: themeColor.withValues(alpha: 0.25),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
                                   ),
                                 ],
                         ),
@@ -355,7 +355,7 @@ class _ExamCardWidgetState extends State<ExamCardWidget> {
                                 ? const Color(0xFF64748B)
                                 : Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                            fontSize: 11.5,
                           ),
                         ),
                       ),

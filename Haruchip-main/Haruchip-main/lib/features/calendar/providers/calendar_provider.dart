@@ -17,8 +17,12 @@ enum CalendarViewMode { month, week, list }
 
 final calendarViewModeProvider = StateProvider<CalendarViewMode>((ref) => CalendarViewMode.month);
 
-/// 캘린더 카테고리 필터 (null = '전체')
+/// 캘린더 카테고리 단일 필터 (하위 호환용, null = '전체')
 final calendarCategoryFilterProvider = StateProvider<String?>((ref) => null);
+
+/// 캘린더 카테고리 다중 선택 필터 (빈 Set = '전체' 선택, 비어있지 않으면 선택된 카테고리들만 동시 노출)
+final calendarSelectedCategoriesProvider =
+    StateProvider<Set<String>>((ref) => const <String>{});
 
 /// 카테고리별 테마 Hex 색상 매핑 (파스텔 톤 통일)
 String getCategoryColorHex(String categoryKey) {
@@ -65,6 +69,15 @@ class CalendarSelectionNotifier extends Notifier<CalendarSelectionState> {
     state = state.copyWith(selectedDate: _dateOnly(date));
   }
 
+  /// 검색 결과 등 특정 날짜의 월과 일자로 즉시 포커스 이동
+  void focusDate(DateTime date) {
+    final target = _dateOnly(date);
+    state = CalendarSelectionState(
+      focusedMonth: DateTime(target.year, target.month, 1),
+      selectedDate: target,
+    );
+  }
+
   void changeMonth(DateTime month) {
     state = state.copyWith(
       focusedMonth: DateTime(month.year, month.month, 1),
@@ -104,19 +117,27 @@ final selectedDateProvider = Provider<DateTime?>(
   (ref) => ref.watch(calendarSelectionProvider).selectedDate,
 );
 
-/// PlanList, MockCalendarEvents, 여행(Travel) 및 사이 계획(Inter-Trip Plans)을 결합한 통합 일정 프로바이더
-final allCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) {
+/// 필터 적용 전 전체 캘린더 일정 프로바이더 (일정 검색 엔진에서 전체 과거/미래 일정 검색에 사용)
+final allUnfilteredCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) {
   final planItems = ref.watch(planListProvider);
   final categories = ref.watch(categoryListProvider);
-  final filter = ref.watch(calendarCategoryFilterProvider);
   final travelTrips = ref.watch(travelTripListProvider);
   final interPlans = ref.watch(interTripPlanListProvider);
   final hobbyList = ref.watch(hobbyListProvider);
   final hobbySchedules = ref.watch(hobbyScheduleListProvider);
 
+  String resolveCategoryColor(String categoryKey, String fallbackHex) {
+    final matches = categories.where(
+      (c) => c.categoryKey == categoryKey || c.id == categoryKey,
+    );
+    return matches.isNotEmpty ? matches.first.colorHex : fallbackHex;
+  }
+
   final dynamicEvents = planItems.map((item) {
-    final matches = categories.where((c) => c.categoryKey == item.categoryKey || c.id == item.categoryKey);
-    final colorHex = matches.isNotEmpty ? matches.first.colorHex : getCategoryColorHex(item.categoryKey);
+    final colorHex = resolveCategoryColor(
+      item.categoryKey,
+      getCategoryColorHex(item.categoryKey),
+    );
 
     return CalendarEvent(
       id: item.id,
@@ -134,11 +155,15 @@ final allCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) {
     );
   }).toList();
 
+  final travelColorHex = resolveCategoryColor('travel', '#0284C7');
   final travelEvents = <CalendarEvent>[];
   for (final trip in travelTrips) {
     final s = _dateOnly(trip.startDate);
     final e = _dateOnly(trip.endDate);
     final days = e.difference(s).inDays + 1;
+    final hasCustomTravelCat =
+        categories.any((c) => c.categoryKey == 'travel');
+    final tripColor = hasCustomTravelCat ? travelColorHex : trip.themeColorHex;
     for (int d = 0; d < days; d++) {
       final curDate = s.add(Duration(days: d));
       final dayLabel = days > 1 ? ' (${d + 1}/$days일차)' : '';
@@ -148,7 +173,7 @@ final allCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) {
         title: '${trip.emoji} ${trip.destination}$dayLabel',
         time: null,
         source: 'personal',
-        colorHex: trip.themeColorHex,
+        colorHex: tripColor,
         categoryKey: 'travel',
         isPublic: false,
       ));
@@ -162,12 +187,13 @@ final allCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) {
       title: '📍 ${plan.title}',
       time: plan.time,
       source: 'personal',
-      colorHex: '#0284C7',
+      colorHex: travelColorHex,
       categoryKey: 'travel',
       isPublic: false,
     ));
   }
 
+  final hobbyColorHex = resolveCategoryColor('hobby', '#354235');
   final hobbyEvents = <CalendarEvent>[];
   for (final sched in hobbySchedules) {
     final matching = hobbyList.where((h) => h.id == sched.hobbyId);
@@ -183,18 +209,43 @@ final allCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) {
       title: '$icon ${sched.title}',
       time: timeStr,
       source: 'personal',
-      colorHex: '#354235',
+      colorHex: hobbyColorHex,
       categoryKey: 'hobby',
       isPublic: false,
     ));
   }
 
-  final all = [...mockCalendarEvents, ...dynamicEvents, ...travelEvents, ...hobbyEvents];
+  final syncedMockEvents = mockCalendarEvents.map((ev) {
+    final resolvedHex = resolveCategoryColor(ev.categoryKey, ev.colorHex);
+    if (resolvedHex == ev.colorHex) return ev;
+    return CalendarEvent(
+      id: ev.id,
+      date: ev.date,
+      title: ev.title,
+      time: ev.time,
+      source: ev.source,
+      colorHex: resolvedHex,
+      categoryKey: ev.categoryKey,
+      isPublic: ev.isPublic,
+    );
+  }).toList();
 
-  if (filter == null) {
-    return all;
+  return [...syncedMockEvents, ...dynamicEvents, ...travelEvents, ...hobbyEvents];
+});
+
+/// PlanList, MockCalendarEvents, 여행(Travel) 및 사이 계획(Inter-Trip Plans)을 결합한 필터 적용 일정 프로바이더
+final allCalendarEventsProvider = Provider<List<CalendarEvent>>((ref) {
+  final all = ref.watch(allUnfilteredCalendarEventsProvider);
+  final legacyFilter = ref.watch(calendarCategoryFilterProvider);
+  final selectedCategories = ref.watch(calendarSelectedCategoriesProvider);
+
+  if (selectedCategories.isNotEmpty) {
+    return all.where((e) => selectedCategories.contains(e.categoryKey)).toList();
   }
-  return all.where((e) => e.categoryKey == filter).toList();
+  if (legacyFilter != null) {
+    return all.where((e) => e.categoryKey == legacyFilter).toList();
+  }
+  return all;
 });
 
 /// 주어진 날짜의 CalendarEvent 목록.

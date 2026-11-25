@@ -169,26 +169,26 @@ class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
     );
   }
 
-  /// 준비 항목 카드 UI (가독성 극대화 + 원터치 아코디언 메모/상세 인라인 토글)
+  /// 준비 항목 카드 UI (세로 패딩 압축 컴팩트 핏 + 원터치 아코디언 메모/상세 인라인 토글)
   Widget _buildRefinedItemCard(WeddingItem item) {
     final isExpanded = _expandedItemIds.contains(item.id);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 5),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: item.isCompleted
               ? const Color(0xFFE2E8F0)
               : (isExpanded ? const Color(0xFFE53E3E) : const Color(0xFFFED7D7)),
-          width: isExpanded ? 1.8 : 1.5,
+          width: isExpanded ? 1.5 : 1.1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isExpanded ? 0.04 : 0.02),
-            blurRadius: isExpanded ? 10 : 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: isExpanded ? 0.03 : 0.015),
+            blurRadius: isExpanded ? 6 : 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -196,7 +196,7 @@ class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
         children: [
           // 카드 본문 행 (탭 시 아코디언 토글)
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -205,42 +205,42 @@ class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
                   padding: const EdgeInsets.only(top: 2),
                   child: InkWell(
                     onTap: () => ref.read(weddingListProvider.notifier).toggleItemCompletion(item.id),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                     child: Container(
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       decoration: BoxDecoration(
                         color: item.isCompleted ? const Color(0xFFE53E3E) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(7),
+                        borderRadius: BorderRadius.circular(6),
                         border: Border.all(
                           color: item.isCompleted ? const Color(0xFFE53E3E) : const Color(0xFFCBD5E1),
-                          width: 2,
+                          width: 1.8,
                         ),
                       ),
                       child: item.isCompleted
-                          ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                          ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
                           : null,
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
 
                 // [중앙]: 항목명 + 일시/장소 (탭 시 원터치 아코디언 펼침/접힘)
                 Expanded(
                   child: InkWell(
                     onTap: () => _toggleAccordion(item.id),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // [중앙 상단]: 항목명 (#순번 태그 완전 제거)
+                        // [중앙 상단]: 항목명
                         Row(
                           children: [
                             Expanded(
                               child: Text(
                                 item.title,
                                 style: TextStyle(
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: item.isCompleted
                                       ? const Color(0xFF94A3B8)
@@ -251,12 +251,12 @@ class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
                             ),
                             Icon(
                               isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                              size: 20,
+                              size: 18,
                               color: isExpanded ? const Color(0xFFE53E3E) : const Color(0xFF94A3B8),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
 
                         // [중앙 하단]: 일시 및 장소 (한눈에 확인)
                         Wrap(

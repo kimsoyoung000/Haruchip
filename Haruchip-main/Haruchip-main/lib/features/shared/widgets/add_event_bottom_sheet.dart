@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../calendar/providers/schedule_room_provider.dart';
+import '../../calendar/widgets/themed_color_palette_sheet.dart';
 import '../../categories/logic/repeat_rule.dart';
 import '../../categories/models/category.dart';
 import '../../categories/models/pet_profile.dart';
@@ -1066,125 +1067,203 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
     );
   }
 
-  static const List<({String name, Color color, String hex})> _kPastelPalette = [
-    (name: '연핑크', color: Color(0xFFFF8DA1), hex: '#FF8DA1'),
-    (name: '연보라', color: Color(0xFFC084FC), hex: '#C084FC'),
-    (name: '파스텔 옐로우', color: Color(0xFFFBBF24), hex: '#FBBF24'),
-    (name: '소프트 옐로우', color: Color(0xFFFDE047), hex: '#FDE047'),
-    (name: '파스텔 피치', color: Color(0xFFFB923C), hex: '#FB923C'),
-    (name: '파스텔 에메랄드', color: Color(0xFF34D399), hex: '#34D399'),
-    (name: '파스텔 민트', color: Color(0xFF6EE7B7), hex: '#6EE7B7'),
-    (name: '파스텔 인디고', color: Color(0xFF818CF8), hex: '#818CF8'),
-    (name: '파스텔 스카이', color: Color(0xFF38BDF8), hex: '#38BDF8'),
-    (name: '로맨틱 로즈', color: Color(0xFFFDA4AF), hex: '#FDA4AF'),
-    (name: '파스텔 카키', color: Color(0xFFA3E635), hex: '#A3E635'),
-    (name: '파스텔 핑크', color: Color(0xFFF472B6), hex: '#F472B6'),
-  ];
-
   void _showCategoryPickerModal(
-    List<EventCategoryOption> categories,
+    List<EventCategoryOption> initialCategories,
   ) {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
-        return Material(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.65,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD1D1D6),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+        return Consumer(
+          builder: (context, modalRef, _) {
+            final liveCats = modalRef.watch(categoryListProvider);
+            final categories = initialCategories.map((opt) {
+              final match = liveCats.where(
+                (c) => c.id == opt.id || c.categoryKey == opt.key,
+              );
+              if (match.isNotEmpty) {
+                return (
+                  key: opt.key,
+                  name: match.first.name,
+                  emoji: match.first.emoji,
+                  color: colorFromHex(match.first.colorHex),
+                  id: match.first.id,
+                );
+              }
+              return opt;
+            }).toList();
+
+            return Material(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              child: SafeArea(
+                top: false,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.68,
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text(
-                      '카테고리 선택',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: _kLabel),
-                    ),
-                  ),
-                  const Divider(height: 1, color: _kDivider),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: categories.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                      itemBuilder: (context, index) {
-                        final item = categories[index];
-                        final isSelected = item.key == _selectedCategoryKey;
-                        return ListTile(
-                          leading: isSelected
-                              ? const Icon(Icons.check, size: 20, color: _kBlue)
-                              : const SizedBox(width: 20),
-                          title: Row(
-                            children: [
-                              Text(item.emoji, style: const TextStyle(fontSize: 16)),
-                              const SizedBox(width: 8),
-                              Text(
-                                item.name,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                  color: _kLabel,
-                                ),
-                              ),
-                            ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD1D1D6),
+                            borderRadius: BorderRadius.circular(2),
                           ),
-                          trailing: Container(
-                            width: 14,
-                            height: 14,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: item.color,
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                          child: Text(
+                            '카테고리 선택',
+                            style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold, color: _kLabel),
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            '카테고리명 탭: 선택  •  우측 컬러 도트 탭: 색상 변경',
+                            style: TextStyle(fontSize: 11, color: _kSubLabel),
+                          ),
+                        ),
+                        const Divider(height: 1, color: _kDivider),
+                        Flexible(
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: categories.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                            itemBuilder: (context, index) {
+                              final item = categories[index];
+                              final isSelected = item.key == _selectedCategoryKey;
+                              final r = (item.color.r * 255).round().toRadixString(16).padLeft(2, '0');
+                              final g = (item.color.g * 255).round().toRadixString(16).padLeft(2, '0');
+                              final b = (item.color.b * 255).round().toRadixString(16).padLeft(2, '0');
+                              final itemHex = '#${r.toUpperCase()}${g.toUpperCase()}${b.toUpperCase()}';
+
+                              return Row(
+                                children: [
+                                  // [좌측 영역]: 아이콘 + 카테고리명 -> 터치 시 즉시 선택 후 바텀시트 닫기
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedCategoryKey = item.key;
+                                        });
+                                        Navigator.pop(ctx);
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
+                                              width: 22,
+                                              child: isSelected
+                                                  ? const Icon(Icons.check, size: 19, color: _kBlue)
+                                                  : null,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(item.emoji, style: const TextStyle(fontSize: 16)),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                item.name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 15.5,
+                                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                                  color: _kLabel,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  // [우측 영역]: 컬러 도트 -> 터치 시 테마별 팔레트 색상 변경 모달 호출
+                                  InkWell(
+                                    key: Key('category_color_dot_${item.key}'),
+                                    onTap: () async {
+                                      final pickedHex = await showThemedColorPickerSheet(
+                                        context,
+                                        title: '${item.emoji} ${item.name} 색상 변경',
+                                        currentHex: itemHex,
+                                      );
+                                      if (pickedHex != null) {
+                                        modalRef
+                                            .read(categoryListProvider.notifier)
+                                            .updateCategoryColor(
+                                              categoryKey: item.key,
+                                              id: item.id,
+                                              name: item.name,
+                                              emoji: item.emoji,
+                                              colorHex: pickedHex,
+                                            );
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      child: Container(
+                                        width: 22,
+                                        height: 22,
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: item.color.withValues(alpha: 0.45),
+                                            width: 1.4,
+                                          ),
+                                        ),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: item.color,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                        const Divider(height: 1, color: _kDivider),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.add_rounded, size: 19, color: _kBlue),
+                              label: const Text(
+                                '+ 새 카테고리 추가',
+                                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: _kBlue),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: _kBlue, width: 1.2),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _showAddNewCategoryDialog();
+                              },
                             ),
                           ),
-                          onTap: () {
-                            setState(() {
-                              _selectedCategoryKey = item.key;
-                            });
-                            Navigator.pop(ctx);
-                          },
-                        );
-                      },
+                        ),
+                      ],
                     ),
                   ),
-                  const Divider(height: 1, color: _kDivider),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.add_rounded, size: 20, color: _kBlue),
-                        label: const Text(
-                          '+ 새 카테고리 추가',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _kBlue),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: _kBlue, width: 1.2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _showAddNewCategoryDialog();
-                        },
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -1192,7 +1271,7 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
 
   void _showAddNewCategoryDialog() {
     final nameCtrl = TextEditingController();
-    String selectedHex = _kPastelPalette.first.hex;
+    String selectedHex = kThemedColorPaletteGroups.first.hexColors.first;
     String selectedEmoji = '📌';
     final emojis = ['📌', '✨', '🗓️', '🎯', '🌿', '☕', '💡', '🌟', '🎵', '💼', '🏡', '🎨'];
 
@@ -1204,146 +1283,122 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
             final currentColor = colorFromHex(selectedHex);
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               title: const Row(
                 children: [
-                  Icon(Icons.bookmark_add_outlined, size: 22, color: _kBlue),
+                  Icon(Icons.bookmark_add_outlined, size: 20, color: _kBlue),
                   SizedBox(width: 8),
-                  Text('새 카테고리 추가', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _kLabel)),
+                  Text('새 카테고리 추가', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: _kLabel)),
                 ],
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        PopupMenuButton<String>(
-                          initialValue: selectedEmoji,
-                          onSelected: (val) => setDialogState(() => selectedEmoji = val),
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F4F6),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Center(
-                              child: Text(selectedEmoji, style: const TextStyle(fontSize: 22)),
-                            ),
-                          ),
-                          itemBuilder: (ctx) => [
-                            for (final em in emojis)
-                              PopupMenuItem(value: em, child: Text(em, style: const TextStyle(fontSize: 20))),
-                          ],
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: nameCtrl,
-                            autofocus: true,
-                            decoration: InputDecoration(
-                              hintText: '카테고리 이름 입력',
-                              hintStyle: const TextStyle(color: _kSubLabel, fontSize: 14),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                              filled: true,
-                              fillColor: const Color(0xFFF9FAFB),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: _kBlue, width: 1.5),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        const Text(
-                          '파스텔 고유 색상',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _kLabel),
-                        ),
-                        const Spacer(),
-                        Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: currentColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        for (final p in _kPastelPalette)
-                          InkWell(
-                            onTap: () => setDialogState(() => selectedHex = p.hex),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: p.color,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: selectedHex == p.hex ? _kLabel : Colors.white,
-                                  width: selectedHex == p.hex ? 2.5 : 1.5,
-                                ),
-                                boxShadow: [
-                                  if (selectedHex == p.hex)
-                                    BoxShadow(
-                                      color: p.color.withValues(alpha: 0.5),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                ],
-                              ),
-                              child: selectedHex == p.hex
-                                  ? const Icon(Icons.check, size: 18, color: Colors.white)
-                                  : null,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              content: SizedBox(
+                width: 340,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Icon(Icons.info_outline, size: 15, color: _kBlue),
-                          SizedBox(width: 6),
+                          PopupMenuButton<String>(
+                            initialValue: selectedEmoji,
+                            onSelected: (val) => setDialogState(() => selectedEmoji = val),
+                            child: Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(selectedEmoji, style: const TextStyle(fontSize: 20)),
+                              ),
+                            ),
+                            itemBuilder: (ctx) => [
+                              for (final em in emojis)
+                                PopupMenuItem(value: em, child: Text(em, style: const TextStyle(fontSize: 20))),
+                            ],
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              '이 카테고리 색상은 캘린더 일정 표시에도 동일하게 적용됩니다',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                color: Color(0xFF1E40AF),
-                                fontWeight: FontWeight.w500,
+                            child: TextField(
+                              controller: nameCtrl,
+                              autofocus: true,
+                              decoration: InputDecoration(
+                                hintText: '카테고리 이름 입력',
+                                hintStyle: const TextStyle(color: _kSubLabel, fontSize: 14),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: _kBlue, width: 1.5),
+                                ),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          const Text(
+                            '라벨 색상',
+                            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: _kLabel),
+                          ),
+                          const Spacer(),
+                          Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: currentColor,
+                              border: Border.all(color: Colors.black.withValues(alpha: 0.12)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ThemedColorPaletteGrid(
+                        selectedHex: selectedHex,
+                        compact: true,
+                        onColorSelected: (hex) => setDialogState(() => selectedHex = hex),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, size: 14, color: _kBlue),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '이 카테고리 색상은 캘린더 일정 표시에도 동일하게 적용됩니다',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF1E40AF),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [

@@ -96,16 +96,16 @@ class TravelCategoryView extends ConsumerWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFF0F8FF), // 파스텔 스카이 블루 배경
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD6ECFF), width: 1.5), // 소프트 스카이 테두리
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD6ECFF), width: 1.3), // 소프트 스카이 테두리
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0284C7).withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF0284C7).withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),

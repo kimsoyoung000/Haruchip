@@ -23,11 +23,11 @@ class AnniversaryListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: AppColors.protoCoupleBg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -37,12 +37,13 @@ class AnniversaryListTile extends StatelessWidget {
               milestone.label,
               style: AppTypography.cardLabel.copyWith(
                 color: AppColors.protoHeading,
+                fontSize: 13,
               ),
             ),
           ),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
               color: AppColors.protoCoupleBgMuted,
               borderRadius: BorderRadius.circular(6),
@@ -52,6 +53,7 @@ class AnniversaryListTile extends StatelessWidget {
               style: AppTypography.caption.copyWith(
                 color: AppColors.protoCoupleTextStrong,
                 fontWeight: FontWeight.w700,
+                fontSize: 11,
               ),
             ),
           ),

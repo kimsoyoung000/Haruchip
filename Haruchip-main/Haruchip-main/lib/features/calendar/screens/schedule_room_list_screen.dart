@@ -11,6 +11,7 @@ import '../widgets/room_card.dart';
 import 'schedule_room_detail_screen.dart';
 
 /// 일정 조율 & 정산 방 목록 (칩 모임 메인 로비) 화면
+/// 컴팩트 정보 밀도 향상 적용
 class ScheduleRoomListScreen extends ConsumerWidget {
   const ScheduleRoomListScreen({super.key, this.onCreateRoom});
 
@@ -31,7 +32,7 @@ class ScheduleRoomListScreen extends ConsumerWidget {
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -47,16 +48,16 @@ class ScheduleRoomListScreen extends ConsumerWidget {
                           '칩 모임',
                           style: AppTypography.heading1.copyWith(
                             color: const Color(0xFF0F172A),
-                            fontSize: 22,
+                            fontSize: 19,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           '그룹 캘린더 조율 · 공지 · 스마트 N차 정산',
                           style: AppTypography.bodyMuted.copyWith(
                             color: const Color(0xFF64748B),
-                            fontSize: 13,
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -69,36 +70,36 @@ class ScheduleRoomListScreen extends ConsumerWidget {
                         SnackBar(content: Text('내 프로필 코드 [$myCode]가 복사되었습니다.')),
                       );
                     },
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFFCBD5E1)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.badge_outlined, size: 14, color: Color(0xFF475569)),
-                          const SizedBox(width: 4),
+                          const Icon(Icons.badge_outlined, size: 13, color: Color(0xFF475569)),
+                          const SizedBox(width: 3),
                           Text(
                             myCode,
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 10.5,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF334155),
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.copy_rounded, size: 11, color: Color(0xFF64748B)),
+                          const SizedBox(width: 3),
+                          const Icon(Icons.copy_rounded, size: 10.5, color: Color(0xFF64748B)),
                         ],
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
 
               // Action Buttons: [+ 새 모임 만들기] & [🔑 코드로 참가]
               Row(
@@ -112,48 +113,49 @@ class ScheduleRoomListScreen extends ConsumerWidget {
                           showCreateRoomDialog(context);
                         }
                       },
-                      icon: const Icon(Icons.add_rounded, size: 18),
+                      icon: const Icon(Icons.add_rounded, size: 16),
                       label: const Text(
                         '새 모임 만들기',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0F172A),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 9.5),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         elevation: 0,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => showJoinRoomDialog(context),
-                      icon: const Icon(Icons.key_rounded, size: 18, color: Color(0xFF0F172A)),
+                      icon: const Icon(Icons.key_rounded, size: 16, color: Color(0xFF0F172A)),
                       label: const Text(
                         '코드로 참가',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF0F172A),
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.1),
+                        padding: const EdgeInsets.symmetric(vertical: 9.5),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                        elevation: 0,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 16),
 
               // Section Header
               Row(
@@ -162,56 +164,56 @@ class ScheduleRoomListScreen extends ConsumerWidget {
                   Text(
                     '참여 중인 모임 (${rooms.length})',
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF0F172A),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
               // Room Cards List
               if (rooms.isEmpty)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                  padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Column(
                     children: [
-                      const Icon(Icons.groups_outlined, size: 48, color: Color(0xFF94A3B8)),
-                      const SizedBox(height: 12),
+                      const Icon(Icons.groups_outlined, size: 40, color: Color(0xFF94A3B8)),
+                      const SizedBox(height: 10),
                       const Text(
                         '참여 중인 모임이 없습니다',
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF334155),
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       const Text(
                         '새로운 모임을 만들거나 코드를 입력하여 참여해보세요!',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: () => showCreateRoomDialog(context),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F172A),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           elevation: 0,
                         ),
-                        child: const Text('모임 개설하기'),
+                        child: const Text('모임 개설하기', style: TextStyle(fontSize: 12)),
                       ),
                     ],
                   ),
@@ -228,7 +230,7 @@ class ScheduleRoomListScreen extends ConsumerWidget {
                       );
                     },
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 8),
                 ],
             ],
           ),

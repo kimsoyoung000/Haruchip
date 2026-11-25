@@ -125,16 +125,16 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: AppColors.protoCardBg,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.protoCardSelectedBg, width: 2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.protoCardSelectedBg, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -150,24 +150,24 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                   children: [
                     if (widget.photoUrl != null)
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(14),
                         child: Image.network(
                           widget.photoUrl!,
-                          width: 56,
-                          height: 56,
+                          width: 48,
+                          height: 48,
                           fit: BoxFit.cover,
                         ),
                       )
                     else
                       Container(
-                        width: 56,
-                        height: 56,
+                        width: 48,
+                        height: 48,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: AppColors.protoCardSelectedBg,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Text(_selectedIcon, style: const TextStyle(fontSize: 28)),
+                        child: Text(_selectedIcon, style: const TextStyle(fontSize: 24)),
                       ),
                     Positioned(
                       right: 0,
@@ -178,13 +178,13 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                           color: AppColors.protoHeading,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.edit, size: 10, color: Colors.white),
+                        child: const Icon(Icons.edit, size: 9, color: Colors.white),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,12 +195,12 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                           widget.petName,
                           style: AppTypography.heading2.copyWith(
                             color: AppColors.protoHeading,
-                            fontSize: 16,
+                            fontSize: 14.5,
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: AppColors.protoCardSelectedBg,
                             borderRadius: BorderRadius.circular(6),
@@ -208,7 +208,7 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                           child: Text(
                             '패밀리 카드 🐾',
                             style: AppTypography.caption.copyWith(
-                              fontSize: 10,
+                              fontSize: 9.5,
                               fontWeight: FontWeight.bold,
                               color: AppColors.protoCardSelectedText,
                             ),
@@ -216,12 +216,13 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       daysCount > 0 ? '함께한 지 D+$daysCount일째' : '반려동물 신분증 카드',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.protoSubtitle,
                         fontWeight: FontWeight.w600,
+                        fontSize: 11,
                       ),
                     ),
                   ],
@@ -232,21 +233,21 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
 
           // 케어 일정 D-Day 칩 연동 섹션
           if (widget.careSchedules.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            const Divider(height: 1, color: AppColors.protoCardBorder),
             const SizedBox(height: 10),
+            const Divider(height: 1, color: AppColors.protoCardBorder),
+            const SizedBox(height: 8),
             Text(
               '🍖 케어 D-Day 일정 칩',
               style: AppTypography.caption.copyWith(
                 color: AppColors.protoSubtitle,
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 for (final schedule in widget.careSchedules) ...[
                   Builder(builder: (context) {
@@ -261,7 +262,7 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                     final dDayLabel = diff == 0 ? 'D-day' : (diff > 0 ? 'D-$diff' : 'D+${diff.abs()}');
 
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceMuted,
                         borderRadius: BorderRadius.circular(999),
@@ -270,19 +271,19 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(schedule.type.defaultEmoji, style: const TextStyle(fontSize: 12)),
+                          Text(schedule.type.defaultEmoji, style: const TextStyle(fontSize: 11)),
                           const SizedBox(width: 4),
                           Text(
                             schedule.title,
                             style: AppTypography.caption.copyWith(
-                              fontSize: 11,
+                              fontSize: 10.5,
                               fontWeight: FontWeight.w600,
                               color: AppColors.protoCardText,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                             decoration: BoxDecoration(
                               color: AppColors.protoButtonBg,
                               borderRadius: BorderRadius.circular(999),
@@ -290,7 +291,7 @@ class _PetProfileCardWidgetState extends State<PetProfileCardWidget> {
                             child: Text(
                               dDayLabel,
                               style: AppTypography.caption.copyWith(
-                                fontSize: 10,
+                                fontSize: 9.5,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.protoButtonText,
                               ),

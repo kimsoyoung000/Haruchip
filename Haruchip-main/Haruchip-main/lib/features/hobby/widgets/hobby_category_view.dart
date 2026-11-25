@@ -132,22 +132,22 @@ class HobbyCategoryView extends ConsumerWidget {
 
     return Container(
       width: double.infinity,
-      height: 190,
       decoration: BoxDecoration(
         color: const Color(0xFFF4F7F4), // 소프트 세이지 배경
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFDDE7DD), width: 1.5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDDE7DD), width: 1.3),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0A000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
+            blurRadius: 6,
+            offset: Offset(0, 2),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // 상단 행: 취미 이름 + 편집 버튼 + 새 취미 추가 버튼
           Row(
@@ -156,10 +156,10 @@ class HobbyCategoryView extends ConsumerWidget {
                 child: Text(
                   hobby.name,
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 17.5,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF354235),
-                    letterSpacing: -0.5,
+                    letterSpacing: -0.4,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -169,16 +169,16 @@ class HobbyCategoryView extends ConsumerWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF5A6E5A)),
+                icon: const Icon(Icons.edit_outlined, size: 17, color: Color(0xFF5A6E5A)),
                 tooltip: '취미 수정',
                 onPressed: () => AddHobbyModal.show(context, initialHobby: hobby),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               InkWell(
                 onTap: () => AddHobbyModal.show(context),
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
@@ -187,12 +187,12 @@ class HobbyCategoryView extends ConsumerWidget {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.add_rounded, size: 14, color: Color(0xFF354235)),
-                      SizedBox(width: 4),
+                      Icon(Icons.add_rounded, size: 13, color: Color(0xFF354235)),
+                      SizedBox(width: 3),
                       Text(
                         '취미 추가',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF354235),
                         ),
@@ -204,24 +204,24 @@ class HobbyCategoryView extends ConsumerWidget {
             ],
           ),
 
-          const Spacer(),
+          const SizedBox(height: 10),
 
           // 중앙/하단 행: 좌측 원형 아바타 + 우측 지속일수(Y2K 도트 뱃지) & 시작일
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // [좌측 원형 아바타]: 취미 대표 이모지 또는 직접 등록한 사진
+              // [좌측 원형 아바타]: 약 15% 축소 (60x60)
               Container(
-                width: 72,
-                height: 72,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFDDE7DD), width: 2),
+                  border: Border.all(color: const Color(0xFFDDE7DD), width: 1.8),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x0F000000),
-                      blurRadius: 6,
+                      blurRadius: 5,
                       offset: Offset(0, 2),
                     ),
                   ],
@@ -231,14 +231,14 @@ class HobbyCategoryView extends ConsumerWidget {
                     ? ClipOval(
                         child: Image.file(
                           File(hobby.imagePath!),
-                          width: 72,
-                          height: 72,
+                          width: 60,
+                          height: 60,
                           fit: BoxFit.cover,
                         ),
                       )
-                    : Text(hobby.icon, style: const TextStyle(fontSize: 36)),
+                    : Text(hobby.icon, style: const TextStyle(fontSize: 30)),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
 
               // [우측 정보]: Y2K 도트 뱃지(지속일수) & 시작일 1줄 표기
               Expanded(

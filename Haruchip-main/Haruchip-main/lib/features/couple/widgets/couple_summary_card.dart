@@ -29,43 +29,44 @@ class CoupleSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [AppColors.protoCoupleBg, AppColors.protoCardBg],
         ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.protoCoupleBgMuted, width: 2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.protoCoupleBgMuted, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(partnerIcon, style: const TextStyle(fontSize: 22)),
-              const SizedBox(width: 8),
+              Text(partnerIcon, style: const TextStyle(fontSize: 19)),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   '$partnerName와(과) 함께한 시간',
                   style: AppTypography.cardLabel.copyWith(
                     color: AppColors.protoCoupleTextStrong,
+                    fontSize: 13,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           if (isOnBreak)
             Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
+                horizontal: 10,
+                vertical: 6,
               ),
               decoration: BoxDecoration(
                 color: AppColors.surfaceMuted,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 '현재 이별 기간이에요',
@@ -79,25 +80,26 @@ class CoupleSummaryCard extends StatelessWidget {
               'D+$totalDays',
               style: AppTypography.heading1.copyWith(
                 color: AppColors.protoCoupleTextStrong,
-                fontSize: 32,
+                fontSize: 26,
               ),
             ),
           if (!isOnBreak && daysSinceReunite != null) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 6,
+                horizontal: 8,
+                vertical: 4,
               ),
               decoration: BoxDecoration(
                 color: AppColors.protoCoupleBgMuted,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 '재회 후 D+$daysSinceReunite',
                 style: AppTypography.caption.copyWith(
                   color: AppColors.protoCoupleTextStrong,
                   fontWeight: FontWeight.w700,
+                  fontSize: 11,
                 ),
               ),
             ),

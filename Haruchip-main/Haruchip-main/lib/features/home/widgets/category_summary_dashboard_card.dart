@@ -14,7 +14,6 @@ import '../../couple/providers/couple_provider.dart';
 import '../../hobby/providers/hobby_provider.dart';
 import '../../military/providers/military_provider.dart';
 import '../../plan/models/plan_item.dart';
-import '../../plan/providers/plan_provider.dart' show dDayLabel;
 import '../../travel/providers/travel_provider.dart';
 import '../../wedding/providers/wedding_provider.dart';
 
@@ -143,6 +142,7 @@ class CategoryThemePalette {
           text: Color(0xFF742A2A),
         );
       case 'plan':
+      case 'appointment':
       default:
         return const CategoryThemePalette(
           bg: Color(0xFFF8F9FA),
@@ -155,7 +155,25 @@ class CategoryThemePalette {
   }
 }
 
-/// 홈/대시보드 메인 표준 카테고리 요약 카드
+/// 다가오는 D-Day 표준 엔트리 (임박순 정렬 & 지난 일정 제외용)
+class _UpcomingDdayEntry {
+  const _UpcomingDdayEntry({
+    required this.title,
+    required this.dDayBadge,
+    required this.sortDateTime,
+  });
+
+  final String title;
+  final String dDayBadge;
+  final DateTime sortDateTime;
+}
+
+/// 홈/대시보드(칩 데이) 메인 표준 카테고리 요약 카드
+///
+/// - 모든 카테고리 카드의 세로 높이를 [kFixedCardHeight]로 완전 통일
+/// - 그룹 1 (커플/솔로/덕질/아기/반려동물/직접 추가): N일째 칩 최대 3개 + 다가오는 D-Day 바 최대 2개
+/// - 그룹 2 (시험/결혼/생일/일정·약속/목표/루틴/취미/여행): N일째 없이 다가오는 D-Day 바 최대 3개
+/// - 그룹 3 (군대): 슬림 복무율 프로그레스 바 + 가장 가까운 다가오는 D-Day 바 1개
 class CategorySummaryDashboardCard extends ConsumerWidget {
   const CategorySummaryDashboardCard({
     super.key,
@@ -169,6 +187,23 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     this.isEditMode = false,
     this.isWideList = false,
   });
+
+  /// 모든 메인 카테고리 카드의 통일 고정 세로 높이 (일정 0개 ~ 최대치 동일)
+  static const double kFixedCardHeight = 148.0;
+
+  /// 그룹 2 (D-Day 전용, 최대 3개) 카테고리 키 집합
+  static const Set<String> _kGroup2Keys = {
+    'exam',
+    'study',
+    'wedding',
+    'birthday',
+    'plan',
+    'appointment',
+    'goal',
+    'routine',
+    'hobby',
+    'travel',
+  };
 
   final CategoryModel category;
   final List<PlanItem> countUpItems;
@@ -188,47 +223,100 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     return diff > 0 ? '$diff일째' : 'D-Day';
   }
 
+  String _formatUpcomingDday(DateTime targetDate, DateTime today) {
+    final d = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    final diff = d.difference(today).inDays;
+    return diff <= 0 ? 'D-Day' : 'D-$diff';
+  }
+
+  /// 날짜/시간이 이미 지난 과거 일정인지 판별 (지난 일정은 메인 카드에서 자동 제외)
+  bool _isUpcoming(DateTime date, TimeOfDay? time, DateTime now, DateTime today) {
+    final d = DateTime(date.year, date.month, date.day);
+    if (d.isBefore(today)) return false;
+    if (d == today && time != null) {
+      final dt = DateTime(d.year, d.month, d.day, time.hour, time.minute);
+      if (dt.isBefore(now)) return false;
+    }
+    return true;
+  }
+
+  /// PlanItem 목록에서 지난 일정을 제외하고 오늘 기준 임박순(오름차순) 정렬
+  List<_UpcomingDdayEntry> _upcomingFromPlanItems(
+    List<PlanItem> items,
+    DateTime now,
+    DateTime today,
+  ) {
+    final list = <_UpcomingDdayEntry>[];
+    for (final item in items) {
+      if (!_isUpcoming(item.date, item.deadlineTime, now, today)) continue;
+      final d = DateTime(item.date.year, item.date.month, item.date.day);
+      final sortDt = item.deadlineTime != null
+          ? DateTime(d.year, d.month, d.day, item.deadlineTime!.hour,
+              item.deadlineTime!.minute)
+          : DateTime(d.year, d.month, d.day, 23, 59);
+      list.add(_UpcomingDdayEntry(
+        title: item.title,
+        dDayBadge: _formatUpcomingDday(d, today),
+        sortDateTime: sortDt,
+      ));
+    }
+    list.sort((a, b) => a.sortDateTime.compareTo(b.sortDateTime));
+    return list;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final skinTheme = category.skinTheme;
-    final defaultPalette = CategoryThemePalette.forCategoryKey(category.categoryKey);
+    final defaultPalette =
+        CategoryThemePalette.forCategoryKey(category.categoryKey);
     final palette = skinTheme != null
         ? CategoryThemePalette(
             bg: colorFromHex(skinTheme.backgroundColor),
             border: colorFromHex(skinTheme.borderColor),
-            chipBg: colorFromHex(skinTheme.patternColor).withValues(alpha: 0.28),
+            chipBg:
+                colorFromHex(skinTheme.patternColor).withValues(alpha: 0.28),
             primary: colorFromHex(skinTheme.borderColor),
             text: colorFromHex(skinTheme.textColor),
           )
         : defaultPalette;
 
     final key = category.categoryKey;
-    final displayIcon = skinTheme?.accentEmoji.isNotEmpty == true ? skinTheme!.accentEmoji : category.icon;
+    final displayIcon = skinTheme?.accentEmoji.isNotEmpty == true
+        ? skinTheme!.accentEmoji
+        : category.icon;
+
+    final Widget bodyWidget;
+    if (key == 'military') {
+      bodyWidget = _buildGroup3MilitaryBody(ref, palette);
+    } else if (_kGroup2Keys.contains(key)) {
+      bodyWidget = _buildGroup2DdayOnlyBody(ref, palette);
+    } else {
+      bodyWidget = _buildGroup1CountUpAndDdayBody(ref, palette);
+    }
 
     final cardContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: [
-        // 1. 헤더: 아이콘 + 카테고리 이름 + 바로가기 화살표 / 편집 모드 숨김 & 핸들
+        // 1. 컴팩트 통일 헤더 (고정 높이)
         Row(
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: 24,
+              height: 24,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: palette.chipBg,
                 shape: BoxShape.circle,
               ),
-              child: Text(displayIcon, style: const TextStyle(fontSize: 16)),
+              child: Text(displayIcon, style: const TextStyle(fontSize: 12.5)),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 7),
             Expanded(
               child: Text(
                 category.name,
                 style: AppTypography.cardLabel.copyWith(
                   fontWeight: FontWeight.w800,
-                  fontSize: 16,
+                  fontSize: 13.5,
                   color: palette.text,
                 ),
                 maxLines: 1,
@@ -238,145 +326,436 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
             if (isEditMode) ...[
               if (onHide != null)
                 IconButton(
-                  icon: const Icon(Icons.visibility_off_outlined, size: 20, color: Color(0xFF6B7280)),
+                  icon: const Icon(Icons.visibility_off_outlined,
+                      size: 16, color: Color(0xFF6B7280)),
                   tooltip: '대시보드에서 숨기기',
                   onPressed: onHide,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
-              const SizedBox(width: 8),
-              const Icon(Icons.drag_handle_rounded, size: 22, color: Color(0xFF9CA3AF)),
-            ] else ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.drag_handle_rounded,
+                  size: 18, color: Color(0xFF9CA3AF)),
+            ] else
               Icon(
                 Icons.chevron_right_rounded,
-                size: 20,
+                size: 17,
                 color: palette.primary.withValues(alpha: 0.7),
               ),
-            ],
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
 
-        // 2. 카테고리별 특화 맞춤 요약 UI
-        if (key == 'military')
-          _buildMilitaryBody(context, ref, palette)
-        else if (key == 'couple')
-          _buildCoupleBody(context, ref, palette)
-        else if (key == 'baby')
-          _buildBabyBody(context, ref, palette)
-        else if (key == 'exam' || key == 'study')
-          _buildExamBody(context, ref, palette)
-        else if (key == 'solo')
-          _buildSoloBody(context, ref, palette)
-        else if (key == 'routine')
-          _buildRoutineBody(context, ref, palette)
-        else if (key == 'hobby')
-          _buildHobbyBody(context, ref, palette)
-        else if (key == 'travel')
-          _buildTravelBody(context, ref, palette)
-        else if (key == 'wedding')
-          _buildWeddingBody(context, ref, palette)
-        else
-          _buildStandardBody(palette),
+        // 2. 고정 높이 내부 본문
+        Expanded(child: bodyWidget),
       ],
     );
 
     if (skinTheme != null) {
-      return InkWell(
-        onTap: isEditMode ? null : onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(skinTheme.borderRadius),
-        child: SkinThemeCardContainer(
-          theme: skinTheme,
-          padding: const EdgeInsets.all(16),
-          child: cardContent,
+      return SizedBox(
+        height: kFixedCardHeight,
+        child: InkWell(
+          onTap: isEditMode ? null : onTap,
+          onLongPress: onLongPress,
+          borderRadius: BorderRadius.circular(skinTheme.borderRadius),
+          child: SkinThemeCardContainer(
+            theme: skinTheme,
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            child: cardContent,
+          ),
         ),
       );
     }
 
-    return InkWell(
-      onTap: isEditMode ? null : onTap,
-      onLongPress: onLongPress,
-      borderRadius: BorderRadius.circular(20),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: palette.bg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isEditMode ? palette.primary : palette.border,
-            width: isEditMode ? 2.0 : 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: palette.primary.withValues(alpha: isEditMode ? 0.12 : 0.04),
-              blurRadius: isEditMode ? 14 : 10,
-              offset: isEditMode ? const Offset(0, 4) : const Offset(0, 3),
+    return SizedBox(
+      height: kFixedCardHeight,
+      child: InkWell(
+        onTap: isEditMode ? null : onTap,
+        onLongPress: onLongPress,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+          decoration: BoxDecoration(
+            color: palette.bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isEditMode ? palette.primary : palette.border,
+              width: isEditMode ? 1.6 : 1.2,
             ),
-          ],
+            boxShadow: [
+              BoxShadow(
+                color: palette.primary.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: cardContent,
         ),
-        child: cardContent,
       ),
     );
   }
 
-  /// 1. 커플 카테고리 특화 요약 (함께한 지 N일째 + 가장 임박한 기념일 D-Day 2개)
-  Widget _buildCoupleBody(
-    BuildContext context,
+  /// 그룹 1: [커플, 솔로, 덕질, 아기, 반려동물, 직접 설정한 새 카테고리들]
+  /// - 상단: 시작일 기준 'N일째' 가로 칩 최대 3개
+  /// - 하단: 화이트 라운드 바 형태 다가오는 D-Day 일정 최대 2개 (임박순, 지난 일정 제외)
+  Widget _buildGroup1CountUpAndDdayBody(
     WidgetRef ref,
     CategoryThemePalette palette,
   ) {
-    final totalDays = ref.watch(totalDaysTogetherProvider);
-    final countUpLabel = '함께한 지 D+$totalDays일째';
-    final topDdays = countDownItems.take(2).toList();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final key = category.categoryKey;
+
+    final chips = <String>[];
+
+    if (key == 'couple') {
+      final totalDays = ref.watch(totalDaysTogetherProvider);
+      chips.add('함께한 지 $totalDays일째');
+    } else if (key == 'baby') {
+      BabyProfile? babyProfile;
+      if (category.metadata?['babyProfile'] != null) {
+        try {
+          babyProfile = BabyProfile.fromJson(
+            Map<String, dynamic>.from(category.metadata!['babyProfile'] as Map),
+          );
+        } catch (_) {}
+      }
+      const babyController = BabyCategoryController();
+      if (babyProfile != null) {
+        chips.add(babyController.formatBabyDaysCount(babyProfile.birthDate));
+        chips.add(babyController.formatBabyAgeDetailed(babyProfile.birthDate));
+      } else {
+        chips.add('태어난 지 1일째');
+      }
+    } else if (key == 'solo') {
+      SoloProfile? soloProfile;
+      if (category.metadata?['soloProfile'] != null) {
+        try {
+          soloProfile = SoloProfile.fromJson(
+            Map<String, dynamic>.from(category.metadata!['soloProfile'] as Map),
+          );
+        } catch (_) {}
+      }
+      final days = soloProfile?.daysCount() ??
+          (countUpItems.isNotEmpty
+              ? (today
+                      .difference(DateTime(
+                        countUpItems.first.date.year,
+                        countUpItems.first.date.month,
+                        countUpItems.first.date.day,
+                      ))
+                      .inDays +
+                  1)
+              : 1);
+      chips.add('나에게 집중한 지 $days일째');
+    } else if (customCountUpText != null && customCountUpText!.isNotEmpty) {
+      chips.add(customCountUpText!);
+    }
+
+    for (final item in countUpItems) {
+      if (chips.length >= 3) break;
+      final text = '${item.title} ${_formatDaysCount(item.date)}';
+      if (!chips.contains(text)) {
+        chips.add(text);
+      }
+    }
+
+    final limitedChips = chips.take(3).toList();
+    final upcoming = _upcomingFromPlanItems(countDownItems, now, today)
+        .take(2)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: palette.chipBg,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            countUpLabel,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: palette.primary,
+        // 상단 N일째 칩 영역 (최대 3개, 1줄 가로 스크롤)
+        if (limitedChips.isNotEmpty) ...[
+          SizedBox(
+            height: 24,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  for (final label in limitedChips)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 5),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: palette.chipBg,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: palette.primary,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
+          const SizedBox(height: 6),
+        ],
+
+        // 하단 다가오는 D-Day 화이트 라운드 바 (최대 2개)
+        Expanded(
+          child: upcoming.isNotEmpty
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    for (final entry in upcoming)
+                      _buildWhiteDdayBar(entry.title, entry.dDayBadge, palette),
+                  ],
+                )
+              : _buildEmptyPlaceholder(),
         ),
-        const SizedBox(height: 10),
-        if (topDdays.isNotEmpty)
-          for (final item in topDdays) ...[
-            _buildDdayRow(item.title, dDayLabel(item.date), palette),
-          ]
-        else
-          Text(
-            '등록된 기념일 일정이 없어요',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-          ),
       ],
     );
   }
 
-  /// 2. 군대 카테고리 특화 요약
-  Widget _buildMilitaryBody(
-    BuildContext context,
+  /// 그룹 2: [시험/자격증, 결혼 준비, 생일, 일정/약속, 목표/버킷리스트, 루틴/주간계획표, 취미, 여행]
+  /// - N일째 표기 없이, 오직 다가오는 'D-Day 일정'만 최대 3개까지 화이트 라운드 바로 표기
+  Widget _buildGroup2DdayOnlyBody(
     WidgetRef ref,
     CategoryThemePalette palette,
   ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final key = category.categoryKey;
+    final entries = <_UpcomingDdayEntry>[];
+
+    if (key == 'exam' || key == 'study') {
+      final raw = category.metadata?['exams'] as List<dynamic>?;
+      if (raw != null) {
+        for (final r in raw) {
+          try {
+            final exam = ExamProfile.fromJson(Map<String, dynamic>.from(r as Map));
+            if (exam.isHidden) continue;
+            for (final stage in exam.stages) {
+              if (stage.isCompleted) continue;
+              final target = (stage.stageType == ExamStageType.application &&
+                      stage.endDate != null &&
+                      today.isAfter(DateTime(stage.startDate.year,
+                          stage.startDate.month, stage.startDate.day)))
+                  ? stage.endDate!
+                  : stage.startDate;
+              final d = DateTime(target.year, target.month, target.day);
+              if (!d.isBefore(today)) {
+                entries.add(_UpcomingDdayEntry(
+                  title: '${exam.title} · ${stage.name}',
+                  dDayBadge: _formatUpcomingDday(d, today),
+                  sortDateTime: d,
+                ));
+              }
+            }
+            for (final sub in exam.subjects) {
+              if (sub.isCompleted) continue;
+              final d = DateTime(
+                  sub.examDate.year, sub.examDate.month, sub.examDate.day);
+              if (!d.isBefore(today)) {
+                entries.add(_UpcomingDdayEntry(
+                  title: '${exam.title} · ${sub.subjectName}',
+                  dDayBadge: _formatUpcomingDday(d, today),
+                  sortDateTime: d,
+                ));
+              }
+            }
+          } catch (_) {}
+        }
+      }
+      entries.addAll(_upcomingFromPlanItems(countDownItems, now, today));
+    } else if (key == 'wedding') {
+      final weddingDate = ref.watch(weddingDateProvider);
+      if (weddingDate != null) {
+        final wd =
+            DateTime(weddingDate.year, weddingDate.month, weddingDate.day);
+        if (!wd.isBefore(today)) {
+          entries.add(_UpcomingDdayEntry(
+            title: '💍 본식 (결혼식)',
+            dDayBadge: _formatUpcomingDday(wd, today),
+            sortDateTime: wd,
+          ));
+        }
+      }
+      final weddingItems = ref.watch(weddingListProvider);
+      for (final item in weddingItems) {
+        if (item.isCompleted || item.targetDate == null) continue;
+        final d = DateTime(item.targetDate!.year, item.targetDate!.month,
+            item.targetDate!.day);
+        if (!d.isBefore(today)) {
+          entries.add(_UpcomingDdayEntry(
+            title: item.title,
+            dDayBadge: _formatUpcomingDday(d, today),
+            sortDateTime: d,
+          ));
+        }
+      }
+      entries.addAll(_upcomingFromPlanItems(countDownItems, now, today));
+    } else if (key == 'travel') {
+      final trips = ref.watch(travelTripListProvider);
+      for (final trip in trips) {
+        final s = DateTime(
+            trip.startDate.year, trip.startDate.month, trip.startDate.day);
+        final e =
+            DateTime(trip.endDate.year, trip.endDate.month, trip.endDate.day);
+        if (e.isBefore(today)) continue; // 지난 여행 제외
+        final isOngoing = !today.isBefore(s) && !today.isAfter(e);
+        entries.add(_UpcomingDdayEntry(
+          title: '${trip.emoji} ${trip.destination}',
+          dDayBadge: isOngoing
+              ? '${trip.currentDayNumber()}일차'
+              : _formatUpcomingDday(s, today),
+          sortDateTime: isOngoing ? today : s,
+        ));
+      }
+      final interPlans = ref.watch(interTripPlanListProvider);
+      for (final p in interPlans) {
+        final d = DateTime(p.date.year, p.date.month, p.date.day);
+        if (!d.isBefore(today)) {
+          entries.add(_UpcomingDdayEntry(
+            title: p.title,
+            dDayBadge: _formatUpcomingDday(d, today),
+            sortDateTime: d,
+          ));
+        }
+      }
+      entries.addAll(_upcomingFromPlanItems(countDownItems, now, today));
+    } else if (key == 'hobby') {
+      final schedules = ref.watch(hobbyScheduleListProvider);
+      final hobbies = ref.watch(hobbyListProvider);
+      for (final sched in schedules) {
+        final d = DateTime(sched.date.year, sched.date.month, sched.date.day);
+        final t = sched.hasTime
+            ? TimeOfDay(hour: sched.date.hour, minute: sched.date.minute)
+            : null;
+        if (!_isUpcoming(d, t, now, today)) continue;
+        final hMatch = hobbies.where((h) => h.id == sched.hobbyId);
+        final prefix = hMatch.isNotEmpty ? '${hMatch.first.icon} ' : '';
+        entries.add(_UpcomingDdayEntry(
+          title: '$prefix${sched.title}',
+          dDayBadge: _formatUpcomingDday(d, today),
+          sortDateTime: sched.date,
+        ));
+      }
+      entries.addAll(_upcomingFromPlanItems(countDownItems, now, today));
+    } else if (key == 'routine') {
+      final allRoutineItems = [...countDownItems, ...countUpItems];
+      for (final item in allRoutineItems) {
+        final hour = item.deadlineTime?.hour ?? 23;
+        final minute = item.deadlineTime?.minute ?? 59;
+        DateTime? nextDate;
+        if (item.repeatConfig.type == RepeatType.daily) {
+          final cand = DateTime(today.year, today.month, today.day, hour, minute);
+          nextDate = cand.isAfter(now) ? cand : cand.add(const Duration(days: 1));
+        } else if (item.repeatConfig.type == RepeatType.weekly &&
+            item.repeatConfig.weekdays.isNotEmpty) {
+          for (int i = 0; i <= 7; i++) {
+            final check = today.add(Duration(days: i));
+            final wd = check.weekday % 7;
+            if (item.repeatConfig.weekdays.contains(wd) ||
+                item.repeatConfig.weekdays.contains(check.weekday)) {
+              final cand =
+                  DateTime(check.year, check.month, check.day, hour, minute);
+              if (cand.isAfter(now) || i > 0) {
+                nextDate = cand;
+                break;
+              }
+            }
+          }
+        } else if (_isUpcoming(item.date, item.deadlineTime, now, today)) {
+          nextDate = DateTime(
+              item.date.year, item.date.month, item.date.day, hour, minute);
+        }
+        if (nextDate != null) {
+          final nd = DateTime(nextDate.year, nextDate.month, nextDate.day);
+          entries.add(_UpcomingDdayEntry(
+            title: item.title,
+            dDayBadge: _formatUpcomingDday(nd, today),
+            sortDateTime: nextDate,
+          ));
+        }
+      }
+    } else {
+      // birthday, plan, appointment, goal
+      entries.addAll(_upcomingFromPlanItems(countDownItems, now, today));
+    }
+
+    entries.sort((a, b) => a.sortDateTime.compareTo(b.sortDateTime));
+    final top3 = entries.take(3).toList();
+
+    if (top3.isEmpty) {
+      return _buildEmptyPlaceholder();
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: [
+        for (final entry in top3)
+          _buildWhiteDdayBar(entry.title, entry.dDayBadge, palette),
+      ],
+    );
+  }
+
+  /// 그룹 3: [군대 (곰신)]
+  /// - 슬림 복무율 프로그레스 바(%) 유지 + 바로 아래 가장 가까운 다가오는 D-Day 일정 1개만 표기
+  Widget _buildGroup3MilitaryBody(
+    WidgetRef ref,
+    CategoryThemePalette palette,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final service = ref.watch(militaryServiceProvider);
     final progress = ref.watch(militaryProgressProvider);
     final dischargeDday = ref.watch(militaryDischargeDdayProvider);
-    final leaveDday = ref.watch(militaryLeaveDdayProvider);
-    final currentRank = ref.watch(militaryCurrentRankProvider);
     final nextRankMilestone = ref.watch(militaryNextRankMilestoneProvider);
-    final nextRankDday = ref.watch(militaryNextRankDdayProvider);
-    final remainingVacationDays = ref.watch(militaryRemainingVacationDaysProvider);
     final progressPercent = (progress * 100).toStringAsFixed(1);
+
+    // 가장 가까운 다가오는 군대 D-Day 1개 산출
+    final candidates = <_UpcomingDdayEntry>[];
+    if (service.nextLeaveDate != null) {
+      final ld = DateTime(service.nextLeaveDate!.year,
+          service.nextLeaveDate!.month, service.nextLeaveDate!.day);
+      if (!ld.isBefore(today)) {
+        candidates.add(_UpcomingDdayEntry(
+          title: '🏖️ 다음 휴가',
+          dDayBadge: _formatUpcomingDday(ld, today),
+          sortDateTime: ld,
+        ));
+      }
+    }
+    if (nextRankMilestone != null) {
+      final rd = DateTime(nextRankMilestone.startDate.year,
+          nextRankMilestone.startDate.month, nextRankMilestone.startDate.day);
+      if (!rd.isBefore(today)) {
+        candidates.add(_UpcomingDdayEntry(
+          title: '🎖️ ${nextRankMilestone.rank.labelKo} 진급',
+          dDayBadge: _formatUpcomingDday(rd, today),
+          sortDateTime: rd,
+        ));
+      }
+    }
+    final dd = DateTime(service.dischargeDate.year,
+        service.dischargeDate.month, service.dischargeDate.day);
+    if (!dd.isBefore(today)) {
+      candidates.add(_UpcomingDdayEntry(
+        title: '🎉 전역일 (만기제대)',
+        dDayBadge: _formatUpcomingDday(dd, today),
+        sortDateTime: dd,
+      ));
+    }
+    candidates.addAll(_upcomingFromPlanItems(countDownItems, now, today));
+    candidates.sort((a, b) => a.sortDateTime.compareTo(b.sortDateTime));
+
+    final closest = candidates.isNotEmpty ? candidates.first : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,22 +768,25 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
                 '복무율 $progressPercent%',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: palette.primary),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: palette.primary,
+                ),
               ),
             ),
             const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                '전역 $dischargeDday',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: palette.text),
+            Text(
+              '전역 $dischargeDday',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: palette.text,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
@@ -415,974 +797,50 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildMiniTag('🎖️', nextRankMilestone == null ? '${currentRank.labelKo} (진급 완료)' : '${nextRankMilestone.rank.labelKo} $nextRankDday', palette),
-              const SizedBox(width: 6),
-              _buildMiniTag('🏖️', leaveDday != null ? '휴가 $leaveDday' : '휴가 미설정', palette),
-              const SizedBox(width: 6),
-              _buildMiniTag('⏳', '남은 휴가 $remainingVacationDays일', palette),
-            ],
-          ),
-        ),
+        if (closest != null)
+          _buildWhiteDdayBar(closest.title, closest.dDayBadge, palette)
+        else
+          Expanded(child: _buildEmptyPlaceholder()),
       ],
     );
   }
 
-  /// 3. 아기 카테고리 특화 요약 (태어난 지 N일째 / 개월수 롤링 + 다음 예방접종/검진 D-Day 2개)
-  Widget _buildBabyBody(
-    BuildContext context,
-    WidgetRef ref,
+  /// 표준 화이트 라운드 D-Day 바 (콤팩트 고정 높이 28px)
+  Widget _buildWhiteDdayBar(
+    String title,
+    String dDayBadge,
     CategoryThemePalette palette,
   ) {
-    BabyProfile? babyProfile;
-    if (category.metadata?['babyProfile'] != null) {
-      try {
-        babyProfile = BabyProfile.fromJson(Map<String, dynamic>.from(category.metadata!['babyProfile'] as Map));
-      } catch (_) {}
-    }
-    final topDdays = countDownItems.take(2).toList();
-    const babyController = BabyCategoryController();
-
-    String daysCountText = '태어난 지 1일째';
-    String detailedAge = '생후 1개월차';
-    if (babyProfile != null) {
-      daysCountText = babyController.formatBabyDaysCount(babyProfile.birthDate);
-      detailedAge = babyController.formatBabyAgeDetailed(babyProfile.birthDate);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: palette.chipBg,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                daysCountText,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: palette.border),
-              ),
-              child: Text(
-                detailedAge,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: palette.text),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        if (topDdays.isNotEmpty)
-          for (final item in topDdays) ...[
-            _buildDdayRow(item.title, dDayLabel(item.date), palette),
-          ]
-        else
-          Text(
-            '등록된 접종/검진 일정이 없어요',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-          ),
-      ],
-    );
-  }
-
-  /// 4. 시험/자격증 카테고리 특화 요약 (접수/1차/2차/발표 구분 없이 현재 시점 가장 D-Day가 임박한 일정 대표 추출)
-  Widget _buildExamBody(
-    BuildContext context,
-    WidgetRef ref,
-    CategoryThemePalette palette,
-  ) {
-    // 1. 카테고리 메타데이터의 시험 목록에서 세부 단계(원서접수, 1차 필기, 2차 실기, 성적/합격발표) 및 과목 일정 추출
-    final List<ExamProfile> exams = [];
-    final raw = category.metadata?['exams'] as List<dynamic>?;
-    if (raw != null) {
-      try {
-        exams.addAll(raw
-            .map((e) => ExamProfile.fromJson(Map<String, dynamic>.from(e as Map)))
-            .where((e) => !e.isHidden));
-      } catch (_) {}
-    }
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final candidateEvents = <({String title, String dDay, int daysRemaining, DateTime date})>[];
-
-    for (final exam in exams) {
-      // 1) 자격증 / 공인시험 단계들
-      for (final stage in exam.stages) {
-        if (stage.isCompleted) continue;
-        final target = (stage.stageType == ExamStageType.application && stage.endDate != null)
-            ? (today.isAfter(DateTime(stage.startDate.year, stage.startDate.month, stage.startDate.day))
-                ? stage.endDate!
-                : stage.startDate)
-            : stage.startDate;
-        final targetDate = DateTime(target.year, target.month, target.day);
-        final diff = targetDate.difference(today).inDays;
-        if (diff >= 0) {
-          final dDayStr = diff == 0 ? 'D-Day' : 'D-$diff';
-          candidateEvents.add((
-            title: '${exam.title} · ${stage.name}',
-            dDay: dDayStr,
-            daysRemaining: diff,
-            date: targetDate,
-          ));
-        }
-      }
-      // 2) 중간고사 / 기말고사 과목들
-      for (final sub in exam.subjects) {
-        if (sub.isCompleted) continue;
-        final subDate = DateTime(sub.examDate.year, sub.examDate.month, sub.examDate.day);
-        final diff = subDate.difference(today).inDays;
-        if (diff >= 0) {
-          final dDayStr = diff == 0 ? 'D-Day' : 'D-$diff';
-          candidateEvents.add((
-            title: '${exam.title} · ${sub.subjectName}',
-            dDay: dDayStr,
-            daysRemaining: diff,
-            date: subDate,
-          ));
-        }
-      }
-    }
-
-    // D-Day가 가장 임박한 순서 (daysRemaining 오름차순: 0, 1, 2...)
-    candidateEvents.sort((a, b) => a.daysRemaining.compareTo(b.daysRemaining));
-
-    // 메타데이터에 등록된 일정이 없는 경우 countDownItems 플랜 아이템 활용
-    final List<({String title, String dDay})> displayRows = [];
-    if (candidateEvents.isNotEmpty) {
-      for (final ev in candidateEvents.take(2)) {
-        displayRows.add((title: ev.title, dDay: ev.dDay));
-      }
-    } else if (countDownItems.isNotEmpty) {
-      for (final item in countDownItems.take(2)) {
-        displayRows.add((title: item.title, dDay: dDayLabel(item.date)));
-      }
-    }
-
-    final totalCount = candidateEvents.isNotEmpty ? candidateEvents.length : countDownItems.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (totalCount > 0) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: palette.chipBg,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              candidateEvents.isNotEmpty
-                  ? '가장 임박한 시험 · ${candidateEvents.first.dDay}'
-                  : '준비 중인 시험 일정 $totalCount개',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-        if (displayRows.isNotEmpty)
-          for (final row in displayRows) ...[
-            _buildDdayRow(row.title, row.dDay, palette),
-          ]
-        else
-          Text(
-            '등록된 시험 일정이 없어요',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-          ),
-      ],
-    );
-  }
-
-  /// 5. 솔로 카테고리 특화 요약 (나에게 집중한 지 N일째 + 자기계발/설렘 D-Day 2개)
-  Widget _buildSoloBody(
-    BuildContext context,
-    WidgetRef ref,
-    CategoryThemePalette palette,
-  ) {
-    SoloProfile? soloProfile;
-    if (category.metadata?['soloProfile'] != null) {
-      try {
-        soloProfile = SoloProfile.fromJson(Map<String, dynamic>.from(category.metadata!['soloProfile'] as Map));
-      } catch (_) {}
-    }
-    final daysSinceStart = soloProfile?.daysCount() ?? (countUpItems.isNotEmpty ? DateTime.now().difference(countUpItems.first.date).inDays : 1);
-    final countUpLabel = '나에게 집중한 지 D+$daysSinceStart일째';
-    final topDdays = countDownItems.take(2).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: palette.chipBg,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            countUpLabel,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
-          ),
-        ),
-        const SizedBox(height: 10),
-        if (topDdays.isNotEmpty)
-          for (final item in topDdays) ...[
-            _buildDdayRow(item.title, dDayLabel(item.date), palette),
-          ]
-        else
-          Text(
-            '등록된 플랜이 없어요',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-          ),
-      ],
-    );
-  }
-
-  /// 6. 루틴 / 주간 계획표 특화 요약 (다가오는 루틴 일정 스마트 계산 및 뱃지)
-  Widget _buildRoutineBody(
-    BuildContext context,
-    WidgetRef ref,
-    CategoryThemePalette palette,
-  ) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final allItems = [...countDownItems, ...countUpItems];
-
-    // Calculate upcoming occurrences for each routine item
-    final upcomingList = <({PlanItem item, DateTime targetDateTime, String timeLabel, String badgeText})>[];
-
-    for (final item in allItems) {
-      final hour = item.deadlineTime?.hour ?? 0;
-      final minute = item.deadlineTime?.minute ?? 0;
-      final timeStr = item.deadlineTime != null
-          ? '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}'
-          : '';
-
-      DateTime? nextDate;
-      if (item.repeatConfig.type == RepeatType.daily) {
-        final candidate = DateTime(today.year, today.month, today.day, hour, minute);
-        if (candidate.isAfter(now) || (hour == 0 && minute == 0 && !candidate.isBefore(today))) {
-          nextDate = candidate;
-        } else {
-          nextDate = candidate.add(const Duration(days: 1));
-        }
-      } else if (item.repeatConfig.type == RepeatType.weekly && item.repeatConfig.weekdays.isNotEmpty) {
-        for (int i = 0; i <= 7; i++) {
-          final checkDate = today.add(Duration(days: i));
-          final checkWd = checkDate.weekday % 7; // 0 for Sunday
-          if (item.repeatConfig.weekdays.contains(checkWd) || item.repeatConfig.weekdays.contains(checkDate.weekday)) {
-            final cand = DateTime(checkDate.year, checkDate.month, checkDate.day, hour, minute);
-            if (cand.isAfter(now) || i > 0) {
-              nextDate = cand;
-              break;
-            }
-          }
-        }
-      }
-
-      nextDate ??= DateTime(item.date.year, item.date.month, item.date.day, hour, minute);
-
-      final diffDays = DateTime(nextDate.year, nextDate.month, nextDate.day).difference(today).inDays;
-      String timeLabel;
-      String badgeText;
-
-      const weekdaysKo = ['일', '월', '화', '수', '목', '금', '토'];
-      final weekdayKo = weekdaysKo[nextDate.weekday % 7];
-
-      if (diffDays == 0) {
-        timeLabel = timeStr.isNotEmpty ? '오늘 $timeStr' : '오늘';
-        final diffMinutes = nextDate.difference(now).inMinutes;
-        if (diffMinutes > 0 && diffMinutes < 60) {
-          badgeText = '$diffMinutes분 전';
-        } else if (diffMinutes >= 60 && diffMinutes <= 1440) {
-          final diffHours = (diffMinutes / 60).floor();
-          badgeText = '$diffHours시간 전';
-        } else {
-          badgeText = '오늘';
-        }
-      } else if (diffDays == 1) {
-        timeLabel = timeStr.isNotEmpty ? '내일 $timeStr' : '내일';
-        badgeText = '내일';
-      } else {
-        timeLabel = timeStr.isNotEmpty ? '$weekdayKo요일 $timeStr' : '$weekdayKo요일';
-        badgeText = diffDays > 0 ? 'D-$diffDays' : dDayLabel(item.date);
-      }
-
-      upcomingList.add((
-        item: item,
-        targetDateTime: nextDate,
-        timeLabel: timeLabel,
-        badgeText: badgeText,
-      ));
-    }
-
-    upcomingList.sort((a, b) => a.targetDateTime.compareTo(b.targetDateTime));
-
-    final displayList = upcomingList.take(2).toList();
-    final todayCount = upcomingList.where((e) {
-      return DateTime(e.targetDateTime.year, e.targetDateTime.month, e.targetDateTime.day) == today;
-    }).length;
-
-    final topPillText = todayCount > 0 ? '오늘 예정된 루틴 $todayCount개' : '다가오는 루틴 일정';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: palette.chipBg,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            topPillText,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: palette.primary,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        if (displayList.isNotEmpty)
-          for (final entry in displayList) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: palette.border.withValues(alpha: 0.8)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          entry.item.title,
-                          style: AppTypography.caption.copyWith(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.protoHeading,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (entry.timeLabel.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            entry.timeLabel,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: palette.text.withValues(alpha: 0.8),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: palette.primary,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      entry.badgeText,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ]
-        else
-          Text(
-            '등록된 루틴 일정이 없어요',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-          ),
-      ],
-    );
-  }
-
-  /// 공통 표준 바디 (덕질, 반려동물, 목표, 일정 등)
-  Widget _buildStandardBody(CategoryThemePalette palette) {
-    final topCountUpPills = <Widget>[];
-
-    if (customCountUpText != null && customCountUpText!.isNotEmpty) {
-      topCountUpPills.add(
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: palette.chipBg,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            customCountUpText!,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
-          ),
-        ),
-      );
-    }
-
-    for (final item in countUpItems.take(2)) {
-      if (customCountUpText != null && countUpItems.length == 1) continue;
-      topCountUpPills.add(
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: palette.chipBg,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            '${item.title} ${_formatDaysCount(item.date)}',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: palette.primary),
-          ),
-        ),
-      );
-      if (topCountUpPills.length >= 2) break;
-    }
-
-    final topDDayItems = countDownItems.take(2).toList();
-    final hasNoData = topCountUpPills.isEmpty && topDDayItems.isEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (topCountUpPills.isNotEmpty) ...[
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: topCountUpPills,
-          ),
-          if (topDDayItems.isNotEmpty) const SizedBox(height: 10),
-        ],
-        if (topDDayItems.isNotEmpty) ...[
-          for (final item in topDDayItems) ...[
-            _buildDdayRow(item.title, dDayLabel(item.date), palette),
-          ],
-        ] else if (hasNoData) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              '등록된 디데이 일정이 없어요',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  /// 7. 취미 카테고리 특화 요약 (시작일 기준 N일째 또는 가장 가까운 일정 D-Day)
-  Widget _buildHobbyBody(
-    BuildContext context,
-    WidgetRef ref,
-    CategoryThemePalette palette,
-  ) {
-    // 하위 호환성: 레거시 테스트에서 metadata['completedCount']를 명시한 경우
-    final legacyCompletedCount = category.metadata?['completedCount'] as int?;
-    if (legacyCompletedCount != null) {
-      final now = DateTime.now();
-      final topCountUp = countUpItems.isNotEmpty ? countUpItems.first : null;
-      final topCountDown = countDownItems.isNotEmpty ? countDownItems.first : null;
-
-      final String mainDdayText;
-      if (topCountDown != null) {
-        mainDdayText = '${topCountDown.title} ${dDayLabel(topCountDown.date)}';
-      } else if (topCountUp != null) {
-        final days = now.difference(topCountUp.date).inDays + 1;
-        mainDdayText = '${category.name} 시작한 지 $days일째';
-      } else {
-        mainDdayText = '${category.name} 진행 중';
-      }
-
-      final topDdays = countDownItems.take(2).toList();
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: palette.chipBg,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  mainDdayText,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: palette.primary,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: palette.border),
-                ),
-                child: Text(
-                  '이번 달 $legacyCompletedCount회 완료',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: palette.text,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (topDdays.isNotEmpty)
-            for (final item in topDdays) ...[
-              _buildDdayRow(item.title, dDayLabel(item.date), palette),
-            ]
-          else
-            Text(
-              '등록된 목표 일정이 없어요',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-            ),
-        ],
-      );
-    }
-
-    final now = DateTime.now();
-    final nextScheduleData = ref.watch(nextHobbyScheduleProvider);
-    final longestHobby = ref.watch(longestRunningHobbyProvider);
-
-    final String chipText;
-    final String? subChipText;
-    final String? scheduleRowTitle;
-    final String? scheduleRowBadge;
-
-    if (nextScheduleData != null) {
-      chipText = '${nextScheduleData.hobby.icon} ${nextScheduleData.schedule.title} ${nextScheduleData.schedule.dDayBadge(now)}';
-      subChipText = '${nextScheduleData.hobby.name} ${nextScheduleData.hobby.daysSinceStartText(now)}';
-      scheduleRowTitle = nextScheduleData.schedule.location != null
-          ? '${nextScheduleData.schedule.title} (📍 ${nextScheduleData.schedule.location})'
-          : nextScheduleData.schedule.title;
-      scheduleRowBadge = nextScheduleData.schedule.dDayBadge(now);
-    } else if (longestHobby != null) {
-      chipText = '${longestHobby.icon} ${longestHobby.name} ${longestHobby.daysSinceStartText(now)}';
-      subChipText = longestHobby.formattedStartDate;
-      scheduleRowTitle = null;
-      scheduleRowBadge = null;
-    } else {
-      chipText = '${category.name} 진행 중';
-      subChipText = null;
-      scheduleRowTitle = null;
-      scheduleRowBadge = null;
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: palette.chipBg,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                chipText,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: palette.primary,
-                ),
-              ),
-            ),
-            if (subChipText != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: palette.border),
-                ),
-                child: Text(
-                  subChipText,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: palette.text,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        if (scheduleRowTitle != null && scheduleRowBadge != null)
-          _buildDdayRow(scheduleRowTitle, scheduleRowBadge, palette)
-        else
-          Text(
-            '등록된 다음 취미 일정이 없어요',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-          ),
-      ],
-    );
-  }
-
-  /// 8. 여행 카테고리 특화 요약 (현재 진행 중이거나 가장 가까운 여행 1개 우선 노출 & 짐 싸기 진행률)
-  Widget _buildTravelBody(
-    BuildContext context,
-    WidgetRef ref,
-    CategoryThemePalette palette,
-  ) {
-    final hasMetadataStartDate = category.metadata?['startDate'] != null;
-    final nextTrip = ref.watch(nextTripProvider);
-
-    if (!hasMetadataStartDate && nextTrip != null) {
-      final isOngoing = nextTrip.isOngoing();
-      final String travelStatusText;
-      if (isOngoing) {
-        travelStatusText = '${nextTrip.destination} ${nextTrip.currentDayNumber()}일차';
-      } else {
-        travelStatusText = '다음 여행: ${nextTrip.emoji} ${nextTrip.destination} ${nextTrip.dDayBadge()}';
-      }
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: palette.chipBg,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  travelStatusText,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: palette.primary,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: palette.border),
-                ),
-                child: Text(
-                  nextTrip.dateRangeText,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: palette.text,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _buildMiniTag('🎒', '짐 싸기 ${nextTrip.packingProgressText} (${(nextTrip.packingProgress * 100).toInt()}%)', palette),
-          if (nextTrip.daySchedules.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            _buildDdayRow(nextTrip.daySchedules.first.title, 'Day 1', palette),
-          ],
-        ],
-      );
-    }
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    DateTime? startDate;
-    DateTime? endDate;
-
-    if (category.metadata?['startDate'] != null) {
-      try {
-        startDate = DateTime.parse(category.metadata!['startDate'] as String);
-      } catch (_) {}
-    }
-    if (category.metadata?['endDate'] != null) {
-      try {
-        endDate = DateTime.parse(category.metadata!['endDate'] as String);
-      } catch (_) {}
-    }
-
-    if (startDate == null && countDownItems.isNotEmpty) {
-      startDate = countDownItems.first.date;
-    }
-    if (startDate == null && countUpItems.isNotEmpty) {
-      startDate = countUpItems.first.date;
-    }
-
-    final String travelStatusText;
-    if (startDate != null) {
-      final sDate = DateTime(startDate.year, startDate.month, startDate.day);
-      final eDate = endDate != null
-          ? DateTime(endDate.year, endDate.month, endDate.day)
-          : sDate.add(const Duration(days: 3));
-
-      if (today.isBefore(sDate)) {
-        final diff = sDate.difference(today).inDays;
-        travelStatusText = diff == 0 ? '오늘 출발 D-Day' : '출발 D-$diff';
-      } else if (!today.isAfter(eDate)) {
-        final currentDay = today.difference(sDate).inDays + 1;
-        travelStatusText = '여행 $currentDay일차';
-      } else {
-        final pastDays = today.difference(eDate).inDays;
-        travelStatusText = '다녀온 지 $pastDays일째';
-      }
-    } else {
-      travelStatusText = '설레는 여행 준비 중';
-    }
-
-    final String periodText;
-    if (startDate != null) {
-      final s = '${startDate.year}.${startDate.month.toString().padLeft(2, '0')}.${startDate.day.toString().padLeft(2, '0')}';
-      if (endDate != null) {
-        final e = '${endDate.year}.${endDate.month.toString().padLeft(2, '0')}.${endDate.day.toString().padLeft(2, '0')}';
-        periodText = '$s ~ $e';
-      } else {
-        periodText = '$s 출발';
-      }
-    } else {
-      periodText = '여행 일정 미정';
-    }
-
-    final topDdays = countDownItems.take(2).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: palette.chipBg,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                travelStatusText,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: palette.primary,
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: palette.border),
-              ),
-              child: Text(
-                periodText,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: palette.text,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        if (topDdays.isNotEmpty)
-          for (final item in topDdays) ...[
-            _buildDdayRow(item.title, dDayLabel(item.date), palette),
-          ]
-        else
-          Text(
-            '등록된 세부 일정이 없어요',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
-          ),
-      ],
-    );
-  }
-
-  /// 9. 결혼 준비 카테고리 특화 요약 (본식 D-N일, 57개 개별 항목 체크리스트 달성률 프로그레스 바, 최우선 임박 일정)
-  Widget _buildWeddingBody(
-    BuildContext context,
-    WidgetRef ref,
-    CategoryThemePalette palette,
-  ) {
-    final weddingDate = ref.watch(weddingDateProvider);
-    final stats = ref.watch(weddingStatsProvider);
-    final items = ref.watch(weddingListProvider);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    final String mainDdayText;
-    if (weddingDate != null) {
-      final wDate = DateTime(weddingDate.year, weddingDate.month, weddingDate.day);
-      if (today.isBefore(wDate)) {
-        final diff = wDate.difference(today).inDays;
-        mainDdayText = '본식 D-$diff';
-      } else if (today.isAtSameMomentAs(wDate)) {
-        mainDdayText = '오늘 본식 D-Day';
-      } else {
-        final past = today.difference(wDate).inDays;
-        mainDdayText = '결혼한 지 $past일째';
-      }
-    } else {
-      mainDdayText = '예식일 설정하기';
-    }
-
-    // Upcoming uncompleted items with targetDate
-    final upcomingItems = items
-        .where((i) => !i.isCompleted && i.targetDate != null)
-        .toList()
-      ..sort((a, b) => a.targetDate!.compareTo(b.targetDate!));
-
-    final displayItems = upcomingItems.isNotEmpty
-        ? upcomingItems.take(2).toList()
-        : items.where((i) => !i.isCompleted).take(2).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: palette.chipBg,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                mainDdayText,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: palette.primary,
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: palette.border),
-              ),
-              child: Text(
-                '${stats.completed}/${stats.total} 완료 (${(stats.ratio * 100).toInt()}%)',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: palette.text,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: stats.ratio,
-            backgroundColor: palette.border,
-            valueColor: AlwaysStoppedAnimation<Color>(palette.primary),
-            minHeight: 6,
-          ),
-        ),
-        const SizedBox(height: 10),
-        if (displayItems.isNotEmpty)
-          for (final item in displayItems) ...[
-            _buildDdayRow(
-              item.title,
-              item.targetDate != null ? item.dDayLabel() : '미정',
-              palette,
-            ),
-          ]
-        else
-          Text(
-            '모든 결혼 준비를 마쳤어요 🎉',
-            style: TextStyle(
-              fontSize: 12,
-              color: palette.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildDdayRow(String title, String dDayText, CategoryThemePalette palette) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      height: 28,
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: palette.border.withValues(alpha: 0.8)),
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: palette.border.withValues(alpha: 0.7)),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               title,
-              style: AppTypography.caption.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.protoHeading,
-              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.protoHeading,
+              ),
             ),
           ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-            decoration: BoxDecoration(
+          const SizedBox(width: 6),
+          Text(
+            dDayBadge,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
               color: palette.primary,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              dDayText,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 11,
-              ),
             ),
           ),
         ],
@@ -1390,28 +848,17 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildMiniTag(String emoji, String text, CategoryThemePalette palette) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: palette.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 11)),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: palette.text),
-            ),
-          ),
-        ],
+  /// 일정이 없을 때도 카드 높이를 일관되게 유지하는 단정한 빈 상태 플레이스홀더
+  Widget _buildEmptyPlaceholder() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        '등록된 일정이 없어요',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey.shade500,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }

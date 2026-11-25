@@ -116,19 +116,19 @@ class _MilitarySetupDialogState extends ConsumerState<_MilitarySetupDialog> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: AppColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
             const Icon(
               Icons.calendar_month_rounded,
-              size: 18,
+              size: 16,
               color: AppColors.protoStepLabel,
             ),
             const SizedBox(width: 8),
@@ -136,6 +136,7 @@ class _MilitarySetupDialogState extends ConsumerState<_MilitarySetupDialog> {
               date == null ? placeholder : _formatDate(date),
               style: AppTypography.cardLabel.copyWith(
                 color: AppColors.protoHeading,
+                fontSize: 13.5,
               ),
             ),
           ],
@@ -146,122 +147,131 @@ class _MilitarySetupDialogState extends ConsumerState<_MilitarySetupDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final maxH = MediaQuery.of(context).size.height * 0.85;
     return GestureDetector(
       onTap: () => Navigator.of(context).pop(),
-      child: Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(20),
-        child: GestureDetector(
-          onTap: () {},
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxWidth: 380),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: AppColors.protoCardBg,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '군대 (곰신) 설정',
-                          style: AppTypography.heading2.copyWith(
-                            color: AppColors.protoHeading,
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: const Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 20,
-                            color: AppColors.protoSubtitle,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _sectionLabel('군종'),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final branch in MilitaryBranch.values)
-                        _BranchChip(
-                          label: branch.labelKo,
-                          selected: _branch == branch,
-                          onTap: () => _selectBranch(branch),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _sectionLabel('입대일'),
-                  const SizedBox(height: 6),
-                  _dateField(date: _enlistDate, onTap: _pickEnlistDate),
-                  const SizedBox(height: 16),
-                  _sectionLabel('전역일 (군종 선택 시 자동 제안, 직접 수정 가능)'),
-                  const SizedBox(height: 6),
-                  _dateField(date: _dischargeDate, onTap: _pickDischargeDate),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _sectionLabel('다음 휴가일 (선택)'),
-                      if (_nextLeaveDate != null)
-                        GestureDetector(
-                          onTap: () => setState(() => _nextLeaveDate = null),
+      child: SafeArea(
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(
+              width: double.infinity,
+              constraints: BoxConstraints(maxWidth: 380, maxHeight: maxH),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.protoCardBg,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
                           child: Text(
-                            '지우기',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.protoSubtitle,
-                              decoration: TextDecoration.underline,
+                            '군대 (곰신) 설정',
+                            style: AppTypography.heading2.copyWith(
+                              color: AppColors.protoHeading,
+                              fontSize: 16.5,
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  _dateField(
-                    date: _nextLeaveDate,
-                    onTap: _pickNextLeaveDate,
-                    placeholder: '휴가일을 선택해주세요',
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _handleSave,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.protoButtonBg,
-                        foregroundColor: AppColors.protoButtonText,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 19,
+                              color: AppColors.protoSubtitle,
+                            ),
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _sectionLabel('군종'),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final branch in MilitaryBranch.values)
+                          _BranchChip(
+                            label: branch.labelKo,
+                            selected: _branch == branch,
+                            onTap: () => _selectBranch(branch),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _sectionLabel('입대일'),
+                    const SizedBox(height: 5),
+                    _dateField(date: _enlistDate, onTap: _pickEnlistDate),
+                    const SizedBox(height: 10),
+                    _sectionLabel('전역일 (군종 선택 시 자동 제안, 직접 수정 가능)'),
+                    const SizedBox(height: 5),
+                    _dateField(date: _dischargeDate, onTap: _pickDischargeDate),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _sectionLabel('다음 휴가일 (선택)'),
+                        if (_nextLeaveDate != null)
+                          GestureDetector(
+                            onTap: () => setState(() => _nextLeaveDate = null),
+                            child: Text(
+                              '지우기',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.protoSubtitle,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    _dateField(
+                      date: _nextLeaveDate,
+                      onTap: _pickNextLeaveDate,
+                      placeholder: '휴가일을 선택해주세요',
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _handleSave,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.protoButtonBg,
+                          foregroundColor: AppColors.protoButtonText,
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text('저장'),
                       ),
-                      child: const Text('저장'),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('닫기'),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text('닫기'),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

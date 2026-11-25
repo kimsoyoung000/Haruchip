@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/colors.dart';
-import '../../../design_system/typography.dart';
 import 'package:haruchip/features/shared/widgets/add_event_bottom_sheet.dart';
 
+import '../models/calendar_display_settings.dart';
 import '../models/calendar_event.dart';
 
 /// 한국 주요 양력 공휴일 맵 (MM-DD)
@@ -18,8 +17,8 @@ const Map<String, String> kKoreanHolidays = {
   '12-25': '성탄절',
 };
 
-/// 한국형 맞춤 월간 캘린더 그리드 (그룹웨어/다우오피스 스타일 컬러 칩 라벨링, 공휴일 표기, 일/월 시작 토글)
-class MonthGrid extends StatefulWidget {
+/// 미니멀 플랫 월간 캘린더 그리드 (무스크롤 Zero-Scroll + 순백 플랫 캔버스 + 좌측 세로 컬러 바 라벨)
+class MonthGrid extends StatelessWidget {
   const MonthGrid({
     super.key,
     required this.focusedMonth,
@@ -29,7 +28,8 @@ class MonthGrid extends StatefulWidget {
     required this.onDateSelected,
     required this.onPreviousMonth,
     required this.onNextMonth,
-    this.startOnMonday = false,
+    this.startOnMonday,
+    this.displaySettings = const CalendarDisplaySettings(),
   });
 
   final DateTime focusedMonth;
@@ -39,27 +39,27 @@ class MonthGrid extends StatefulWidget {
   final ValueChanged<DateTime> onDateSelected;
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
-  final bool startOnMonday;
+  final bool? startOnMonday;
+  final CalendarDisplaySettings displaySettings;
 
-  @override
-  State<MonthGrid> createState() => _MonthGridState();
-}
-
-class _MonthGridState extends State<MonthGrid> {
-  late bool _startOnMonday;
-
-  @override
-  void initState() {
-    super.initState();
-    _startOnMonday = widget.startOnMonday;
-  }
+  // 레퍼런스 스타일 다크 그레이 선택 하이라이트 & 포테이토 칩 소프트 크림 오늘 강조
+  static const Color _kSelectedCardBg = Color(0xFF2C2C2E);
+  static const Color _kTodayPillBg = Color(0xFFFFF3D6);
+  static const Color _kTodayPillBorder = Color(0xFFF2C97D);
+  static const Color _kTodayText = Color(0xFF3D2C10);
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   String? _getHolidayName(DateTime date) {
-    final key = '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final key =
+        '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     return kKoreanHolidays[key];
+  }
+
+  String _approxLunarLabel(DateTime date) {
+    final approx = date.subtract(const Duration(days: 29));
+    return '${approx.month}.${approx.day}';
   }
 
   Color _parseColor(String hex) {
@@ -71,323 +71,375 @@ class _MonthGridState extends State<MonthGrid> {
     }
   }
 
+  /// 연속 일정(여행 등) 여부 판별
+  bool _isContinuousEvent(CalendarEvent ev) {
+    return ev.id.startsWith('cal-trip-') ||
+        ev.categoryKey == 'travel' ||
+        ev.title.contains('일차)');
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
-    final firstOfMonth = DateTime(widget.focusedMonth.year, widget.focusedMonth.month, 1);
-    final daysInMonth = DateTime(
-      widget.focusedMonth.year,
-      widget.focusedMonth.month + 1,
-      0,
-    ).day;
+    final settings = displaySettings;
+    final useMondayStart = startOnMonday ?? settings.startOnMonday;
 
-    // 요일 시작 계산 (일요일 시작 vs 월요일 시작)
-    final leadingBlanks = _startOnMonday
+    final firstOfMonth = DateTime(focusedMonth.year, focusedMonth.month, 1);
+    final daysInMonth =
+        DateTime(focusedMonth.year, focusedMonth.month + 1, 0).day;
+
+    final leadingBlanks = useMondayStart
         ? (firstOfMonth.weekday - 1) % 7
         : firstOfMonth.weekday % 7;
 
-    final weekLabels = _startOnMonday
+    final totalSlots = leadingBlanks + daysInMonth;
+    final rowCount = (totalSlots / 7).ceil();
+    final gridItemCount = rowCount * 7;
+
+    final gridStartDate = firstOfMonth.subtract(Duration(days: leadingBlanks));
+
+    final weekLabels = useMondayStart
         ? const ['월', '화', '수', '목', '금', '토', '일']
         : const ['일', '월', '화', '수', '목', '금', '토'];
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.protoCardBg,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.protoCardBorder, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    // 가로 넘김 방식으로 단일화
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity < -220) {
+          onNextMonth();
+        } else if (velocity > 220) {
+          onPreviousMonth();
+        }
+      },
       child: Column(
         children: [
-          // 상단 년/월 헤더 & 이동 버튼 & 일/월 시작 토글
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                runSpacing: 4,
-                children: [
-                  Text(
-                    '${widget.focusedMonth.year}년 ${widget.focusedMonth.month}월',
-                    style: AppTypography.cardLabel.copyWith(
-                      color: AppColors.protoHeading,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: () => setState(() => _startOnMonday = !_startOnMonday),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceMuted,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
+          // 요일 헤더 (플랫, 박스 없음)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              children: [
+                for (int i = 0; i < weekLabels.length; i++)
+                  Expanded(
+                    child: Center(
                       child: Text(
-                        _startOnMonday ? '월요일 시작' : '일요일 시작',
-                        style: AppTypography.caption.copyWith(
-                          fontSize: 10,
-                          color: AppColors.protoSubtitle,
+                        weekLabels[i],
+                        style: TextStyle(
+                          color: (useMondayStart ? i == 6 : i == 0)
+                              ? const Color(0xFF9CA3AF)
+                              : (i == (useMondayStart ? 5 : 6)
+                                  ? const Color(0xFF9CA3AF)
+                                  : const Color(0xFF1F2937)),
                           fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                          height: 1.15,
                         ),
                       ),
                     ),
                   ),
-                ],
-                ),
-              ),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: widget.onPreviousMonth,
-                    icon: const Icon(Icons.chevron_left_rounded),
-                    color: AppColors.protoCardText,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  IconButton(
-                    onPressed: widget.onNextMonth,
-                    icon: const Icon(Icons.chevron_right_rounded),
-                    color: AppColors.protoCardText,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // 요일 헤더
-          Row(
-            children: [
-              for (int i = 0; i < weekLabels.length; i++)
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      weekLabels[i],
-                      style: AppTypography.caption.copyWith(
-                        color: (_startOnMonday ? i == 6 : i == 0)
-                            ? AppColors.danger
-                            : (i == (_startOnMonday ? 5 : 6)
-                                ? const Color(0xFF1976D2)
-                                : AppColors.protoSubtitle),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // 날짜 셀 그리드
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 3,
-              childAspectRatio: 0.65,
+              ],
             ),
-            itemCount: leadingBlanks + daysInMonth,
-            itemBuilder: (context, index) {
-              if (index < leadingBlanks) return const SizedBox.shrink();
-              final day = index - leadingBlanks + 1;
-              final date = DateTime(
-                widget.focusedMonth.year,
-                widget.focusedMonth.month,
-                day,
-              );
+          ),
 
-              final isToday = _isSameDay(date, today);
-              final isSelected = _isSameDay(date, widget.selectedDate);
-              final dayEvents = widget.getEventsOnDate?.call(date) ?? [];
-              final holidayName = _getHolidayName(date);
-              final isSunday = date.weekday == DateTime.sunday;
-              final isSaturday = date.weekday == DateTime.saturday;
+          // 날짜 셀 그리드 — 격자 테두리 제거, 남은 높이를 주차 수로 동적 분배 (Zero-Scroll)
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const double mainSpacing = 2.0;
+                const double crossSpacing = 1.0;
+                final double availableHeight = constraints.hasBoundedHeight
+                    ? constraints.maxHeight
+                    : rowCount * 62.0;
+                final double rawCellHeight =
+                    (availableHeight - mainSpacing * (rowCount - 1)) / rowCount;
+                final double cellHeight =
+                    rawCellHeight > 14.0 ? rawCellHeight : 14.0;
 
-              Color dayTextColor;
-              if (isToday) {
-                dayTextColor = AppColors.protoButtonText;
-              } else if (isSunday || holidayName != null) {
-                dayTextColor = AppColors.danger;
-              } else if (isSaturday) {
-                dayTextColor = const Color(0xFF1976D2);
-              } else {
-                dayTextColor = AppColors.protoCardText;
-              }
+                final double baseDayFont = cellHeight < 38
+                    ? 10.5
+                    : (cellHeight < 52 ? 12.0 : 13.0);
+                final double dayFontSize =
+                    (baseDayFont * settings.fontSize.scale).clamp(9.5, 15.0);
+                final double baseChipFont = cellHeight < 46 ? 9.5 : 10.5;
+                final double chipFontSize =
+                    (baseChipFont * settings.fontSize.scale).clamp(8.5, 12.0);
 
-              return InkWell(
-                onTap: () {
-                  widget.onDateSelected(date);
-                },
-                onDoubleTap: () {
-                  widget.onDateSelected(date);
-                  showAddEventBottomSheet(
-                    context,
-                    categoryKey: 'plan',
-                    initialDate: date,
-                  );
-                },
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isToday
-                        ? AppColors.protoButtonBg
-                        : (isSelected
-                            ? AppColors.protoCardSelectedBg
-                            : Colors.transparent),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isSelected && !isToday
-                          ? AppColors.protoCardSelectedBorder
-                          : const Color(0xFFE5E5EA),
-                      width: isSelected ? 1.8 : 0.6,
-                    ),
+                return GridView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    mainAxisSpacing: mainSpacing,
+                    crossAxisSpacing: crossSpacing,
+                    mainAxisExtent: cellHeight,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // 날짜 숫자 및 공휴일 라벨
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // 아주 좁은 폰·큰 글씨에서는 칸보다 숫자가 커질 수 있어 살짝 줄여 맞춘다.
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                            decoration: isToday
-                                ? BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(4),
-                                  )
-                                : null,
-                            child: Text(
-                              '$day',
-                              style: TextStyle(
-                                fontWeight: (isToday || isSelected)
-                                    ? FontWeight.w900
-                                    : FontWeight.w600,
-                                color: dayTextColor,
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          ),
-                            ),
-                          ),
-                          if (holidayName != null)
-                            Expanded(
-                              child: Text(
-                                holidayName,
-                                style: const TextStyle(
-                                  fontSize: 7.5,
-                                  color: AppColors.danger,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.right,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
+                  itemCount: gridItemCount,
+                  itemBuilder: (context, index) {
+                    final date = gridStartDate.add(Duration(days: index));
+                    final isCurrentMonth = date.month == focusedMonth.month &&
+                        date.year == focusedMonth.year;
+                    final isToday = _isSameDay(date, today);
+                    final isSelected = _isSameDay(date, selectedDate);
+                    final dayEvents =
+                        isCurrentMonth ? (getEventsOnDate?.call(date) ?? []) : <CalendarEvent>[];
+                    final holidayName =
+                        isCurrentMonth ? _getHolidayName(date) : null;
+                    final isSunday = date.weekday == DateTime.sunday;
+                    final isSaturday = date.weekday == DateTime.saturday;
 
-                      // 그룹웨어 감성 둥근 컬러 라벨 바 (Badge Chips)
-                      Expanded(
-                        // 칸 높이(좁은 폰·큰 글씨에서는 낮아짐)에 들어가는 칩 개수만 보여주고
-                        // 나머지는 "+N"으로 줄인다 — 최대 2개, 넘치면 RenderFlex 오류가 나므로.
-                        child: LayoutBuilder(builder: (context, box) {
-                          final scaler = MediaQuery.textScalerOf(context);
-                          final chipH = scaler.scale(10) + 8.5;
-                          final plusH = scaler.scale(9) + 2;
-                          var shown = dayEvents.length < 2 ? dayEvents.length : 2;
-                          while (shown > 0 &&
-                              shown * chipH + (dayEvents.length > shown ? plusH : 0) >
-                                  box.maxHeight) {
-                            shown--;
+                    Color dayTextColor;
+                    if (isSelected) {
+                      dayTextColor = Colors.white;
+                    } else if (!isCurrentMonth) {
+                      dayTextColor = const Color(0xFFC7C7CC);
+                    } else if (isToday) {
+                      dayTextColor = _kTodayText;
+                    } else if (holidayName != null || isSunday) {
+                      dayTextColor = const Color(0xFFE11D48);
+                    } else if (isSaturday) {
+                      dayTextColor = const Color(0xFF6B7280);
+                    } else {
+                      dayTextColor = const Color(0xFF111827);
+                    }
+
+                    return InkWell(
+                      onTap: () {
+                        if (!isCurrentMonth) {
+                          if (date.isBefore(firstOfMonth)) {
+                            onPreviousMonth();
+                          } else {
+                            onNextMonth();
                           }
-                          return ClipRect(
+                        }
+                        onDateSelected(date);
+                      },
+                      onDoubleTap: () {
+                        onDateSelected(date);
+                        showAddEventBottomSheet(
+                          context,
+                          categoryKey: 'plan',
+                          initialDate: date,
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(2, 3, 2, 2),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? _kSelectedCardBg
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            for (final ev in dayEvents.take(shown))
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 2),
-                                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1.5),
-                                decoration: BoxDecoration(
-                                  color: _parseColor(ev.colorHex).withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(3),
-                                  border: Border.all(
-                                    color: _parseColor(ev.colorHex).withValues(alpha: 0.7),
-                                    width: 0.7,
+                            // 날짜 숫자 (선택: 다크 라운드 카드 / 오늘: 소프트 크림 옐로우 칩)
+                            Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: (isToday && !isSelected) ? 6 : 2,
+                                    vertical: (isToday && !isSelected) ? 1.5 : 0.5,
                                   ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 3.5,
-                                      height: 3.5,
-                                      decoration: BoxDecoration(
-                                        color: _parseColor(ev.colorHex),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 2.5),
-                                    Expanded(
-                                      child: Text(
-                                        ev.title,
+                                  decoration: (isToday && !isSelected)
+                                      ? BoxDecoration(
+                                          color: _kTodayPillBg,
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                          border: Border.all(
+                                            color: _kTodayPillBorder,
+                                            width: 1,
+                                          ),
+                                        )
+                                      : null,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '${date.day}',
                                         style: TextStyle(
-                                          fontSize: 8,
-                                          fontWeight: FontWeight.w800,
-                                          color: _parseColor(ev.colorHex),
+                                          fontWeight: (isToday || isSelected)
+                                              ? FontWeight.w800
+                                              : FontWeight.w600,
+                                          color: dayTextColor,
+                                          fontSize: dayFontSize,
+                                          height: 1.1,
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            if (dayEvents.length > shown)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 1),
-                                child: Text(
-                                  '+${dayEvents.length - shown}',
-                                  style: const TextStyle(
-                                    fontSize: 7.5,
-                                    color: AppColors.protoSubtitle,
-                                    fontWeight: FontWeight.w800,
+                                      if (settings.showLunar &&
+                                          isCurrentMonth &&
+                                          cellHeight >= 46) ...[
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          _approxLunarLabel(date),
+                                          style: TextStyle(
+                                            fontSize: 7,
+                                            color: isSelected
+                                                ? Colors.white60
+                                                : const Color(0xFF9CA3AF),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                  textAlign: TextAlign.center,
                                 ),
                               ),
+                            ),
+
+                            if (dayEvents.isNotEmpty) ...[
+                              const SizedBox(height: 2.5),
+                              // 미니멀 플랫 일정 바 (좌측 얇은 세로 컬러 바 + 콤팩트 제목 / 연속 일정은 소프트 파스텔 띠)
+                              Expanded(
+                                child: LayoutBuilder(builder: (context, box) {
+                                  if (box.maxHeight < 6) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final scaler =
+                                      MediaQuery.textScalerOf(context);
+                                  final barH =
+                                      scaler.scale(chipFontSize) + 4.0;
+                                  final plusH = scaler.scale(7.5) + 1.5;
+                                  final maxItems = dayEvents.length < 3
+                                      ? dayEvents.length
+                                      : 3;
+                                  var shown = maxItems;
+                                  while (shown > 0) {
+                                    final totalH = shown * barH +
+                                        (shown < dayEvents.length ? plusH : 0);
+                                    if (totalH <= box.maxHeight) break;
+                                    shown--;
+                                  }
+                                  final overflowCount =
+                                      dayEvents.length - shown;
+
+                                  if (shown == 0) {
+                                    return Align(
+                                      alignment: Alignment.topCenter,
+                                      child: Wrap(
+                                        spacing: 2,
+                                        runSpacing: 1,
+                                        children: [
+                                          for (final ev in dayEvents.take(3))
+                                            Container(
+                                              width: 4.5,
+                                              height: 4.5,
+                                              decoration: BoxDecoration(
+                                                color: _parseColor(ev.colorHex),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    mainAxisAlignment: MainAxisAlignment.start,
+                                    children: [
+                                      for (int i = 0; i < shown; i++)
+                                        Builder(builder: (context) {
+                                          final ev = dayEvents[i];
+                                          final chipColor =
+                                              _parseColor(ev.colorHex);
+                                          final isContinuous =
+                                              _isContinuousEvent(ev);
+                                          final labelText =
+                                              (settings.showTime &&
+                                                      ev.time != null)
+                                                  ? '${ev.time} ${ev.title}'
+                                                  : ev.title;
+
+                                          return Container(
+                                            height: barH - 1.5,
+                                            margin: const EdgeInsets.only(
+                                                bottom: 1.5),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 2,
+                                              vertical: 0.8,
+                                            ),
+                                            decoration: isContinuous
+                                                ? BoxDecoration(
+                                                    color: isSelected
+                                                        ? chipColor.withValues(
+                                                            alpha: 0.35)
+                                                        : chipColor.withValues(
+                                                            alpha: 0.22),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            3),
+                                                  )
+                                                : null,
+                                            child: Row(
+                                              children: [
+                                                // 좌측 얇은 세로 컬러 바 (| 헬스장 스타일)
+                                                Container(
+                                                  width: 2.2,
+                                                  height: chipFontSize + 1,
+                                                  decoration: BoxDecoration(
+                                                    color: chipColor,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            1.5),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 2.5),
+                                                Expanded(
+                                                  child: Text(
+                                                    labelText,
+                                                    style: TextStyle(
+                                                      fontSize: chipFontSize,
+                                                      fontWeight: settings
+                                                          .fontWeight.weight,
+                                                      color: isSelected
+                                                          ? Colors.white
+                                                          : const Color(
+                                                              0xFF374151),
+                                                      height: 1.05,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                      if (overflowCount > 0 &&
+                                          box.maxHeight >=
+                                              shown * barH + plusH)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(left: 2),
+                                          child: Text(
+                                            '+$overflowCount',
+                                            style: TextStyle(
+                                              fontSize: 7.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: isSelected
+                                                  ? Colors.white70
+                                                  : const Color(0xFF9CA3AF),
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                }),
+                              ),
+                            ],
                           ],
                         ),
-                          );
-                        }),
                       ),
-                    ],
-                  ),
-                ),
-              );
-            },
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),

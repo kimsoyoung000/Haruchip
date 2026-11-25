@@ -55,19 +55,19 @@ class PlanItemCard extends ConsumerWidget {
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.protoCardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.protoCardBorder, width: 2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.protoCardBorder, width: 1.2),
       ),
       child: Row(
         children: [
           Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.only(right: 8),
+            width: 7,
+            height: 7,
+            margin: const EdgeInsets.only(right: 7),
             decoration: BoxDecoration(
               color: priorityColor(item.priority),
               shape: BoxShape.circle,
@@ -81,41 +81,46 @@ class PlanItemCard extends ConsumerWidget {
                   item.title,
                   style: AppTypography.cardLabel.copyWith(
                     color: AppColors.protoHeading,
+                    fontSize: 13.5,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Wrap(
                   children: [
                     Text(
                       _categoryLabel,
                       style: AppTypography.caption.copyWith(
                         color: AppColors.protoSubtitle,
+                        fontSize: 11,
                       ),
                     ),
                     if (item.repeat) ...[
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Text(
                         '· 매년 반복',
                         style: AppTypography.caption.copyWith(
                           color: AppColors.protoSubtitle,
+                          fontSize: 11,
                         ),
                       ),
                     ],
                     if (roomName != null) ...[
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Text(
                         '· 📅 $roomName',
                         style: AppTypography.caption.copyWith(
                           color: AppColors.protoSubtitle,
+                          fontSize: 11,
                         ),
                       ),
                     ],
                     if (item.deadlineTime != null) ...[
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Text(
                         '· ${item.deadlineTime!.hour.toString().padLeft(2, '0')}:${item.deadlineTime!.minute.toString().padLeft(2, '0')} 마감',
                         style: AppTypography.caption.copyWith(
                           color: AppColors.protoSubtitle,
+                          fontSize: 11,
                         ),
                       ),
                     ],
@@ -124,9 +129,9 @@ class PlanItemCard extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
             decoration: BoxDecoration(
               color: AppColors.protoButtonBg,
               borderRadius: BorderRadius.circular(999),
@@ -136,6 +141,7 @@ class PlanItemCard extends ConsumerWidget {
               style: AppTypography.caption.copyWith(
                 color: AppColors.protoButtonText,
                 fontWeight: FontWeight.w700,
+                fontSize: 11,
               ),
             ),
           ),

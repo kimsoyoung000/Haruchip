@@ -6,9 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../calendar/providers/calendar_display_settings_provider.dart';
+import '../../calendar/widgets/calendar_display_settings_sheet.dart';
 import '../../categories/models/category.dart';
 import '../../categories/providers/category_provider.dart';
 import '../../home/screens/trash_bin_screen.dart';
+import '../../home/widgets/dashboard_category_filter_sheet.dart';
 import '../../onboarding/providers/calendar_integration_provider.dart';
 import '../../onboarding/providers/dashboard_view_mode_provider.dart';
 import '../../onboarding/screens/app_permission_screen.dart';
@@ -602,6 +605,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final trashItems = ref.watch(trashBinProvider);
     final hiddenCategories = ref.watch(hiddenCategoriesProvider);
     final selectedViewMode = ref.watch(resolvedDashboardViewModeProvider);
+    final calendarDisplaySettings = ref.watch(calendarDisplaySettingsProvider);
     final calendarSet = ref.watch(calendarIntegrationProvider);
     final isGoogleSync = calendarSet.contains('google');
     final isNaverSync = calendarSet.contains('naver');
@@ -610,7 +614,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       backgroundColor: AppColors.protoBackground,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -634,19 +638,19 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 18),
 
-              // 1. 내 프로필 카드 (아바타, 닉네임, 로그인 정보, 고유 식별 코드)
+              // 1. 내 프로필 카드 (슬림화: 아바타 52x52, 패딩 13, 닉네임 15sp)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE5E7EB)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
+                      color: Colors.black.withValues(alpha: 0.025),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
@@ -660,32 +664,32 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                           child: Stack(
                             children: [
                               Container(
-                                width: 64,
-                                height: 64,
+                                width: 52,
+                                height: 52,
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF3F4F6),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+                                  border: Border.all(color: const Color(0xFFE5E7EB), width: 1.3),
                                 ),
                                 alignment: Alignment.center,
-                                child: Text(_selectedAvatarEmoji, style: const TextStyle(fontSize: 32)),
+                                child: Text(_selectedAvatarEmoji, style: const TextStyle(fontSize: 26)),
                               ),
                               Positioned(
                                 right: 0,
                                 bottom: 0,
                                 child: Container(
-                                  padding: const EdgeInsets.all(4),
+                                  padding: const EdgeInsets.all(3.5),
                                   decoration: const BoxDecoration(
                                     color: Color(0xFF3B82F6),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.camera_alt_rounded, size: 12, color: Colors.white),
+                                  child: const Icon(Icons.camera_alt_rounded, size: 10, color: Colors.white),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 12),
                         // 닉네임 & 계정 정보
                         Expanded(
                           child: Column(
@@ -697,47 +701,48 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                                     child: Text(
                                       _nickname,
                                       style: AppTypography.heading2.copyWith(
-                                        fontSize: 17,
+                                        fontSize: 15.5,
                                         fontWeight: FontWeight.w800,
                                         color: AppColors.protoHeading,
                                       ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 5),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFEFF6FF),
-                                      borderRadius: BorderRadius.circular(6),
+                                      borderRadius: BorderRadius.circular(5),
                                       border: Border.all(color: const Color(0xFFBFDBFE)),
                                     ),
                                     child: const Text(
                                       '인증 회원',
                                       style: TextStyle(
                                         color: Color(0xFF1D4ED8),
-                                        fontSize: 10,
+                                        fontSize: 9.5,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 3),
+                              const SizedBox(height: 2),
                               Text(
                                 userEmail,
                                 style: const TextStyle(
                                   color: Color(0xFF6B7280),
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 6),
-                              Row(
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 2,
                                 children: [
                                   _buildSocialBadge('Google', const Color(0xFFEA4335)),
-                                  const SizedBox(width: 4),
                                   _buildSocialBadge('Apple', Colors.black),
                                 ],
                               ),
@@ -749,46 +754,52 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                           onPressed: _openEditProfileDialog,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.protoHeading,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                             side: const BorderSide(color: Color(0xFFD1D5DB)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                          child: const Text('프로필 수정', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: const Text('프로필 수정', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
-                    const Divider(height: 24, color: Color(0xFFF3F4F6)),
+                    const Divider(height: 18, color: Color(0xFFF3F4F6)),
                     // 고유 유저 식별 코드
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.qr_code_rounded, size: 16, color: Color(0xFF6B7280)),
-                            const SizedBox(width: 6),
-                            const Text(
-                              '고유 유저 식별 코드',
-                              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              ProfileSettingsScreen.userUniqueCode,
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
-                            ),
-                          ],
+                        Expanded(
+                          child: Row(
+                            children: [
+                              const Icon(Icons.qr_code_rounded, size: 14, color: Color(0xFF6B7280)),
+                              const SizedBox(width: 5),
+                              const Text(
+                                '고유 유저 식별 코드',
+                                style: TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  ProfileSettingsScreen.userUniqueCode,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         InkWell(
                           onTap: _copyUserCode,
                           borderRadius: BorderRadius.circular(6),
                           child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                             child: Row(
                               children: [
-                                Icon(Icons.copy_rounded, size: 13, color: Color(0xFF3B82F6)),
-                                SizedBox(width: 3),
+                                Icon(Icons.copy_rounded, size: 12, color: Color(0xFF3B82F6)),
+                                SizedBox(width: 2.5),
                                 Text(
                                   '복사',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF3B82F6)),
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF3B82F6)),
                                 ),
                               ],
                             ),
@@ -1044,11 +1055,137 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                               Expanded(
                                 child: _buildViewModeButton(
                                   title: '칩 모아보기 뷰',
-                                  subtitle: '카드 그리드형',
+                                  subtitle: '2열 박스형',
                                   icon: Icons.grid_view_rounded,
-                                  isSelected: selectedViewMode == 'horizontal' || selectedViewMode == 'grid',
+                                  isSelected: selectedViewMode == 'box' ||
+                                      selectedViewMode == 'horizontal' ||
+                                      selectedViewMode == 'grid',
                                   onTap: () {
-                                    ref.read(dashboardViewModeProvider.notifier).select('grid');
+                                    ref
+                                        .read(dashboardViewModeProvider.notifier)
+                                        .select('grid');
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
+
+                    // 카테고리 순서 편집 (메인 대시보드에서 이관)
+                    _buildSettingsTile(
+                      icon: Icons.sort_rounded,
+                      iconColor: const Color(0xFF8B5CF6),
+                      title: '카테고리 순서 편집',
+                      subtitle: '칩 데이 메인 화면에 표시되는 카테고리 카드 순서를 변경합니다.',
+                      badgeText: '순서 변경',
+                      badgeColor: const Color(0xFFF5F3FF),
+                      badgeTextColor: const Color(0xFF7C3AED),
+                      onTap: () => showCategoryOrderEditSheet(context),
+                    ),
+                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
+
+                    // 칩 캘린더 표시 설정 (글꼴 크기, 굵기, 라벨 형식)
+                    _buildSettingsTile(
+                      icon: Icons.calendar_view_month_rounded,
+                      iconColor: const Color(0xFFD99B26),
+                      title: '캘린더 표시 설정',
+                      subtitle:
+                          '글꼴 ${calendarDisplaySettings.fontSize.labelKo} · 굵기 ${calendarDisplaySettings.fontWeight.labelKo}',
+                      badgeText: '맞춤 설정',
+                      badgeColor: const Color(0xFFFFF3D6),
+                      badgeTextColor: const Color(0xFF785112),
+                      onTap: () => showCalendarDisplaySettingsSheet(
+                        context,
+                        isOnboarding: false,
+                      ),
+                    ),
+                    const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
+
+                    // 캘린더 주 시작 요일 설정 (일요일부터 시작 / 월요일부터 시작)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3F4F6),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.date_range_rounded,
+                                  size: 18,
+                                  color: Color(0xFF374151),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '캘린더 시작 요일',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.protoHeading,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      calendarDisplaySettings.startOnMonday
+                                          ? '현재: 월요일부터 시작'
+                                          : '현재: 일요일부터 시작',
+                                      style: AppTypography.caption.copyWith(
+                                        color: AppColors.protoSubtitle,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildViewModeButton(
+                                  title: '일요일부터 시작',
+                                  subtitle: '일 · 월 · 화 · 수 · 목 · 금 · 토',
+                                  icon: Icons.wb_sunny_outlined,
+                                  isSelected:
+                                      !calendarDisplaySettings.startOnMonday,
+                                  onTap: () {
+                                    ref
+                                        .read(calendarDisplaySettingsProvider
+                                            .notifier)
+                                        .setStartOnMonday(false);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildViewModeButton(
+                                  title: '월요일부터 시작',
+                                  subtitle: '월 · 화 · 수 · 목 · 금 · 토 · 일',
+                                  icon: Icons.work_outline_rounded,
+                                  isSelected:
+                                      calendarDisplaySettings.startOnMonday,
+                                  onTap: () {
+                                    ref
+                                        .read(calendarDisplaySettingsProvider
+                                            .notifier)
+                                        .setStartOnMonday(true);
                                   },
                                 ),
                               ),
@@ -1216,39 +1353,41 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     Color? badgeTextColor,
   }) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      dense: true,
+      visualDensity: const VisualDensity(vertical: -1.5),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
       leading: Container(
-        width: 34,
-        height: 34,
+        width: 30,
+        height: 30,
         decoration: BoxDecoration(
           color: iconColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
         ),
         alignment: Alignment.center,
-        child: Icon(icon, size: 18, color: iconColor),
+        child: Icon(icon, size: 16, color: iconColor),
       ),
       title: Row(
         children: [
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
               overflow: TextOverflow.ellipsis,
             ),
           ),
           if (badgeText != null) ...[
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
               decoration: BoxDecoration(
                 color: badgeColor ?? const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(5),
               ),
               child: Text(
                 badgeText,
                 style: TextStyle(
                   color: badgeTextColor ?? const Color(0xFF1D4ED8),
-                  fontSize: 10,
+                  fontSize: 9.5,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1258,9 +1397,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       ),
       subtitle: Text(
         subtitle,
-        style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle, fontSize: 11),
+        style: AppTypography.caption.copyWith(color: AppColors.protoSubtitle, fontSize: 10.5),
       ),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF9CA3AF)),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF9CA3AF)),
       onTap: onTap,
     );
   }

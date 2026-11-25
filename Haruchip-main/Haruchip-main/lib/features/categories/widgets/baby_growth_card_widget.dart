@@ -6,7 +6,7 @@ import '../../../design_system/typography.dart';
 import '../controllers/baby_category_controller.dart';
 import '../models/baby_profile.dart';
 
-/// 아기 성장 메인 카드 위젯
+/// 아기 성장 메인 카드 위젯 (컴팩트 슬림화: 아바타 직경 약 15% 축소 및 카드 내부 여백 압축)
 /// (원형 프로필 사진, 태어난 지 N일째, 상세 월령 N개월 N일차(N주 N일), 성별/혈액형/출생시간 뱃지)
 class BabyGrowthCardWidget extends StatelessWidget {
   const BabyGrowthCardWidget({
@@ -43,18 +43,18 @@ class BabyGrowthCardWidget extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: const Color(0xFFFFFDF5),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isBoy
               ? const Color(0xFFBAE6FD)
               : (isGirl ? const Color(0xFFFBCFE8) : const Color(0xFFFED7AA)),
-          width: 1.5,
+          width: 1.4,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -62,37 +62,37 @@ class BabyGrowthCardWidget extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTapEdit,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(13),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // 1. 원형 프로필 아바타
+                    // 1. 원형 프로필 아바타 (약 15% 축소: 56x56)
                     Stack(
                       children: [
                         Container(
-                          width: 68,
-                          height: 68,
+                          width: 56,
+                          height: 56,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: isBoy
                                   ? const Color(0xFF38BDF8)
                                   : (isGirl ? const Color(0xFFF472B6) : const Color(0xFFFB923C)),
-                              width: 2.5,
+                              width: 2.0,
                             ),
                             boxShadow: [
                               BoxShadow(
                                 color: (isBoy
                                         ? const Color(0xFF38BDF8)
                                         : (isGirl ? const Color(0xFFF472B6) : const Color(0xFFFB923C)))
-                                    .withValues(alpha: 0.25),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
+                                    .withValues(alpha: 0.22),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
@@ -102,11 +102,11 @@ class BabyGrowthCardWidget extends StatelessWidget {
                                     image: avatarImage,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => const Center(
-                                      child: Text('👶', style: TextStyle(fontSize: 32)),
+                                      child: Text('👶', style: TextStyle(fontSize: 26)),
                                     ),
                                   )
                                 : const Center(
-                                    child: Text('👶', style: TextStyle(fontSize: 32)),
+                                    child: Text('👶', style: TextStyle(fontSize: 26)),
                                   ),
                           ),
                         ),
@@ -114,21 +114,21 @@ class BabyGrowthCardWidget extends StatelessWidget {
                           right: 0,
                           bottom: 0,
                           child: Container(
-                            padding: const EdgeInsets.all(3),
+                            padding: const EdgeInsets.all(2.5),
                             decoration: const BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               Icons.edit_rounded,
-                              size: 13,
+                              size: 11,
                               color: Colors.grey.shade700,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
 
                     // 2. 아기 이름 & 태어난 지 N일째
                     Expanded(
@@ -142,30 +142,42 @@ class BabyGrowthCardWidget extends StatelessWidget {
                                   profile.name,
                                   style: AppTypography.heading2.copyWith(
                                     color: AppColors.protoHeading,
-                                    fontSize: 18,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w800,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                size: 12,
-                                color: Color(0xFF94A3B8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: isBoy
+                                      ? const Color(0xFFE0F2FE)
+                                      : (isGirl ? const Color(0xFFFCE7F3) : const Color(0xFFFFEDD5)),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  isBoy ? '남아 👦' : (isGirl ? '여아 👧' : '성별 미정'),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: isBoy
+                                        ? const Color(0xFF0369A1)
+                                        : (isGirl ? const Color(0xFFBE185D) : const Color(0xFFC2410C)),
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             daysCountText,
-                            style: TextStyle(
-                              fontSize: 19,
+                            style: const TextStyle(
+                              fontSize: 18,
                               fontWeight: FontWeight.w900,
-                              color: isBoy
-                                  ? const Color(0xFF0284C7)
-                                  : (isGirl ? const Color(0xFFDB2777) : const Color(0xFFEA580C)),
-                              letterSpacing: -0.3,
+                              color: Color(0xFF1E293B),
+                              letterSpacing: -0.4,
                             ),
                           ),
                         ],
@@ -173,105 +185,91 @@ class BabyGrowthCardWidget extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
 
-                const SizedBox(height: 14),
-
-                // 3. 상세 월령 배너 (생후 N개월 N일차 / N주 N일)
+                // 3. 상세 월령 배지 (N개월 N일차 / N주 N일)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   decoration: BoxDecoration(
-                    color: isBoy
-                        ? const Color(0xFFE0F2FE)
-                        : (isGirl ? const Color(0xFFFCE7F3) : const Color(0xFFFFEDD5)),
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFEF08A)),
                   ),
                   child: Row(
                     children: [
-                      Text(
-                        isBoy ? '🩵' : (isGirl ? '🩷' : '✨'),
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(width: 8),
+                      const Icon(Icons.cake_outlined, size: 14, color: Color(0xFFCA8A04)),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           detailedAgeText,
-                          style: TextStyle(
-                            fontSize: 13,
+                          style: const TextStyle(
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: isBoy
-                                ? const Color(0xFF0369A1)
-                                : (isGirl ? const Color(0xFFBE185D) : const Color(0xFFC2410C)),
+                            color: Color(0xFF713F12),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 6),
 
-                const SizedBox(height: 10),
-
-                // 4. 세부 정보 뱃지들 (성별, 혈액형, 출생시간, 수유텀)
+                // 4. 출생 정보 뱃지들 (생년월일, 혈액형, 출생 시간)
                 Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                  spacing: 5,
+                  runSpacing: 4,
                   children: [
-                    if (profile.gender != BabyGender.none)
-                      _buildInfoBadge(
-                        label: profile.gender.label,
-                        bgColor: isBoy ? const Color(0xFFF0F9FF) : const Color(0xFFFFF1F2),
-                        textColor: isBoy ? const Color(0xFF0284C7) : const Color(0xFFE11D48),
-                        borderColor: isBoy ? const Color(0xFFBAE6FD) : const Color(0xFFFECDD3),
-                      ),
+                    _buildBabyInfoChip(
+                      icon: Icons.calendar_month_outlined,
+                      label: '${profile.birthDate.year}.${profile.birthDate.month.toString().padLeft(2, '0')}.${profile.birthDate.day.toString().padLeft(2, '0')} 생',
+                    ),
                     if (profile.bloodType != null && profile.bloodType!.isNotEmpty)
-                      _buildInfoBadge(
+                      _buildBabyInfoChip(
+                        icon: Icons.bloodtype_outlined,
                         label: '${profile.bloodType}형',
-                        bgColor: const Color(0xFFF8FAFC),
-                        textColor: const Color(0xFF475569),
-                        borderColor: const Color(0xFFE2E8F0),
                       ),
                     if (profile.birthTime != null && profile.birthTime!.isNotEmpty)
-                      _buildInfoBadge(
-                        label: '⏰ ${profile.birthTime} 출생',
-                        bgColor: const Color(0xFFF8FAFC),
-                        textColor: const Color(0xFF475569),
-                        borderColor: const Color(0xFFE2E8F0),
-                      ),
-                    _buildInfoBadge(
-                      label: '🍼 수유텀 ${profile.feedingIntervalHours}시간',
-                      bgColor: const Color(0xFFFFFBEB),
-                      textColor: const Color(0xFFB45309),
-                      borderColor: const Color(0xFFFDE68A),
-                    ),
-                    if (onTapManageSections != null)
-                      GestureDetector(
-                        onTap: onTapManageSections,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF93C5FD), width: 1),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.tune_rounded, size: 12, color: Color(0xFF2563EB)),
-                              SizedBox(width: 4),
-                              Text(
-                                '섹션 관리',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF2563EB),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      _buildBabyInfoChip(
+                        icon: Icons.schedule_outlined,
+                        label: '${profile.birthTime} 탄생',
                       ),
                   ],
                 ),
+
+                if (onTapManageSections != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: InkWell(
+                      onTap: onTapManageSections,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFCBD5E1), width: 0.8),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.tune_rounded, size: 11, color: Color(0xFF475569)),
+                            SizedBox(width: 3),
+                            Text(
+                              '섹션 순서 관리',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF475569),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -280,26 +278,31 @@ class BabyGrowthCardWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoBadge({
+  Widget _buildBabyInfoChip({
+    required IconData icon,
     required String label,
-    required Color bgColor,
-    required Color textColor,
-    required Color borderColor,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor, width: 1),
+        color: Colors.white.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: const Color(0xFF64748B)),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF334155),
+            ),
+          ),
+        ],
       ),
     );
   }

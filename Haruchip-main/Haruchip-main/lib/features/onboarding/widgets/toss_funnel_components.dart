@@ -19,7 +19,7 @@ class TossStepIndicator extends StatelessWidget {
     final progress = (currentStep / totalSteps).clamp(0.0, 1.0);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 20, 10),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
       child: Column(
         children: [
           Row(
@@ -29,25 +29,25 @@ class TossStepIndicator extends StatelessWidget {
                 IconButton(
                   icon: const Icon(
                     Icons.arrow_back_ios_new_rounded,
-                    size: 18,
+                    size: 16,
                     color: Color(0xFF333D4B),
                   ),
                   onPressed: onBack,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 )
               else
-                const SizedBox(width: 32),
+                const SizedBox(width: 28),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF2F4F6),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   '$currentStep/$totalSteps',
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF6B7684),
                     letterSpacing: -0.2,
@@ -56,7 +56,7 @@ class TossStepIndicator extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: TweenAnimationBuilder<double>(
@@ -66,7 +66,7 @@ class TossStepIndicator extends StatelessWidget {
               builder: (context, value, _) {
                 return LinearProgressIndicator(
                   value: value,
-                  minHeight: 3.5,
+                  minHeight: 3.0,
                   backgroundColor: const Color(0xFFE5E8EB),
                   valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF3182F6)),
                 );
@@ -79,7 +79,7 @@ class TossStepIndicator extends StatelessWidget {
   }
 }
 
-/// 글래스모피즘(약간의 블러/반투명 배경 + 부드러운 라운딩) 모던 플로팅 액션 버튼
+/// 글래스모피즘 모던 플로팅 액션 버튼 (컴팩트 뷰포트 맞춤)
 class GlassFloatingButton extends StatelessWidget {
   const GlassFloatingButton({
     super.key,
@@ -99,39 +99,40 @@ class GlassFloatingButton extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
             child: Container(
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(24),
+                color: Colors.white.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.85),
-                  width: 1.5,
+                  width: 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
               child: SizedBox(
                 width: double.infinity,
-                height: 54,
+                height: 48,
                 child: ElevatedButton(
                   onPressed: enabled ? onPressed : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: enabled ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
                     foregroundColor: enabled ? Colors.white : const Color(0xFF94A3B8),
                     elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   child: Row(
@@ -143,7 +144,7 @@ class GlassFloatingButton extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.2,
                           ),
@@ -151,7 +152,7 @@ class GlassFloatingButton extends StatelessWidget {
                       ),
                       if (icon != null) ...[
                         const SizedBox(width: 6),
-                        Icon(icon, size: 18),
+                        Icon(icon, size: 16),
                       ],
                     ],
                   ),

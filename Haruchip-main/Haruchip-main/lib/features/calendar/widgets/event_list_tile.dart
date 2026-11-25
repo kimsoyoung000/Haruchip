@@ -40,11 +40,11 @@ class EventListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = _parseColor(event.colorHex);
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border(left: BorderSide(color: accent, width: 3)),
       ),
       child: Row(
@@ -55,36 +55,41 @@ class EventListTile extends StatelessWidget {
               children: [
                 Text(
                   event.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.cardLabel.copyWith(
                     color: AppColors.protoHeading,
+                    fontSize: 13,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   _sourceLabel,
                   style: AppTypography.caption.copyWith(
                     color: accent,
+                    fontSize: 10.5,
                   ),
                 ),
               ],
             ),
           ),
           if (event.time != null) ...[
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
+                horizontal: 6,
+                vertical: 2.5,
               ),
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 event.time!,
                 style: AppTypography.caption.copyWith(
                   color: AppColors.protoHeading,
                   fontWeight: FontWeight.w700,
+                  fontSize: 10.5,
                 ),
               ),
             ),

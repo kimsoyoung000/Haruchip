@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../design_system/typography.dart';
 import '../models/onboarding_category.dart';
 
-/// 온보딩 카테고리 선택 카드 (햅틱 피드백 & 파스텔 하이라이트 테두리)
+/// 온보딩 카테고리 선택 컴팩트 칩/카드 (수평 10dp / 수직 6dp 슬림 규격, 햅틱 피드백 & 파스텔 하이라이트)
 class CategorySelectionCard extends StatelessWidget {
   const CategorySelectionCard({
     super.key,
@@ -36,8 +35,16 @@ class CategorySelectionCard extends StatelessWidget {
         return const Color(0xFF60A5FA);
       case 'meeting':
         return const Color(0xFF818CF8);
+      case 'pet':
+        return const Color(0xFFFB923C);
+      case 'birthday':
+        return const Color(0xFFF472B6);
+      case 'hobby':
+        return const Color(0xFF10B981);
+      case 'travel':
+        return const Color(0xFF0EA5E9);
       default:
-        return const Color(0xFFF59E0B);
+        return const Color(0xFF6366F1);
     }
   }
 
@@ -51,68 +58,61 @@ class CategorySelectionCard extends StatelessWidget {
       label: '${category.labelKo} 카테고리',
       child: InkWell(
         onTap: _handleTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: selected
-                ? highlightColor.withValues(alpha: 0.08)
+                ? highlightColor.withValues(alpha: 0.12)
                 : Colors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected
                   ? highlightColor
-                  : const Color(0xFFF2F4F6),
-              width: selected ? 2.0 : 1.2,
+                  : const Color(0xFFE5E7EB),
+              width: selected ? 1.6 : 1.0,
             ),
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: highlightColor.withValues(alpha: 0.22),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      color: highlightColor.withValues(alpha: 0.2),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
                   ]
                 : [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                      color: Colors.black.withValues(alpha: 0.015),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
                     ),
                   ],
           ),
-          child: Column(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? highlightColor.withValues(alpha: 0.15)
-                      : const Color(0xFFF9FAFB),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  category.emoji,
-                  style: const TextStyle(fontSize: 22),
-                ),
-              ),
-              const SizedBox(height: 10),
               Text(
-                category.labelKo,
-                textAlign: TextAlign.center,
-                style: AppTypography.cardLabel.copyWith(
-                  fontSize: 13.5,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected
-                      ? const Color(0xFF191F28)
-                      : const Color(0xFF4B5563),
-                  letterSpacing: -0.2,
+                category.emoji,
+                style: const TextStyle(fontSize: 15),
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  category.labelKo,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected
+                        ? const Color(0xFF191F28)
+                        : const Color(0xFF4B5563),
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
             ],

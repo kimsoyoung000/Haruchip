@@ -502,7 +502,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _buildQuickNavCard(
               title: '휴지통 (30일 복구 보존)',
               subtitle: '실수로 삭제된 모든 데이터를 30일간 안전하게 보관합니다.',
@@ -515,7 +515,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _buildQuickNavCard(
               title: '모바일 홈/잠금화면 위젯 시뮬레이터',
               subtitle: '잠금화면 미니 위젯, 2x2 감성 위젯, 4x2 스마트 캘린더 미리보기',
@@ -528,7 +528,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _buildQuickNavCard(
               title: '앱 접근 권한 관리',
               subtitle: '알림, 사진, 카메라, 캘린더, 간편 정산 연결, 마케팅 권한 설정',
@@ -995,61 +995,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFE5E7EB)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.015),
+              blurRadius: 4,
+              offset: const Offset(0, 1.5),
             ),
           ],
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: iconColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 20, color: iconColor),
+              child: Icon(icon, size: 17, color: iconColor),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 11),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(fontSize: 11.5, color: AppColors.protoSubtitle),
+                    style: const TextStyle(fontSize: 10.5, color: AppColors.protoSubtitle),
                   ),
                 ],
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
                 color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 badgeText,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
+                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.protoHeading),
               ),
             ),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.protoSubtitle),
+            const SizedBox(width: 3),
+            const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.protoSubtitle),
           ],
         ),
       ),

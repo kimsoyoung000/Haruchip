@@ -140,23 +140,23 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
     );
   }
 
-  /// 2. 상단 대표 모임 카드 (파스텔 피치/코럴 테마: 배경 #FFF5F2, 테두리 #FFE2D9, 텍스트 #42302A)
+  /// 2. 상단 대표 모임 카드 (파스텔 피치/코럴 테마: 상하 두께 슬림화 및 정보 밀도 향상)
   Widget _buildTopGroupCard(BuildContext context, GroupCategoryItem group) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: const Color(0xFFFFF5F2),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFFFE2D9), width: 1.5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFFE2D9), width: 1.4),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE26D5C).withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: const Color(0xFFE26D5C).withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(13),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -164,9 +164,9 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 좌측 아바타
+              // 좌측 아바타 (48x48로 축소)
               _buildAvatarWidget(group),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
 
               // 중앙: 모임명 & 멤버 수
               Expanded(
@@ -179,26 +179,26 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                           child: Text(
                             group.name,
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 17,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF42302A),
-                              letterSpacing: -0.5,
+                              letterSpacing: -0.4,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFE2D9),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             '${group.memberCount}명',
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF78350F),
                             ),
@@ -206,11 +206,11 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       '개설일: ${group.foundationDate.year}.${group.foundationDate.month.toString().padLeft(2, '0')}.${group.foundationDate.day.toString().padLeft(2, '0')}',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: Color(0xFF8C6D62),
                         fontWeight: FontWeight.w500,
                       ),
@@ -221,8 +221,10 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
 
               // 우측 상단: 모임 관리 팝업 메뉴
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF8C6D62)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                icon: const Icon(Icons.more_horiz_rounded, size: 20, color: Color(0xFF8C6D62)),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 onSelected: (value) {
                   if (value == 'edit') {
                     AddGroupModal.show(context, existingGroup: group);
@@ -235,9 +237,9 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(Icons.edit_outlined, size: 18, color: Color(0xFF42302A)),
+                        Icon(Icons.edit_outlined, size: 16, color: Color(0xFF42302A)),
                         SizedBox(width: 8),
-                        Text('모임 정보 수정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        Text('모임 정보 수정', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
@@ -245,9 +247,9 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                     value: 'delete',
                     child: Row(
                       children: [
-                        Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                        Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
                         SizedBox(width: 8),
-                        Text('모임 삭제', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent)),
+                        Text('모임 삭제', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.redAccent)),
                       ],
                     ),
                   ),
@@ -256,28 +258,28 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
 
           // N일째 카운터 & 정기 모임 주기 뱃지
           Row(
             children: [
               // 모임 N일째 뱃지
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFD7C9),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(9),
                   border: Border.all(color: const Color(0xFFFFB39E)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.celebration_rounded, size: 15, color: Color(0xFFC2410C)),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.celebration_rounded, size: 13, color: Color(0xFFC2410C)),
+                    const SizedBox(width: 4),
                     Text(
                       group.daysCountText(),
                       style: const TextStyle(
-                        fontSize: 13.5,
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF42302A),
                       ),
@@ -285,27 +287,27 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
 
               // 정기 모임 주기 정보 칩 (예: 매월 둘째 주 토요일)
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(9),
                     border: Border.all(color: const Color(0xFFFFE2D9)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.event_repeat_rounded, size: 14, color: Color(0xFFE26D5C)),
-                      const SizedBox(width: 5),
+                      const Icon(Icons.event_repeat_rounded, size: 13, color: Color(0xFFE26D5C)),
+                      const SizedBox(width: 4),
                       Flexible(
                         child: Text(
                           group.regularScheduleInfo,
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: Color(0xFF5E453D),
                           ),
@@ -323,37 +325,37 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
     );
   }
 
-  /// 아바타 위젯 (사진 파일 vs 이모지)
+  /// 아바타 위젯 (직경 48dp로 약 15% 축소)
   Widget _buildAvatarWidget(GroupCategoryItem group) {
     if (group.imagePath != null && group.imagePath!.isNotEmpty) {
       final file = File(group.imagePath!);
       if (file.existsSync()) {
         return ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Image.file(file, width: 56, height: 56, fit: BoxFit.cover),
+          borderRadius: BorderRadius.circular(14),
+          child: Image.file(file, width: 48, height: 48, fit: BoxFit.cover),
         );
       }
     }
 
     return Container(
-      width: 56,
-      height: 56,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFE2D9), width: 1.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFE2D9), width: 1.3),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE26D5C).withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: const Color(0xFFE26D5C).withValues(alpha: 0.08),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       alignment: Alignment.center,
       child: Text(
         group.icon,
-        style: const TextStyle(fontSize: 28),
+        style: const TextStyle(fontSize: 24),
       ),
     );
   }
@@ -553,7 +555,7 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: schedules.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (ctx, index) {
               final schedule = schedules[index];
               return _buildMeetingScheduleCard(context, schedule, isPast: false);
@@ -614,7 +616,7 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: pastSchedules.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (ctx, index) {
               final schedule = pastSchedules[index];
               return _buildMeetingScheduleCard(context, schedule, isPast: true);
@@ -624,7 +626,7 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
     );
   }
 
-  /// 모임 일정 카드 (D-Day, 일시, 장소, 정기 뱃지, 참여/불참 토글)
+  /// 모임 일정 카드 (상하 두께 슬림화 & D-Day, 일시, 장소, 정기 뱃지, 세련된 컴팩트 참여/불참 토글)
   Widget _buildMeetingScheduleCard(
     BuildContext context,
     GroupMeetingScheduleItem schedule, {
@@ -636,22 +638,22 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
     return Container(
       decoration: BoxDecoration(
         color: isPast ? const Color(0xFFFAFAFA) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isToday
               ? const Color(0xFFE26D5C)
               : (isPast ? const Color(0xFFE7E5E4) : const Color(0xFFFFE2D9)),
-          width: isToday ? 1.5 : 1,
+          width: isToday ? 1.4 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isPast ? 0.01 : 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: isPast ? 0.01 : 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -660,17 +662,17 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
             children: [
               // D-Day 뱃지
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                 decoration: BoxDecoration(
                   color: isPast
                       ? const Color(0xFFE7E5E4)
                       : (isToday ? const Color(0xFFE26D5C) : const Color(0xFFFFE2D9)),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   dDay,
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                     color: isPast
                         ? const Color(0xFF78716C)
@@ -678,20 +680,20 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
 
               if (schedule.isRegular)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF5F2),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: const Color(0xFFFFE2D9)),
                   ),
                   child: const Text(
                     '정기 모임',
                     style: TextStyle(
-                      fontSize: 10.5,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFFE26D5C),
                     ),
@@ -702,10 +704,10 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
 
               // 편집/삭제 팝업
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_horiz, size: 18, color: Color(0xFFA8A29E)),
+                icon: const Icon(Icons.more_horiz, size: 16, color: Color(0xFFA8A29E)),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 onSelected: (val) {
                   if (val == 'edit') {
                     AddGroupMeetingModal.show(context, groupId: schedule.groupId, existingSchedule: schedule);
@@ -716,40 +718,40 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                 itemBuilder: (ctx) => [
                   const PopupMenuItem(
                     value: 'edit',
-                    child: Text('일정 수정', style: TextStyle(fontSize: 12.5)),
+                    child: Text('일정 수정', style: TextStyle(fontSize: 12)),
                   ),
                   const PopupMenuItem(
                     value: 'delete',
-                    child: Text('일정 삭제', style: TextStyle(fontSize: 12.5, color: Colors.redAccent)),
+                    child: Text('일정 삭제', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
                   ),
                 ],
               ),
             ],
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           // 제목
           Text(
             schedule.title,
             style: TextStyle(
-              fontSize: 15.5,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
               color: isPast ? const Color(0xFF78716C) : const Color(0xFF292524),
               decoration: isPast ? TextDecoration.lineThrough : null,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
 
           // 일시
           Row(
             children: [
-              Icon(Icons.access_time_rounded, size: 14, color: isPast ? const Color(0xFFA8A29E) : const Color(0xFFE26D5C)),
-              const SizedBox(width: 5),
+              Icon(Icons.access_time_rounded, size: 13, color: isPast ? const Color(0xFFA8A29E) : const Color(0xFFE26D5C)),
+              const SizedBox(width: 4),
               Text(
                 schedule.formattedDateTime,
                 style: TextStyle(
-                  fontSize: 12.5,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w600,
                   color: isPast ? const Color(0xFFA8A29E) : const Color(0xFF57534E),
                 ),
@@ -759,16 +761,16 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
 
           // 장소 (있을 경우)
           if (schedule.location.isNotEmpty && schedule.location != '장소 미정') ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Row(
               children: [
-                Icon(Icons.location_on_outlined, size: 14, color: isPast ? const Color(0xFFA8A29E) : const Color(0xFFE26D5C)),
-                const SizedBox(width: 5),
+                Icon(Icons.location_on_outlined, size: 13, color: isPast ? const Color(0xFFA8A29E) : const Color(0xFFE26D5C)),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     schedule.location,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: isPast ? const Color(0xFFA8A29E) : const Color(0xFF78716C),
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -780,27 +782,27 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
 
           // 메모 (있을 경우)
           if (schedule.memo != null && schedule.memo!.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               schedule.memo!,
-              style: const TextStyle(fontSize: 11.5, color: Color(0xFFA8A29E)),
+              style: const TextStyle(fontSize: 10.5, color: Color(0xFFA8A29E)),
             ),
           ],
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           const Divider(height: 1, color: Color(0xFFF5F5F4)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
 
-          // 하단: [참여 / 불참] 원터치 토글 바
+          // 하단: [참여 / 불참] 컴팩트 원터치 토글 바
           Row(
             children: [
               const Text(
                 '참석 여부:',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF78716C)),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF78716C)),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
 
-              // [참여] 버튼
+              // [참여] 버튼 (세련되고 컴팩트하게 축소)
               _buildAttendanceButton(
                 label: '참여',
                 icon: Icons.check_circle_rounded,
@@ -810,9 +812,9 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
                   ref.read(groupScheduleListProvider.notifier).toggleAttendance(schedule.id, true);
                 },
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
 
-              // [불참] 버튼
+              // [불참] 버튼 (세련되고 컴팩트하게 축소)
               _buildAttendanceButton(
                 label: '불참',
                 icon: Icons.cancel_rounded,
@@ -829,7 +831,7 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
               Text(
                 schedule.attendanceLabel,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: schedule.isAttending == true
                       ? const Color(0xFF059669)
@@ -845,7 +847,7 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
     );
   }
 
-  /// 참여 / 불참 토글 버튼
+  /// 참여 / 불참 토글 버튼 (세련되고 컴팩트한 버튼 폼)
   Widget _buildAttendanceButton({
     required String label,
     required IconData icon,
@@ -855,16 +857,16 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
         decoration: BoxDecoration(
           color: isSelected ? activeColor.withValues(alpha: 0.12) : const Color(0xFFF5F5F4),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? activeColor : const Color(0xFFE7E5E4),
-            width: isSelected ? 1.5 : 1,
+            width: isSelected ? 1.4 : 1,
           ),
         ),
         child: Row(
@@ -872,14 +874,14 @@ class _GroupCategoryViewState extends ConsumerState<GroupCategoryView> {
           children: [
             Icon(
               icon,
-              size: 14,
+              size: 13,
               color: isSelected ? activeColor : const Color(0xFFA8A29E),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
                 color: isSelected ? activeColor : const Color(0xFF78716C),
               ),

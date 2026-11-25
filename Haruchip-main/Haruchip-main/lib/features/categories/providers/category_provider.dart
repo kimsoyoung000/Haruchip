@@ -99,6 +99,34 @@ class CategoryListNotifier extends Notifier<List<Category>> {
     state = state.map((c) => c.id == category.id ? category : c).toList();
   }
 
+  /// 카테고리 고유 색상 즉시 변경 (로컬 + Firestore 자동 동기화 및 칩 캘린더 전역 색상 일괄 갱신)
+  void updateCategoryColor({
+    required String categoryKey,
+    String? id,
+    required String name,
+    required String emoji,
+    required String colorHex,
+  }) {
+    final normalizedHex = colorHex.startsWith('#') ? colorHex : '#$colorHex';
+    final hasMatch = state.any(
+      (c) => (id != null && id.isNotEmpty && c.id == id) || c.categoryKey == categoryKey,
+    );
+    if (hasMatch) {
+      state = state.map((c) {
+        final matches = (id != null && id.isNotEmpty && c.id == id) ||
+            c.categoryKey == categoryKey;
+        return matches ? c.copyWith(colorHex: normalizedHex) : c;
+      }).toList();
+    } else {
+      addCategory(
+        categoryKey: categoryKey,
+        name: name,
+        emoji: emoji,
+        colorHex: normalizedHex,
+      );
+    }
+  }
+
   /// 대시보드 카테고리 순서 재배치 (드래그 앤 드롭)
   void reorderCategories(int oldIndex, int newIndex) {
     if (oldIndex < 0 || oldIndex >= state.length || newIndex < 0 || newIndex > state.length) {
