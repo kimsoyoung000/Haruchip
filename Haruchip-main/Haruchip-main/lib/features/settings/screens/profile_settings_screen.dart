@@ -16,6 +16,9 @@ import '../../calendar/providers/schedule_room_provider.dart';
 import '../../calendar/widgets/calendar_display_settings_sheet.dart';
 import '../../categories/models/category.dart';
 import '../../categories/providers/category_provider.dart';
+import '../../friends/models/battle_tag_user.dart';
+import '../../friends/providers/friend_system_provider.dart';
+import '../../friends/widgets/friend_management_card.dart';
 import '../../home/providers/main_tab_provider.dart';
 import '../../home/screens/trash_bin_screen.dart';
 import '../../home/widgets/dashboard_category_filter_sheet.dart';
@@ -92,102 +95,149 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     );
   }
 
-  /// 닉네임 수정 팝업 다이얼로그
+  /// 닉네임 & 4자리 배틀태그(#TAG) 수정 팝업 다이얼로그
   void _openEditProfileDialog() {
-    final controller = TextEditingController(text: _nickname);
+    final myBattleProfile = ref.read(friendSystemProvider).myProfile;
+    final nameController = TextEditingController(text: _nickname);
+    final tagController = TextEditingController(text: myBattleProfile.tag);
+    String? tagError;
+
     showDialog<void>(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.edit_note_rounded, color: AppColors.chipYellowText),
-            const SizedBox(width: 8),
-            Text(
-              '프로필 수정',
-              style: AppTypography.heading2.copyWith(
-                fontSize: 18,
-                color: AppColors.protoHeading,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.edit_note_rounded, color: AppColors.chipYellowText),
+              const SizedBox(width: 8),
+              Text(
+                '프로필 수정',
+                style: AppTypography.heading2.copyWith(
+                  fontSize: 18,
+                  color: AppColors.protoHeading,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '하루칩에서 사용할 닉네임과 4자리 태그(#TAG)를 설정해 주세요.',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.protoSubtitle,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameController,
+                maxLength: 12,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: '새 닉네임 입력 (최대 12자)',
+                  filled: true,
+                  fillColor: AppColors.cleanCanvasBg,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: AppColors.chipGoldOutline,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('profile_tag_input'),
+                controller: tagController,
+                maxLength: 4,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  prefixText: '# ',
+                  hintText: '영문 대문자/숫자 4자리 (예: 7F2K)',
+                  errorText: tagError,
+                  filled: true,
+                  fillColor: AppColors.cleanCanvasBg,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: AppColors.chipGoldOutline,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text(
+                '취소',
+                style: TextStyle(color: AppColors.protoSubtitle),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final newName = nameController.text.trim();
+                final newTag = tagController.text.trim().toUpperCase();
+                if (!isValidBattleTag(newTag)) {
+                  setDialogState(() {
+                    tagError = '영문 대문자 또는 숫자 4자리를 입력하세요.';
+                  });
+                  return;
+                }
+                if (newName.isNotEmpty) {
+                  setState(() => _nickname = newName);
+                  ref.read(friendSystemProvider.notifier).updateMyProfile(
+                        nickname: newName,
+                        tag: newTag,
+                        avatarIcon: _selectedAvatarEmoji,
+                      );
+                  Navigator.pop(dialogCtx);
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(
+                      content: Text('프로필이 "$newName#$newTag"(으)로 변경되었습니다.'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.chipYellowBg,
+                foregroundColor: AppColors.chipYellowText,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                '저장',
+                style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '하루칩에서 사용할 닉네임을 입력해 주세요.',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.protoSubtitle,
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              maxLength: 12,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: '새 닉네임 입력 (최대 12자)',
-                filled: true,
-                fillColor: AppColors.cleanCanvasBg,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                    color: AppColors.chipGoldOutline,
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text(
-              '취소',
-              style: TextStyle(color: AppColors.protoSubtitle),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final newName = controller.text.trim();
-              if (newName.isNotEmpty) {
-                setState(() => _nickname = newName);
-                Navigator.pop(dialogCtx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('닉네임이 "$newName"(으)로 변경되었습니다.'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.chipYellowBg,
-              foregroundColor: AppColors.chipYellowText,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              '저장',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -777,20 +827,38 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 5,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              Flexible(
+                              Text(
+                                _nickname,
+                                style: AppTypography.heading2.copyWith(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.protoHeading,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cleanCanvasBg,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
                                 child: Text(
-                                  _nickname,
-                                  style: AppTypography.heading2.copyWith(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.protoHeading,
+                                  '#${ref.watch(friendSystemProvider).myProfile.tag}',
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF6B7280),
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 7,
@@ -1284,6 +1352,14 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 20),
+
+              // ===============================================================
+              // [구역 2-7] 친구 관리 (배틀태그 검색 / 요청 / 목록 / 차단)
+              // ===============================================================
+              _buildSectionHeader('친구 관리'),
+              const SizedBox(height: 8),
+              const FriendManagementCard(),
               const SizedBox(height: 20),
 
               // ===============================================================

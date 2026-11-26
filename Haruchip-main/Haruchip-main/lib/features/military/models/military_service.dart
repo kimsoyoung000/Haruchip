@@ -2,18 +2,114 @@ import 'package:flutter/foundation.dart';
 
 import 'military_rank.dart';
 
-/// 군대(곰신) 카테고리 도메인 모델 — 핸드오프 문서 §5.3.
-///
-/// [CoupleRelationship]과 같은 이유로 [Category]/[PlanItem]에 억지로
-/// 끼워 넣지 않고 별도 모델로 뺐다 — 입대일/전역일 두 날짜가 한 쌍으로
-/// 붙어 있어야 진급 게이지를 계산할 수 있는데, `PlanItem`은 날짜 하나만
-/// 갖는 구조라 맞지 않는다.
-///
-/// "계급별 D-Day 자동 계산"(§5.3)은 최초 구현 시점엔 실제 진급 규정을
-/// 몰라 TODO로 남겨뒀었는데, 이후 핸드오프 문서에 군종별 규정(§5.3
-/// `totalServiceMonths`/`monthsTo*`)이 추가돼 [military_rank.dart]의
-/// [rankMilestones]/[currentRank]/[nextRankMilestone]로 계산한다 —
-/// [branch]가 그 계산의 입력값이다.
+/// 군 출타 4대 분류 + 직접입력
+enum MilitaryLeaveType {
+  regular, // 정기휴가
+  reward, // 포상휴가
+  overnight, // 외박
+  outing, // 외출
+  custom; // 직접입력
+
+  String get labelKo => switch (this) {
+        MilitaryLeaveType.regular => '정기휴가',
+        MilitaryLeaveType.reward => '포상휴가',
+        MilitaryLeaveType.overnight => '외박',
+        MilitaryLeaveType.outing => '외출',
+        MilitaryLeaveType.custom => '직접입력',
+      };
+
+  String get emoji => switch (this) {
+        MilitaryLeaveType.regular => '🌴',
+        MilitaryLeaveType.reward => '🏅',
+        MilitaryLeaveType.overnight => '🌙',
+        MilitaryLeaveType.outing => '🚶',
+        MilitaryLeaveType.custom => '📅',
+      };
+
+  static MilitaryLeaveType fromName(String? raw) {
+    return MilitaryLeaveType.values.firstWhere(
+      (t) => t.name == raw,
+      orElse: () => MilitaryLeaveType.regular,
+    );
+  }
+}
+
+/// 개별 휴가·외박·외출·면회 일정 모델
+@immutable
+class MilitaryLeaveRecord {
+  const MilitaryLeaveRecord({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.startDate,
+    required this.endDate,
+    this.memo,
+  });
+
+  final String id;
+  final MilitaryLeaveType type;
+  final String title;
+  final DateTime startDate;
+  final DateTime endDate;
+  final String? memo;
+
+  /// 총 사용 일수 (당일 = 1일, 연속 = 종료일 - 시작일 + 1)
+  int get daysCount {
+    final s = DateTime(startDate.year, startDate.month, startDate.day);
+    final e = DateTime(endDate.year, endDate.month, endDate.day);
+    final diff = e.difference(s).inDays;
+    return diff < 0 ? 1 : diff + 1;
+  }
+
+  bool get isSingleDay => daysCount <= 1;
+
+  /// 예: '정기휴가 5일' 또는 '외출 1일'
+  String get summaryLabel => '$title $daysCount일';
+
+  MilitaryLeaveRecord copyWith({
+    String? id,
+    MilitaryLeaveType? type,
+    String? title,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? memo,
+  }) {
+    return MilitaryLeaveRecord(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      memo: memo ?? this.memo,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': type.name,
+        'title': title,
+        'startDate': startDate.toIso8601String(),
+        'endDate': endDate.toIso8601String(),
+        if (memo != null && memo!.isNotEmpty) 'memo': memo,
+      };
+
+  factory MilitaryLeaveRecord.fromJson(Map<String, dynamic> json) {
+    final start = DateTime.parse(json['startDate'] as String);
+    final end = json['endDate'] != null
+        ? DateTime.parse(json['endDate'] as String)
+        : start;
+    return MilitaryLeaveRecord(
+      id: json['id'] as String? ?? '',
+      type: MilitaryLeaveType.fromName(json['type'] as String?),
+      title: json['title'] as String? ?? '휴가',
+      startDate: start,
+      endDate: end,
+      memo: json['memo'] as String?,
+    );
+  }
+}
+
+/// 군대(곰신) 카테고리 도메인 모델 — 핸드오프 문서 §5.3 + 출타/곰신 공유 확장
 @immutable
 class MilitaryService {
   const MilitaryService({
@@ -23,28 +119,74 @@ class MilitaryService {
     this.nextLeaveDate,
     this.totalVacationDays = 24,
     this.usedVacationDays = 0,
+    this.soldierName = '우리 군인',
+    this.shortenedDays = 0,
+    this.totalRewardVacationDays = 10,
+    this.leaves = const [],
+    this.shareCode,
+    this.connectedPartnerCode,
   });
 
   final DateTime enlistDate;
   final DateTime dischargeDate;
-
-  /// 군종 — 계급별 진급 시점 자체는 군종 공통이지만, 설정 다이얼로그가
-  /// 전역일을 자동 제안할 때(`defaultDischargeDate`) 군종별 총
-  /// 복무기간(§5.3)을 참조한다.
   final MilitaryBranch branch;
-
-  /// 다음 휴가일 — 자동 계산이 아니라 사용자가 직접 입력한다(§5.3
-  /// "휴가는 복무기간 제외 계산 안 하고 별도 '휴가까지 D-Day' 탭 분리").
   final DateTime? nextLeaveDate;
 
-  /// 총 부여받은 휴가 일수(개수)
+  /// 총 부여받은 정기휴가 일수
   final int totalVacationDays;
 
-  /// 사용/소진한 휴가 일수(개수)
+  /// 수동 입력 사용 휴가 일수 (하위 호환 유지)
   final int usedVacationDays;
 
-  /// 잔여 휴가 일수
-  int get remainingVacationDays => (totalVacationDays - usedVacationDays).clamp(0, 999);
+  /// 군인 닉네임
+  final String soldierName;
+
+  /// 단축일수 (조기전역/복무단축 등)
+  final int shortenedDays;
+
+  /// 총 부여받은 포상휴가 일수
+  final int totalRewardVacationDays;
+
+  /// 등록된 출타(정기휴가·포상휴가·외박·외출·직접입력) 목록
+  final List<MilitaryLeaveRecord> leaves;
+
+  /// 내 곰신-군인 공유 초대 코드 (난수 생성)
+  final String? shareCode;
+
+  /// 연결된 상대방 공유 방 코드
+  final String? connectedPartnerCode;
+
+  /// 단축일수가 반영된 실 전역일
+  DateTime get effectiveDischargeDate =>
+      shortenedDays > 0 ? dischargeDate.subtract(Duration(days: shortenedDays)) : dischargeDate;
+
+  /// 정기휴가 사용 일수 합계
+  int get usedRegularLeaveDays {
+    final fromLeaves = leaves
+        .where((l) => l.type == MilitaryLeaveType.regular)
+        .fold<int>(0, (sum, l) => sum + l.daysCount);
+    return fromLeaves > 0 ? fromLeaves : usedVacationDays;
+  }
+
+  /// 남은 정기휴가 일수
+  int get remainingVacationDays =>
+      (totalVacationDays - usedRegularLeaveDays).clamp(0, 999);
+
+  /// 포상휴가 사용 일수 합계
+  int get usedRewardLeaveDays => leaves
+      .where((l) => l.type == MilitaryLeaveType.reward)
+      .fold<int>(0, (sum, l) => sum + l.daysCount);
+
+  /// 남은 포상휴가 일수
+  int get remainingRewardVacationDays =>
+      (totalRewardVacationDays - usedRewardLeaveDays).clamp(0, 999);
+
+  /// 외박/외출 등록 횟수
+  int get overnightAndOutingCount => leaves
+      .where((l) =>
+          l.type == MilitaryLeaveType.overnight ||
+          l.type == MilitaryLeaveType.outing)
+      .length;
 
   MilitaryService copyWith({
     DateTime? enlistDate,
@@ -54,6 +196,13 @@ class MilitaryService {
     bool clearNextLeaveDate = false,
     int? totalVacationDays,
     int? usedVacationDays,
+    String? soldierName,
+    int? shortenedDays,
+    int? totalRewardVacationDays,
+    List<MilitaryLeaveRecord>? leaves,
+    String? shareCode,
+    String? connectedPartnerCode,
+    bool clearConnectedPartnerCode = false,
   }) {
     return MilitaryService(
       enlistDate: enlistDate ?? this.enlistDate,
@@ -63,6 +212,55 @@ class MilitaryService {
           clearNextLeaveDate ? null : (nextLeaveDate ?? this.nextLeaveDate),
       totalVacationDays: totalVacationDays ?? this.totalVacationDays,
       usedVacationDays: usedVacationDays ?? this.usedVacationDays,
+      soldierName: soldierName ?? this.soldierName,
+      shortenedDays: shortenedDays ?? this.shortenedDays,
+      totalRewardVacationDays:
+          totalRewardVacationDays ?? this.totalRewardVacationDays,
+      leaves: leaves ?? this.leaves,
+      shareCode: shareCode ?? this.shareCode,
+      connectedPartnerCode: clearConnectedPartnerCode
+          ? null
+          : (connectedPartnerCode ?? this.connectedPartnerCode),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'enlistDate': enlistDate.toIso8601String(),
+        'dischargeDate': dischargeDate.toIso8601String(),
+        'branch': branch.name,
+        if (nextLeaveDate != null)
+          'nextLeaveDate': nextLeaveDate!.toIso8601String(),
+        'totalVacationDays': totalVacationDays,
+        'usedVacationDays': usedVacationDays,
+        'soldierName': soldierName,
+        'shortenedDays': shortenedDays,
+        'totalRewardVacationDays': totalRewardVacationDays,
+        'leaves': leaves.map((l) => l.toJson()).toList(),
+        if (shareCode != null) 'shareCode': shareCode,
+        if (connectedPartnerCode != null)
+          'connectedPartnerCode': connectedPartnerCode,
+      };
+
+  factory MilitaryService.fromJson(Map<String, dynamic> json) {
+    return MilitaryService(
+      enlistDate: DateTime.parse(json['enlistDate'] as String),
+      dischargeDate: DateTime.parse(json['dischargeDate'] as String),
+      branch: MilitaryBranch.fromName(json['branch'] as String?),
+      nextLeaveDate: json['nextLeaveDate'] != null
+          ? DateTime.parse(json['nextLeaveDate'] as String)
+          : null,
+      totalVacationDays: json['totalVacationDays'] as int? ?? 24,
+      usedVacationDays: json['usedVacationDays'] as int? ?? 0,
+      soldierName: json['soldierName'] as String? ?? '우리 군인',
+      shortenedDays: json['shortenedDays'] as int? ?? 0,
+      totalRewardVacationDays: json['totalRewardVacationDays'] as int? ?? 10,
+      leaves: (json['leaves'] as List<dynamic>?)
+              ?.map((e) => MilitaryLeaveRecord.fromJson(
+                  Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          const [],
+      shareCode: json['shareCode'] as String?,
+      connectedPartnerCode: json['connectedPartnerCode'] as String?,
     );
   }
 }

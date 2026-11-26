@@ -8,6 +8,7 @@ import '../../../design_system/typography.dart';
 import '../../couple/models/couple_relationship.dart';
 import '../../couple/providers/couple_provider.dart';
 import '../../couple/widgets/couple_relationship_setup_sheet.dart';
+import '../../friends/widgets/partner_soft_dropdown_button.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../../shared/widgets/add_event_bottom_sheet.dart';
@@ -387,6 +388,10 @@ class _CoupleCategoryDetailScreenState
               onPressed: _saveTitle,
             )
           else ...[
+            PartnerSoftDropdownButton(
+              categoryKey: 'couple',
+              categoryName: _category.name,
+            ),
             TextButton.icon(
               key: const Key('category_decorate_button'),
               onPressed: _openEditModal,

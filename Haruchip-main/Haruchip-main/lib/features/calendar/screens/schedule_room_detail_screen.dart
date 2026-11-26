@@ -10,6 +10,8 @@ import '../../plan/providers/plan_provider.dart';
 import '../../trash/models/trash_item.dart';
 import '../../trash/providers/trash_provider.dart';
 import '../data/calendar_mock_data.dart';
+import '../../friends/models/battle_tag_user.dart';
+import '../../friends/providers/friend_system_provider.dart';
 import '../models/schedule_room.dart';
 import '../data/room_remote.dart';
 import '../providers/schedule_room_provider.dart';
@@ -500,6 +502,9 @@ class _ScheduleRoomDetailScreenState
   }
 
   Widget _buildMembersHorizontalList(ScheduleRoom room) {
+    final friendState = ref.watch(friendSystemProvider);
+    final myProfile = ref.watch(currentUserProfileProvider);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -534,6 +539,10 @@ class _ScheduleRoomDetailScreenState
             spacing: 8,
             runSpacing: 8,
             children: room.members.map((m) {
+              final isMe = m.uid == myProfile.uid || m.uid == friendState.myProfile.uid;
+              final isAlreadyFriend = friendState.isFriend(m.uid);
+              final isSent = friendState.hasSentRequest(m.uid);
+
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
@@ -553,6 +562,56 @@ class _ScheduleRoomDetailScreenState
                     if (m.isHost) ...[
                       const SizedBox(width: 4),
                       const Text('👑', style: TextStyle(fontSize: 10)),
+                    ],
+                    if (!isMe && !isAlreadyFriend) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        key: Key('room_member_add_friend_${m.uid}'),
+                        onTap: isSent
+                            ? null
+                            : () async {
+                                await ref
+                                    .read(friendSystemProvider.notifier)
+                                    .sendFriendRequest(
+                                      BattleTagUser(
+                                        uid: m.uid,
+                                        nickname: m.name,
+                                        tag: generateBattleTag(),
+                                        avatarIcon: m.icon,
+                                      ),
+                                    );
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('${m.name}님에게 친구 요청을 보냈습니다.'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSent
+                                ? const Color(0xFFE5E7EB)
+                                : AppColors.chipYellowBg,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            isSent ? '요청됨' : '+ 친구 추가',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: isSent
+                                  ? const Color(0xFF6B7280)
+                                  : AppColors.chipYellowText,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ],
                 ),

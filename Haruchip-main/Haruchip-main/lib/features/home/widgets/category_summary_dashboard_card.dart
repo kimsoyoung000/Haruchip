@@ -789,9 +789,23 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     final nextRankMilestone = ref.watch(militaryNextRankMilestoneProvider);
     final progressPercent = (progress * 100).toStringAsFixed(1);
 
-    // 가장 가까운 다가오는 군대 D-Day 1개 산출
+    // 가장 가까운 다가오는 군대 D-Day 1개 산출 (등록된 출타 + 진급 + 전역 + 커스텀 일정)
     final candidates = <_UpcomingDdayEntry>[];
-    if (service.nextLeaveDate != null) {
+    for (final leave in service.leaves) {
+      final ld = DateTime(
+        leave.startDate.year,
+        leave.startDate.month,
+        leave.startDate.day,
+      );
+      if (!ld.isBefore(today)) {
+        candidates.add(_UpcomingDdayEntry(
+          title: '${leave.type.emoji} ${leave.summaryLabel}',
+          dDayBadge: _formatUpcomingDday(ld, today),
+          sortDateTime: ld,
+        ));
+      }
+    }
+    if (service.nextLeaveDate != null && candidates.isEmpty) {
       final ld = DateTime(service.nextLeaveDate!.year,
           service.nextLeaveDate!.month, service.nextLeaveDate!.day);
       if (!ld.isBefore(today)) {
@@ -813,8 +827,8 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
         ));
       }
     }
-    final dd = DateTime(service.dischargeDate.year,
-        service.dischargeDate.month, service.dischargeDate.day);
+    final dd = DateTime(service.effectiveDischargeDate.year,
+        service.effectiveDischargeDate.month, service.effectiveDischargeDate.day);
     if (!dd.isBefore(today)) {
       candidates.add(_UpcomingDdayEntry(
         title: '🎉 전역일 (만기제대)',
@@ -838,32 +852,43 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
                 '복무율 $progressPercent%',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: palette.primary,
+                  color: Color(0xFF2E6B3E),
                 ),
               ),
             ),
             const SizedBox(width: 6),
             Text(
               '전역 $dischargeDday',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: palette.text,
+                color: AppColors.chipYellowText,
               ),
             ),
           ],
         ),
         const SizedBox(height: 5),
         ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 6,
-            backgroundColor: palette.chipBg,
-            valueColor: AlwaysStoppedAnimation<Color>(palette.primary),
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            height: 7,
+            width: double.infinity,
+            color: const Color(0xFFFFF8E1),
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: progress.clamp(0.0, 1.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.chipYellowBg, Color(0xFF81C784)],
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 10),

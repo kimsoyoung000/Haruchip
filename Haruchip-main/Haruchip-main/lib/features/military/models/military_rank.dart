@@ -19,6 +19,13 @@ enum MilitaryBranch {
         MilitaryBranch.airForce => '공군',
         MilitaryBranch.publicService => '사회복무요원',
       };
+
+  static MilitaryBranch fromName(String? raw) {
+    return MilitaryBranch.values.firstWhere(
+      (b) => b.name == raw,
+      orElse: () => MilitaryBranch.army,
+    );
+  }
 }
 
 /// 군종별 총 복무기간(개월) — §5.3.
@@ -118,4 +125,181 @@ RankMilestone? nextRankMilestone(DateTime enlistDate, {DateTime? today}) {
 /// 않는다(그대로 편집 가능한 필드로 남겨둠).
 DateTime defaultDischargeDate(DateTime enlistDate, MilitaryBranch branch) {
   return _addMonths(enlistDate, totalServiceMonths[branch]!);
+}
+
+/// 실시간 정밀 복무율(0.0 ~ 1.0) — 소수점 6자리까지 흐르는 실시간 게이지용
+double calculateExactServiceProgress({
+  required DateTime enlistDate,
+  required DateTime dischargeDate,
+  DateTime? now,
+}) {
+  final current = now ?? DateTime.now();
+  final start = DateTime(enlistDate.year, enlistDate.month, enlistDate.day);
+  final end = DateTime(dischargeDate.year, dischargeDate.month, dischargeDate.day);
+  final totalUs = end.difference(start).inMicroseconds;
+  if (totalUs <= 0) return 1.0;
+  final elapsedUs = current.difference(start).inMicroseconds;
+  return (elapsedUs / totalUs).clamp(0.0, 1.0);
+}
+
+/// 현재 호봉 및 다음 호봉 승급 정보
+@immutable
+class HobongInfo {
+  const HobongInfo({
+    required this.currentRank,
+    required this.currentHobong,
+    required this.nextHobong,
+    required this.nextHobongDate,
+    required this.dDay,
+    required this.progress,
+  });
+
+  final MilitaryRank currentRank;
+  final int currentHobong;
+  final int nextHobong;
+  final DateTime nextHobongDate;
+  final int dDay;
+  final double progress;
+}
+
+/// 현재 계급의 호봉 및 다음 달 1일 호봉 승급 진행률 계산
+HobongInfo calculateHobongInfo(DateTime enlistDate, {DateTime? now}) {
+  final current = now ?? DateTime.now();
+  final today = DateTime(current.year, current.month, current.day);
+  final milestones = rankMilestones(enlistDate);
+
+  RankMilestone active = milestones.first;
+  for (final m in milestones) {
+    if (!today.isBefore(DateTime(m.startDate.year, m.startDate.month, m.startDate.day))) {
+      active = m;
+    }
+  }
+
+  final monthsInRank = ((today.year - active.startDate.year) * 12 +
+          (today.month - active.startDate.month))
+      .clamp(0, 12);
+  final currentHobong = monthsInRank + 1;
+
+  final monthStart = DateTime(today.year, today.month, 1);
+  final nextMonthFirst = DateTime(today.year, today.month + 1, 1);
+  final totalUs = nextMonthFirst.difference(monthStart).inMicroseconds;
+  final elapsedUs = current.difference(monthStart).inMicroseconds;
+  final progress = totalUs > 0 ? (elapsedUs / totalUs).clamp(0.0, 1.0) : 0.0;
+  final dDay = nextMonthFirst.difference(today).inDays.clamp(0, 31);
+
+  return HobongInfo(
+    currentRank: active.rank,
+    currentHobong: currentHobong,
+    nextHobong: currentHobong + 1,
+    nextHobongDate: nextMonthFirst,
+    dDay: dDay,
+    progress: progress,
+  );
+}
+
+/// 계급 진급 진행률 정보
+@immutable
+class RankPromotionProgress {
+  const RankPromotionProgress({
+    required this.currentRank,
+    required this.nextRank,
+    required this.targetDate,
+    required this.dDay,
+    required this.progress,
+  });
+
+  final MilitaryRank currentRank;
+  final MilitaryRank? nextRank; // 병장일 경우 null (전역 기준)
+  final DateTime targetDate;
+  final int dDay;
+  final double progress;
+}
+
+/// 현재 계급 시작일 → 다음 계급 진급일(병장은 전역일) 진행률 계산
+RankPromotionProgress calculateRankPromotionProgress(
+  DateTime enlistDate,
+  DateTime dischargeDate, {
+  DateTime? now,
+}) {
+  final current = now ?? DateTime.now();
+  final today = DateTime(current.year, current.month, current.day);
+  final milestones = rankMilestones(enlistDate);
+
+  RankMilestone active = milestones.first;
+  RankMilestone? next;
+  for (final m in milestones) {
+    final mDate = DateTime(m.startDate.year, m.startDate.month, m.startDate.day);
+    if (!today.isBefore(mDate)) {
+      active = m;
+    } else {
+      next ??= m;
+    }
+  }
+
+  final start = DateTime(active.startDate.year, active.startDate.month, active.startDate.day);
+  final end = next != null
+      ? DateTime(next.startDate.year, next.startDate.month, next.startDate.day)
+      : DateTime(dischargeDate.year, dischargeDate.month, dischargeDate.day);
+
+  final totalUs = end.difference(start).inMicroseconds;
+  final elapsedUs = current.difference(start).inMicroseconds;
+  final progress = totalUs > 0 ? (elapsedUs / totalUs).clamp(0.0, 1.0) : 1.0;
+  final dDay = end.difference(today).inDays.clamp(0, 9999);
+
+  return RankPromotionProgress(
+    currentRank: active.rank,
+    nextRank: next?.rank,
+    targetDate: end,
+    dDay: dDay,
+    progress: progress,
+  );
+}
+
+/// 대한민국 주요 양력 법정 공휴일 (월-일)
+const Set<(int, int)> _kKoreanFixedHolidays = {
+  (1, 1), // 신정
+  (3, 1), // 삼일절
+  (5, 5), // 어린이날
+  (6, 6), // 현충일
+  (8, 15), // 광복절
+  (10, 3), // 개천절
+  (10, 9), // 한글날
+  (12, 25), // 성탄절
+};
+
+/// 남은 일과일 계산: 남은 복무일 - (주말 토·일 + 공휴일 + 등록된 개인 휴가 평일 일수)
+int calculateRemainingWorkdays({
+  required DateTime dischargeDate,
+  List<({DateTime startDate, DateTime endDate})> leaveRanges = const [],
+  DateTime? today,
+}) {
+  final now = today ?? DateTime.now();
+  final start = DateTime(now.year, now.month, now.day);
+  final end = DateTime(dischargeDate.year, dischargeDate.month, dischargeDate.day);
+  if (!end.isAfter(start)) return 0;
+
+  // 등록된 휴가 날짜 집합 (평일 중복 차감 방지)
+  final leaveDays = <DateTime>{};
+  for (final range in leaveRanges) {
+    final s = DateTime(range.startDate.year, range.startDate.month, range.startDate.day);
+    final e = DateTime(range.endDate.year, range.endDate.month, range.endDate.day);
+    for (var d = s; !d.isAfter(e); d = d.add(const Duration(days: 1))) {
+      leaveDays.add(d);
+    }
+  }
+
+  int workdays = 0;
+  for (var d = start; d.isBefore(end); d = d.add(const Duration(days: 1))) {
+    if (d.weekday == DateTime.saturday || d.weekday == DateTime.sunday) {
+      continue;
+    }
+    if (_kKoreanFixedHolidays.contains((d.month, d.day))) {
+      continue;
+    }
+    if (leaveDays.contains(d)) {
+      continue;
+    }
+    workdays++;
+  }
+  return workdays;
 }

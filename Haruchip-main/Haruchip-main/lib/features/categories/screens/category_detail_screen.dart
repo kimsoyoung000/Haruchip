@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../../friends/widgets/partner_soft_dropdown_button.dart';
+import '../../military/widgets/military_category_view.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../../shared/widgets/add_event_bottom_sheet.dart';
@@ -1728,6 +1730,28 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
               ),
             ),
           ],
+          // 커플·군대·결혼 카테고리 우측 상단 소프트 드롭다운 파트너 공유 버튼
+          if (_category.categoryKey == 'military' ||
+              _category.categoryKey == 'wedding')
+            PartnerSoftDropdownButton(
+              categoryKey: _category.categoryKey,
+              categoryName: _category.name,
+            ),
+          // 군대(곰신) 카테고리 우측 상단 [초대/공유] 버튼
+          if (_category.categoryKey == 'military')
+            IconButton(
+              key: const Key('military_share_button'),
+              onPressed: () => showMilitaryGomshinShareModal(context, ref),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.person_add_alt_1_outlined,
+                size: 20,
+                color: AppColors.protoHeading,
+              ),
+              tooltip: '초대/공유',
+            ),
           // 전 카테고리 공통 꾸미기(단일 스킨 엔진) 진입 버튼
           IconButton(
             key: const Key('category_decorate_button'),
@@ -1780,7 +1804,9 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
                                               ? _buildHobbyBody()
                                               : _category.categoryKey == 'group'
                                                   ? _buildGroupBody()
-                                                  : Column(
+                                                  : _category.categoryKey == 'military'
+                                                      ? const MilitaryCategoryView()
+                                                      : Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                   // 1. 상단 카드 영역 (Pet: 패밀리 카드 캐러셀 / 기타: 커스텀 꾸미기 카드)

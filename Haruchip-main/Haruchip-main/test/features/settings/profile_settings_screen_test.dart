@@ -92,12 +92,14 @@ void main() {
       await tester.tap(find.text('프로필 수정'));
       await tester.pumpAndSettle();
 
-      // 다이얼로그 확인
-      expect(find.text('하루칩에서 사용할 닉네임을 입력해 주세요.'), findsOneWidget);
-      final textField = find.byType(TextField);
-      expect(textField, findsOneWidget);
+      // 다이얼로그 확인 (닉네임 + 4자리 태그 입력)
+      expect(
+        find.text('하루칩에서 사용할 닉네임과 4자리 태그(#TAG)를 설정해 주세요.'),
+        findsOneWidget,
+      );
+      final nameField = find.byType(TextField).first;
 
-      await tester.enterText(textField, '행복한 하루');
+      await tester.enterText(nameField, '행복한 하루');
       await tester.tap(find.text('저장'));
       await tester.pumpAndSettle();
 
