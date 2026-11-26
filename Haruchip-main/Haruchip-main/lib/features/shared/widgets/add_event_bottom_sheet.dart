@@ -228,6 +228,8 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
 
   // Room Links
   final List<String> _selectedRoomIds = [];
+  final Set<String> _selectedParticipantUids = <String>{};
+  bool _participantsInitialized = false;
 
   @override
   void initState() {
@@ -417,6 +419,11 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
         }.toList();
         if (targetRoomIds.isNotEmpty) {
           final myProfile = ref.read(currentUserProfileProvider);
+          final effectiveParticipants = <String>{
+            myProfile.uid,
+            ..._selectedParticipantUids,
+          }.toList();
+          final isSharedGroup = effectiveParticipants.length >= 2;
           final sharedEvent = RoomSharedEvent(
             id: 'room-plan-${item.id}',
             roomId: targetRoomIds.first,
@@ -428,6 +435,8 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
             time: _startTime == null
                 ? null
                 : '${_startTime!.hour.toString().padLeft(2, '0')}:${_startTime!.minute.toString().padLeft(2, '0')}',
+            participantUids: effectiveParticipants,
+            isSharedGroupEvent: isSharedGroup,
           );
           ref.read(scheduleRoomsProvider.notifier).addRoomEventToMultipleRooms(
                 roomIds: targetRoomIds,
@@ -1994,11 +2003,16 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
 
   Widget _buildRoomSection() {
     final rooms = ref.watch(scheduleRoomsProvider);
+    final myProfile = ref.watch(currentUserProfileProvider);
     final isGroupRoomMode =
         widget.initialRoomId != null && widget.initialRoomId!.isNotEmpty;
     final currentRoom = isGroupRoomMode
         ? rooms.where((r) => r.id == widget.initialRoomId).firstOrNull
         : null;
+    if (isGroupRoomMode && !_participantsInitialized) {
+      _participantsInitialized = true;
+      _selectedParticipantUids.add(myProfile.uid);
+    }
     // 모임 내부 일정 등록 시: 현재 모임은 기본 고정, 하단 선택 칩에는 '다른 모임방'만 노출
     final selectableRooms = isGroupRoomMode
         ? rooms.where((r) => r.id != widget.initialRoomId).toList()
@@ -2010,6 +2024,128 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 모임 내부 일정 등록 시: 함께하는 멤버 선택 (2인 이상 체크 시 공통 모임 일정 자동 승격)
+            if (currentRoom != null && currentRoom.members.length > 1) ...[
+              Container(
+                key: const Key('add_event_participants_section'),
+                margin: const EdgeInsets.only(bottom: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.people_outline_rounded,
+                          size: 18,
+                          color: _kLabel,
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          '함께하는 멤버 선택',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.bold,
+                            color: _kLabel,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_selectedParticipantUids.length >= 2)
+                          Container(
+                            key: const Key('add_event_common_group_badge'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFE699),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '공통 모임 (${_selectedParticipantUids.length}명)',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF3A2E1A),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: [
+                        for (final member in currentRoom.members)
+                          () {
+                            final isSelf = member.uid == myProfile.uid ||
+                                member.name == myProfile.name;
+                            final isChecked = isSelf ||
+                                _selectedParticipantUids.contains(member.uid);
+                            return InkWell(
+                              key: Key('add_event_participant_${member.uid}'),
+                              onTap: isSelf
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        if (_selectedParticipantUids
+                                            .contains(member.uid)) {
+                                          _selectedParticipantUids
+                                              .remove(member.uid);
+                                        } else {
+                                          _selectedParticipantUids
+                                              .add(member.uid);
+                                        }
+                                      });
+                                    },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isChecked
+                                      ? const Color(0xFFFFE699)
+                                      : _kChipBg,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isChecked
+                                          ? Icons.check_circle_rounded
+                                          : Icons.radio_button_unchecked_rounded,
+                                      size: 14,
+                                      color: isChecked
+                                          ? const Color(0xFF3A2E1A)
+                                          : _kSubLabel,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      isSelf ? '${member.name} (나)' : member.name,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: isChecked
+                                            ? const Color(0xFF3A2E1A)
+                                            : _kLabel,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }(),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: _kDivider),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 const Icon(Icons.group_outlined, size: 18, color: _kLabel),

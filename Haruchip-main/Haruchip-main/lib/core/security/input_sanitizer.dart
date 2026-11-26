@@ -55,14 +55,14 @@ class HaruInputSanitizer {
     return raw.replaceAll(_injectionDangerRegex, '').trim();
   }
 
-  /// 닉네임 유효성 검사 (공백 제외 2~10자 + 비속어/음란어/시스템 예약어 차단)
+  /// 닉네임 유효성 검사 (공백 제외 2~10자 + 운영진 사칭 예약어 및 비속어/음란어 차단)
+  /// 기본 브랜드명('하루칩', '하루칩 여행자' 등)은 정상 허용한다.
   static const List<String> _kForbiddenNicknameTokens = [
     '운영자',
     '관리자',
-    '하루칩',
     'admin',
     'administrator',
-    'system',
+    'root',
     '시발',
     '씨발',
     '병신',

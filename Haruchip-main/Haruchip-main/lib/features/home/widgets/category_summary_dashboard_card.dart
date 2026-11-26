@@ -40,35 +40,35 @@ class CategoryThemePalette {
     switch (key) {
       case 'couple':
         return const CategoryThemePalette(
-          bg: Color(0xFFFFF0F3),
+          bg: Color(0xFFFFF0F2), // 은은한 베이비 소프트 핑크
           border: Color(0xFFFFCCD5),
-          chipBg: Color(0xFFFFCCD5),
-          primary: Color(0xFFFF7A9C),
-          text: Color(0xFF4A4A4A),
+          chipBg: Color(0xFFFFDCE2),
+          primary: Color(0xFFE86A87),
+          text: Color(0xFF4A3B3F),
         );
       case 'military':
         return const CategoryThemePalette(
-          bg: Color(0xFFF0FDF4),
-          border: Color(0xFFDCFCE7),
-          chipBg: Color(0xFFDCFCE7),
-          primary: Color(0xFF16A34A),
-          text: Color(0xFF14532D),
+          bg: Color(0xFFF0F7F2), // 차분한 파스텔 세이지 그린
+          border: Color(0xFFD3E8D8),
+          chipBg: Color(0xFFDCEEE1),
+          primary: Color(0xFF2E7D4F),
+          text: Color(0xFF1F3D2B),
         );
       case 'baby':
         return const CategoryThemePalette(
-          bg: Color(0xFFFEFCE8),
-          border: Color(0xFFFEF08A),
-          chipBg: Color(0xFFFEF08A),
+          bg: Color(0xFFFFF9E6), // 따뜻한 밀크 옐로우
+          border: Color(0xFFFDECB4),
+          chipBg: Color(0xFFFEF0C7),
           primary: Color(0xFFCA8A04),
-          text: Color(0xFF713F12),
+          text: Color(0xFF5C4310),
         );
       case 'pet':
         return const CategoryThemePalette(
-          bg: Color(0xFFFFF8F1),
-          border: Color(0xFFFFEDD5),
-          chipBg: Color(0xFFFFEDD5),
+          bg: Color(0xFFFFF4EC), // 따뜻한 크림 피치 오렌지
+          border: Color(0xFFFFE0C8),
+          chipBg: Color(0xFFFFE4D1),
           primary: Color(0xFFEA580C),
-          text: Color(0xFF7C2D12),
+          text: Color(0xFF6B3214),
         );
       case 'solo':
       case 'custom':
@@ -81,17 +81,17 @@ class CategoryThemePalette {
         );
       case 'fandom':
         return const CategoryThemePalette(
-          bg: Color(0xFFFFFDF0),
-          border: Color(0xFFFEF3C7),
+          bg: Color(0xFFFEFDE8), // 화사한 소프트 레몬 옐로우
+          border: Color(0xFFFEF3B8),
           chipBg: Color(0xFFFEF3C7),
           primary: Color(0xFFD97706),
-          text: Color(0xFF78350F),
+          text: Color(0xFF68410F),
         );
       case 'exam':
       case 'study':
         return const CategoryThemePalette(
-          bg: Color(0xFFEFF6FF),
-          border: Color(0xFFDBEAFE),
+          bg: Color(0xFFF0F6FF), // 집중도 높은 소프트 파스텔 스카이블루
+          border: Color(0xFFD4E6FF),
           chipBg: Color(0xFFDBEAFE),
           primary: Color(0xFF2563EB),
           text: Color(0xFF1E3A8A),
@@ -105,20 +105,13 @@ class CategoryThemePalette {
           text: Color(0xFF831843),
         );
       case 'goal':
-        return const CategoryThemePalette(
-          bg: Color(0xFFF0FDF4),
-          border: Color(0xFFDCFCE7),
-          chipBg: Color(0xFFDCFCE7),
-          primary: Color(0xFF16A34A),
-          text: Color(0xFF14532D),
-        );
       case 'routine':
         return const CategoryThemePalette(
-          bg: Color(0xFFF0F9FF),
-          border: Color(0xFFE0F2FE),
-          chipBg: Color(0xFFE0F2FE),
-          primary: Color(0xFF0284C7),
-          text: Color(0xFF075985),
+          bg: Color(0xFFF5F2FA), // 부드러운 파스텔 라일락
+          border: Color(0xFFE5DCF5),
+          chipBg: Color(0xFFEAE2F8),
+          primary: Color(0xFF7C3AED),
+          text: Color(0xFF3B2466),
         );
       case 'hobby':
         return const CategoryThemePalette(
@@ -130,29 +123,29 @@ class CategoryThemePalette {
         );
       case 'travel':
         return const CategoryThemePalette(
-          bg: Color(0xFFF0F8FF),
-          border: Color(0xFFD6ECFF),
-          chipBg: Color(0xFFD6ECFF),
-          primary: Color(0xFF2C3E50),
-          text: Color(0xFF2C3E50),
+          bg: Color(0xFFF0FAF9), // 청량한 파스텔 민트/아쿠아
+          border: Color(0xFFCFF0EC),
+          chipBg: Color(0xFFD5F3EF),
+          primary: Color(0xFF0D9488),
+          text: Color(0xFF134E4A),
         );
       case 'wedding':
         return const CategoryThemePalette(
-          bg: Color(0xFFFFF5F5),
-          border: Color(0xFFFED7D7),
-          chipBg: Color(0xFFFED7D7),
-          primary: Color(0xFFE53E3E),
-          text: Color(0xFF742A2A),
+          bg: Color(0xFFF9F4FC), // 우아하고 클래식한 라벤더 블러시
+          border: Color(0xFFEBDDF5),
+          chipBg: Color(0xFFF1E6F9),
+          primary: Color(0xFF9333EA),
+          text: Color(0xFF4C1D6E),
         );
       case 'plan':
       case 'appointment':
       default:
         return const CategoryThemePalette(
-          bg: Color(0xFFF8F9FA),
+          bg: Color(0xFFFFFFFF),
           border: Color(0xFFE9ECEF),
-          chipBg: Color(0xFFE9ECEF),
-          primary: Color(0xFF495057),
-          text: Color(0xFF343A40),
+          chipBg: Color(0xFFF1F5F9),
+          primary: Color(0xFF475569),
+          text: Color(0xFF334155),
         );
     }
   }
@@ -378,7 +371,7 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
       );
     }
 
-    // 무테두리 순백색(#FFFFFF) 럭셔리 플랫 카드 + 초미세 소프트 섀도우
+    // 무테두리 카테고리 고유 파스텔 카드 + 초미세 소프트 섀도우 (배경 #F8F9FA 위 입체감)
     return SizedBox(
       height: kFixedCardHeight,
       child: InkWell(
@@ -388,7 +381,7 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
         child: Container(
           padding: AppLayoutTokens.cardInternalPadding,
           decoration: BoxDecoration(
-            color: AppColors.cleanWhiteBg,
+            color: palette.bg,
             borderRadius: BorderRadius.circular(18),
             boxShadow: AppLayoutTokens.luxuryCardShadow,
           ),
@@ -905,20 +898,21 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     );
   }
 
-  /// 표준 파스텔 소프트 라운드 D-Day 바 (순백색 카드 위 은은한 대비, 콤팩트 고정 높이 28px)
+  /// 표준 화이트 라운드 D-Day 바 (파스텔 카드 위 깔끔한 대비, 콤팩트 고정 높이 28px)
   Widget _buildWhiteDdayBar(
     String title,
     String dDayBadge,
     CategoryThemePalette palette,
   ) {
-    final rowBg = Color.lerp(const Color(0xFFF8F9FA), palette.bg, 0.72) ??
-        const Color(0xFFF8F9FA);
+    final isPureWhiteCard = palette.bg == const Color(0xFFFFFFFF);
     return Container(
       height: 28,
       margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
-        color: rowBg,
+        color: isPureWhiteCard
+            ? const Color(0xFFF8F9FA)
+            : Colors.white.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(9),
       ),
       child: Row(

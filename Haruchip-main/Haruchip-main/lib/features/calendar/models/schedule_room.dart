@@ -126,6 +126,8 @@ class RoomSharedEvent {
     this.isAllDay = false,
     this.location,
     this.memo,
+    this.participantUids = const [],
+    this.isSharedGroupEvent = false,
     this.isDeleted = false,
     this.deletedAt,
   });
@@ -140,6 +142,17 @@ class RoomSharedEvent {
   final bool isAllDay;
   final String? location;
   final String? memo;
+
+  /// 이 일정에 함께 참여하는 멤버 UID 목록 (2인 이상 시 공통 모임 일정)
+  final List<String> participantUids;
+
+  /// 명시적 공통 모임 일정 플래그 (일정 조율 확정 또는 2인 이상 참여)
+  final bool isSharedGroupEvent;
+
+  /// 실제 캘린더 렌더링 시 공통 모임 대표 컬러를 적용할지 여부
+  bool get isEffectiveSharedGroupEvent =>
+      isSharedGroupEvent || participantUids.length >= 2;
+
   final bool isDeleted;
   final DateTime? deletedAt;
 
@@ -149,10 +162,13 @@ class RoomSharedEvent {
     String? title,
     String? authorUid,
     DateTime? date,
+    DateTime? endDate,
     String? time,
     bool? isAllDay,
     String? location,
     String? memo,
+    List<String>? participantUids,
+    bool? isSharedGroupEvent,
     bool? isDeleted,
     DateTime? deletedAt,
   }) {
@@ -162,10 +178,13 @@ class RoomSharedEvent {
       title: title ?? this.title,
       authorUid: authorUid ?? this.authorUid,
       date: date ?? this.date,
+      endDate: endDate ?? this.endDate,
       time: time ?? this.time,
       isAllDay: isAllDay ?? this.isAllDay,
       location: location ?? this.location,
       memo: memo ?? this.memo,
+      participantUids: participantUids ?? this.participantUids,
+      isSharedGroupEvent: isSharedGroupEvent ?? this.isSharedGroupEvent,
       isDeleted: isDeleted ?? this.isDeleted,
       deletedAt: deletedAt ?? this.deletedAt,
     );
@@ -177,10 +196,13 @@ class RoomSharedEvent {
         'title': title,
         'authorUid': authorUid,
         'date': date.toIso8601String(),
+        if (endDate != null) 'endDate': endDate!.toIso8601String(),
         'time': time,
         'isAllDay': isAllDay,
         'location': location,
         'memo': memo,
+        'participantUids': participantUids,
+        'isSharedGroupEvent': isSharedGroupEvent,
         'isDeleted': isDeleted,
         'deletedAt': deletedAt?.toIso8601String(),
       };
@@ -192,10 +214,16 @@ class RoomSharedEvent {
       title: json['title'] as String? ?? '',
       authorUid: json['authorUid'] as String? ?? '',
       date: json['date'] != null ? DateTime.parse(json['date'] as String) : DateTime.now(),
+      endDate: json['endDate'] != null ? DateTime.tryParse(json['endDate'] as String) : null,
       time: json['time'] as String?,
       isAllDay: json['isAllDay'] as bool? ?? false,
       location: json['location'] as String?,
       memo: json['memo'] as String?,
+      participantUids: (json['participantUids'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      isSharedGroupEvent: json['isSharedGroupEvent'] as bool? ?? false,
       isDeleted: json['isDeleted'] as bool? ?? false,
       deletedAt: json['deletedAt'] != null ? DateTime.parse(json['deletedAt'] as String) : null,
     );
@@ -748,6 +776,7 @@ class ScheduleRoom {
     required this.dates,
     this.description,
     this.categoryTag = '모임',
+    this.sharedEventColorHex = '#FFE699',
     this.confirmedDate,
     this.payments = const {},
     this.settlementConfirmedAt,
@@ -766,6 +795,9 @@ class ScheduleRoom {
   final String inviteCode; // 8~10자리 보안 코드
   final String? description;
   final String categoryTag;
+
+  /// 2인 이상 공통 참여 일정 및 확정 모임 일정에 적용되는 공통 모임 대표 컬러
+  final String sharedEventColorHex;
   final List<RoomMember> members;
 
   /// key: 'YYYY-MM-DD', value: 그 날짜에 가능하다고 표시한 uid 리스트
@@ -796,6 +828,7 @@ class ScheduleRoom {
     String? inviteCode,
     String? description,
     String? categoryTag,
+    String? sharedEventColorHex,
     List<RoomMember>? members,
     Map<String, List<String>>? dates,
     Object? confirmedDate = _unset,
@@ -816,6 +849,7 @@ class ScheduleRoom {
       inviteCode: inviteCode ?? this.inviteCode,
       description: description ?? this.description,
       categoryTag: categoryTag ?? this.categoryTag,
+      sharedEventColorHex: sharedEventColorHex ?? this.sharedEventColorHex,
       members: members ?? this.members,
       dates: dates ?? this.dates,
       confirmedDate: identical(confirmedDate, _unset)

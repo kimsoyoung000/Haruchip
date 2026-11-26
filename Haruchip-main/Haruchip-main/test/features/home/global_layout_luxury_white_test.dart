@@ -28,10 +28,10 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // 메인 대시보드 배경색 #FAFAFC 확인
+        // 메인 대시보드 배경색 #F8F9FA 확인
         final mainScaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
-        expect(mainScaffold.backgroundColor, const Color(0xFFFAFAFC));
-        expect(AppColors.protoBackground, const Color(0xFFFAFAFC));
+        expect(mainScaffold.backgroundColor, const Color(0xFFF8F9FA));
+        expect(AppColors.protoBackground, const Color(0xFFF8F9FA));
 
         // 하단 네비게이션바 미세 경계선 (0xFFF0F0F2, width 0.8) 확인
         final navContainer = tester.widget<Container>(

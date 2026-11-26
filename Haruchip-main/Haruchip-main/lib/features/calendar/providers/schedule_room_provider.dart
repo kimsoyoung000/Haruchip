@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart'
-    show FirebaseException, FirebaseFirestore;
+    show FirebaseException, FirebaseFirestore, SetOptions;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/security/input_sanitizer.dart';
@@ -891,6 +891,30 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
         else
           room,
     ];
+  }
+
+  /// 모임의 '공통 모임 대표 컬러' 갱신 (2인 이상 공통 참여 일정 및 확정 모임 일정 라벨에 적용)
+  void updateRoomSharedEventColor({
+    required String roomId,
+    required String colorHex,
+  }) {
+    final normalized = colorHex.startsWith('#') ? colorHex : '#$colorHex';
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(sharedEventColorHex: normalized)
+        else
+          room,
+    ];
+    final s = _sync;
+    if (s != null) {
+      _push(() async {
+        await FirebaseFirestore.instance.collection('rooms').doc(roomId).set(
+          {'sharedEventColorHex': normalized},
+          SetOptions(merge: true),
+        );
+      });
+    }
   }
 }
 

@@ -19,7 +19,6 @@ import '../providers/calendar_display_settings_provider.dart';
 import '../providers/schedule_room_provider.dart';
 import '../widgets/add_room_notice_dialog.dart';
 import '../widgets/add_room_vote_dialog.dart';
-import '../widgets/member_color_picker_dialog.dart';
 import '../widgets/month_grid.dart';
 import '../widgets/room_availability_month_grid.dart';
 import '../widgets/room_management_drawer.dart';
@@ -174,6 +173,8 @@ class _ScheduleRoomDetailScreenState
           authorUid: room.members.firstWhere((m) => m.isHost, orElse: () => room.members.first).uid,
           date: date,
           isAllDay: true,
+          participantUids: room.members.map((m) => m.uid).toList(),
+          isSharedGroupEvent: true,
         ),
       );
     }
@@ -181,27 +182,6 @@ class _ScheduleRoomDetailScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('🎉 $dateStr 날짜로 모임 일정이 확정되었습니다!')),
     );
-  }
-
-  void _editMyProfile(ScheduleRoom room, RoomMember myMember) async {
-    final takenColors = room.members
-        .where((m) => m.uid != myMember.uid)
-        .map((m) => m.colorHex.toUpperCase())
-        .toList();
-
-    final pickedHex = await showMemberColorPickerDialog(
-      context,
-      currentColorHex: myMember.colorHex,
-      takenColorHexList: takenColors,
-    );
-
-    if (pickedHex != null) {
-      ref.read(scheduleRoomsProvider.notifier).updateMemberCustomization(
-            roomId: room.id,
-            uid: myMember.uid,
-            colorHex: pickedHex,
-          );
-    }
   }
 
   void _handleSend(BuildContext context, String provider, String toName, int amount) {
@@ -286,16 +266,12 @@ class _ScheduleRoomDetailScreenState
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_pin_rounded, color: Color(0xFF0F172A)),
-            tooltip: '내 컬러 및 이모지 변경',
-            onPressed: () => _editMyProfile(room, myMember),
-          ),
+          // 햄버거(☰) 및 중복 컬러 아이콘 제거 -> 단일 [프로필/서랍] 통합 버튼
           Builder(
             builder: (scaffoldCtx) => IconButton(
               key: const Key('open_room_drawer_button'),
-              icon: const Icon(Icons.menu_rounded, color: Color(0xFF0F172A)),
-              tooltip: '모임 관리 서랍',
+              icon: const Icon(Icons.person_pin_rounded, color: Color(0xFF0F172A)),
+              tooltip: '모임 프로필 및 관리 서랍',
               onPressed: () => Scaffold.of(scaffoldCtx).openEndDrawer(),
             ),
           ),
@@ -679,7 +655,9 @@ class _ScheduleRoomDetailScreenState
         time: ev.isAllDay ? null : ev.time,
         source: 'group',
         categoryKey: 'group_${room.id}',
-        colorHex: author.colorHex,
+        colorHex: ev.isEffectiveSharedGroupEvent
+            ? room.sharedEventColorHex
+            : author.colorHex,
         fillLabelBackground: true,
       );
     }).toList();
@@ -783,6 +761,10 @@ class _ScheduleRoomDetailScreenState
       orElse: () => const RoomMember(uid: '', name: '멤버', icon: '👤', colorHex: '#38BDF8'),
     );
 
+    final isCommonGroup = ev.isEffectiveSharedGroupEvent;
+    final badgeColorHex =
+        isCommonGroup ? room.sharedEventColorHex : author.colorHex;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -804,14 +786,48 @@ class _ScheduleRoomDetailScreenState
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: _hexToColor(author.colorHex).withValues(alpha: 0.25),
+                  color: _hexToColor(badgeColorHex).withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(
-                  '${author.icon} ${author.name}',
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isCommonGroup) ...[
+                      const Icon(
+                        Icons.groups_rounded,
+                        size: 12,
+                        color: Color(0xFF1E293B),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        ev.participantUids.length >= 2
+                            ? '공통 모임 (${ev.participantUids.length}명)'
+                            : '공통 모임',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ] else ...[
+                      HaruChipIconViewer(
+                        iconKey: author.icon,
+                        size: 12,
+                        circular: true,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        author.name,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
@@ -1082,7 +1098,10 @@ class _ScheduleRoomDetailScreenState
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          room.members.where((m) => e.value.contains(m.uid)).map((m) => '${m.icon}${m.name}').join(' '),
+                          room.members
+                              .where((m) => e.value.contains(m.uid))
+                              .map((m) => m.name)
+                              .join(', '),
                           style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1366,8 +1385,14 @@ class _ScheduleRoomDetailScreenState
                   padding: EdgeInsets.only(right: 6),
                   child: Icon(Icons.push_pin, size: 14, color: Color(0xFFD97706)),
                 ),
+              HaruChipIconViewer(
+                iconKey: notice.authorIcon,
+                size: 14,
+                circular: true,
+              ),
+              const SizedBox(width: 5),
               Text(
-                '${notice.authorIcon} ${notice.authorName}',
+                notice.authorName,
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
               ),
               const Spacer(),
@@ -1471,7 +1496,7 @@ class _ScheduleRoomDetailScreenState
               if (confirmedMembers.isNotEmpty)
                 Expanded(
                   child: Text(
-                    '${confirmedMembers.length}명 확인 (${confirmedMembers.map((m) => '${m.icon} ${m.name}').join(', ')})',
+                    '${confirmedMembers.length}명 확인 (${confirmedMembers.map((m) => m.name).join(', ')})',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
@@ -1790,9 +1815,20 @@ class _ScheduleRoomDetailScreenState
                                 color: _hexToColor(m.colorHex).withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text(
-                                '${m.icon} ${m.name}',
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  HaruChipIconViewer(
+                                    iconKey: m.icon,
+                                    size: 11,
+                                    circular: true,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    m.name,
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                  ),
+                                ],
                               ),
                             );
                           }).toList(),

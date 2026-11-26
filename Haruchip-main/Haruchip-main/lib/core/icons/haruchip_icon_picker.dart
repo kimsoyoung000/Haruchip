@@ -287,18 +287,20 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
 
     return Column(
       children: [
-        // 1. 심플(파스텔) vs 라인(2px) 스타일 전환 필
+        // 1. [심플 파스텔] / [미니멀 라인] 스타일 전환 탭
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: Row(
             children: [
               _buildStylePill(
+                key: const Key('icon_picker_style_simple'),
                 label: '심플 파스텔',
                 selected: _style == HaruChipIconStyle.simple,
                 onTap: () => setState(() => _style = HaruChipIconStyle.simple),
               ),
               const SizedBox(width: 8),
               _buildStylePill(
+                key: const Key('icon_picker_style_line'),
                 label: '미니멀 라인',
                 selected: _style == HaruChipIconStyle.line,
                 onTap: () => setState(() => _style = HaruChipIconStyle.line),
@@ -378,50 +380,46 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
                       ),
                     ),
                     const SizedBox(height: 8),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 5,
-                        crossAxisSpacing: 9,
-                        mainAxisSpacing: 9,
-                        childAspectRatio: 1,
-                      ),
-                      itemCount: items.length,
-                      itemBuilder: (context, itemIndex) {
-                        final item = items[itemIndex];
-                        final isSelected = normalizedSelected == item.key;
-
-                        return Tooltip(
-                          message: item.labelKo,
-                          child: InkWell(
-                            key: Key('icon_picker_item_${item.key}'),
-                            onTap: () => Navigator.of(context).pop(item.key),
-                            borderRadius: BorderRadius.circular(14),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 140),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppColors.protoCardSelectedBg
-                                    : AppColors.surfaceMuted.withValues(alpha: 0.62),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final item in items)
+                          () {
+                            final isSelected = normalizedSelected == item.key;
+                            return Tooltip(
+                              message: item.labelKo,
+                              child: InkWell(
+                                key: Key('icon_picker_item_${item.key}'),
+                                onTap: () => Navigator.of(context).pop(item.key),
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.protoCardSelectedBorder
-                                      : Colors.transparent,
-                                  width: isSelected ? 1.8 : 1,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 140),
+                                  width: 44,
+                                  height: 44,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.chipYellowBg
+                                        : AppColors.surfaceMuted
+                                            .withValues(alpha: 0.65),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.chipGoldOutline
+                                          : Colors.transparent,
+                                      width: isSelected ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: HaruChipIconViewer(
+                                    iconKey: item.key,
+                                    size: 24,
+                                  ),
                                 ),
                               ),
-                              child: HaruChipIconViewer(
-                                iconKey: item.key,
-                                size: 26,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                            );
+                          }(),
+                      ],
                     ),
                   ],
                 ),
@@ -434,11 +432,13 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
   }
 
   Widget _buildStylePill({
+    Key? key,
     required String label,
     required bool selected,
     required VoidCallback onTap,
   }) {
     return InkWell(
+      key: key,
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: AnimatedContainer(

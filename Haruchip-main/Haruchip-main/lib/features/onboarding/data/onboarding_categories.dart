@@ -24,19 +24,19 @@ const List<OnboardingCategory> kOnboardingCategories = [
     key: 'fandom',
     labelKo: '덕질',
     group: CategoryGroup.emotional,
-    emoji: 'simple_lightstick',
+    emoji: 'simple_star',
   ),
   OnboardingCategory(
     key: 'baby',
     labelKo: '아기',
     group: CategoryGroup.emotional,
-    emoji: 'simple_baby_face',
+    emoji: 'simple_baby_bottle',
   ),
   OnboardingCategory(
     key: 'military',
     labelKo: '군대 (곰신)',
     group: CategoryGroup.practical,
-    emoji: 'simple_beret_bear',
+    emoji: 'simple_bear',
   ),
   OnboardingCategory(
     key: 'exam',
@@ -78,7 +78,7 @@ const List<OnboardingCategory> kOnboardingCategories = [
     key: 'routine',
     labelKo: '루틴 / 주간 계획표',
     group: CategoryGroup.practical,
-    emoji: 'simple_clock',
+    emoji: 'simple_sprout',
   ),
   OnboardingCategory(
     key: 'hobby',

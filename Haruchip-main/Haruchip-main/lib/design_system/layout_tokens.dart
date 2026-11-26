@@ -35,14 +35,14 @@ class AppLayoutTokens {
     24,
   );
 
-  /// 무테두리 순백색 카드용 초미세 소프트 섀도우
-  static List<BoxShadow> get luxuryCardShadow => [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.03),
-          blurRadius: 8,
-          offset: const Offset(0, 2),
-        ),
-      ];
+  /// 무테두리 카테고리 카드용 초미세 소프트 섀도우 (배경 #F8F9FA 위 입체감)
+  static const List<BoxShadow> luxuryCardShadow = [
+    BoxShadow(
+      color: Color(0x08000000),
+      blurRadius: 10,
+      offset: Offset(0, 3),
+    ),
+  ];
 
   /// 하단 네비게이션바 상단 초경량 디바이더 라인
   static const Border navBarTopDivider = Border(

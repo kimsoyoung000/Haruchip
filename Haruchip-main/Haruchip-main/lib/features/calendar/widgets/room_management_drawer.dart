@@ -897,6 +897,106 @@ class RoomManagementDrawer extends ConsumerWidget {
             ),
             const Divider(height: 1, color: Color(0xFFF3F4F6)),
 
+            // (1.5) 공통 모임 대표 컬러 설정 팔레트 (2인 이상 공통 일정 & 확정 모임용)
+            Padding(
+              key: const Key('drawer_shared_event_color_section'),
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        '공통 모임 대표 컬러',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.protoHeading,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        width: 11,
+                        height: 11,
+                        decoration: BoxDecoration(
+                          color: _parseHexColor(liveRoom.sharedEventColorHex),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.black.withValues(alpha: 0.12),
+                            width: 0.8,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  const Text(
+                    '2인 이상 참여 일정과 확정 모임 라벨에 적용됩니다.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final hex in const [
+                        '#FFE699',
+                        '#FFCAD4',
+                        '#B8E0D2',
+                        '#A9DEF9',
+                        '#E4C1F9',
+                        '#FFD6A5',
+                        '#CDEAC0',
+                        '#D8E2DC',
+                      ])
+                        () {
+                          final isSelected =
+                              liveRoom.sharedEventColorHex.toUpperCase() ==
+                                  hex.toUpperCase();
+                          return GestureDetector(
+                            key: Key('drawer_shared_color_$hex'),
+                            onTap: () {
+                              ref
+                                  .read(scheduleRoomsProvider.notifier)
+                                  .updateRoomSharedEventColor(
+                                    roomId: liveRoom.id,
+                                    colorHex: hex,
+                                  );
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 140),
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: _parseHexColor(hex),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.protoHeading
+                                      : Colors.black.withValues(alpha: 0.08),
+                                  width: isSelected ? 2 : 1,
+                                ),
+                              ),
+                              child: isSelected
+                                  ? const Icon(
+                                      Icons.check_rounded,
+                                      size: 13,
+                                      color: AppColors.protoHeading,
+                                    )
+                                  : null,
+                            ),
+                          );
+                        }(),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFF3F4F6)),
+
             // (2) 참여 멤버 리스트
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),

@@ -7,24 +7,12 @@ import 'package:haruchip/core/icons/haruchip_icon_registry.dart';
 import 'package:haruchip/features/onboarding/data/onboarding_categories.dart';
 
 void main() {
-  group('Default Pastel Category Icons & Themed Icon Library Tests', () {
+  group('Restored Original Simple Pastel & Minimal Line Icon Pack Tests', () {
     test(
-      '1. 모든 기본 카테고리 대표 아이콘이 최신 심플 파스텔 에셋 키로 교체되었고, 모든 등록 SVG 파일이 디스크에 실존한다',
+      '1. 등록된 전체 심플 파스텔(57종) & 미니멀 라인(57종) 키가 디스크의 실제 SVG 파일과 1:1 일치한다 (더미 키 0개)',
       () {
-        for (final cat in kOnboardingCategories) {
-          expect(
-            cat.emoji.startsWith('simple_'),
-            isTrue,
-            reason: '${cat.key} should use a simple_* pastel SVG key, got ${cat.emoji}',
-          );
-          expect(
-            HaruChipIconRegistry.isSafeRegistryKey(cat.emoji),
-            isTrue,
-            reason: '${cat.emoji} must be registered in HaruChipIconRegistry',
-          );
-        }
+        expect(HaruChipIconRegistry.registeredKeys.length, 114);
 
-        // 모든 등록된 키의 SVG 파일이 실제 프로젝트 에셋 폴더에 존재하는지 검증
         for (final key in HaruChipIconRegistry.registeredKeys) {
           final assetPath = HaruChipIconRegistry.getAssetPath(key);
           expect(
@@ -33,110 +21,60 @@ void main() {
             reason: 'Missing SVG asset file for key $key at $assetPath',
           );
         }
+
+        final simpleFiles = Directory('assets/icons/simple')
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.svg'))
+            .length;
+        final lineFiles = Directory('assets/icons/line')
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.svg'))
+            .length;
+        expect(simpleFiles, 57);
+        expect(lineFiles, 57);
       },
     );
 
     test(
-      '2. 테마별 아이콘 풀(군대/아기/반려동물/덕질/생일/뷰티/여행) 확장 및 레거시 이모지 자동 업그레이드 검증',
+      '2. 기본 카테고리 대표 심볼(하트/별/아기/곰돌이/케이크/반지 등) 원본 심플 파스텔 매핑 & 안전 복구 검증',
       () {
-        final catalog = HaruChipIconRegistry.groupedCatalog(
-          style: HaruChipIconStyle.simple,
-        );
+        final byKey = {for (final c in kOnboardingCategories) c.key: c.emoji};
+        expect(byKey['couple'], 'simple_heart');
+        expect(byKey['fandom'], 'simple_star');
+        expect(byKey['baby'], 'simple_baby_bottle');
+        expect(byKey['military'], 'simple_bear');
+        expect(byKey['exam'], 'simple_book');
+        expect(byKey['wedding'], 'simple_ring');
+        expect(byKey['birthday'], 'simple_cake');
+        expect(byKey['pet'], 'simple_paw');
+        expect(byKey['plan'], 'simple_calendar');
+        expect(byKey['goal'], 'simple_target');
+        expect(byKey['routine'], 'simple_sprout');
+        expect(byKey['hobby'], 'simple_palette');
+        expect(byKey['travel'], 'simple_airplane');
+        expect(byKey['custom'], 'simple_sparkle');
 
-        expect(
-          catalog['군대']!.map((e) => e.slug),
-          containsAll(<String>[
-            'beret_bear',
-            'dog_tag',
-            'letter',
-            'combat_boot',
-            'military_badge',
-            'bugle',
-          ]),
-        );
-        expect(
-          catalog['아기']!.map((e) => e.slug),
-          containsAll(<String>[
-            'baby_face',
-            'baby_bottle',
-            'baby_bowl',
-            'baby_rattle',
-            'stroller',
-            'pacifier',
-            'baby_socks',
-          ]),
-        );
-        expect(
-          catalog['반려동물']!.map((e) => e.slug),
-          containsAll(<String>[
-            'dog',
-            'cat',
-            'hamster',
-            'rabbit',
-            'paw',
-            'fish_bone',
-            'dog_bone',
-          ]),
-        );
-        expect(
-          catalog['덕질/엔터']!.map((e) => e.slug),
-          containsAll(<String>[
-            'lightstick',
-            'microphone',
-            'ticket',
-            'camera',
-            'vinyl_lp',
-            'movie_film',
-            'tv_monitor',
-            'heart_album',
-          ]),
-        );
-        expect(
-          catalog['생일/파티']!.map((e) => e.slug),
-          containsAll(<String>[
-            'cake',
-            'candle',
-            'gift',
-            'party',
-            'party_hat',
-            'balloon',
-          ]),
-        );
-        expect(
-          catalog['뷰티/취미']!.map((e) => e.slug),
-          containsAll(<String>[
-            'lipstick',
-            'makeup_brush',
-            'perfume',
-            'mirror',
-            'shopping_bag',
-            'ribbon',
-            'palette',
-            'gamepad',
-          ]),
-        );
-        expect(
-          catalog['여행/휴식']!.map((e) => e.slug),
-          containsAll(<String>[
-            'suitcase',
-            'passport',
-            'airplane',
-            'palm_tree',
-            'tent',
-            'travel_map',
-            'sunglasses',
-            'car',
-          ]),
-        );
+        for (final cat in kOnboardingCategories) {
+          expect(HaruChipIconRegistry.isSafeRegistryKey(cat.emoji), isTrue);
+        }
 
-        // 레거시 이모지 업그레이드 & 사용자 커스텀 보존
+        // 구형 이모지 및 제거된 임시 키 -> 원본 심플 파스텔 키로 안전 복구
         expect(
           HaruChipIconRegistry.upgradeLegacyCategoryIcon('military', '🎖️'),
-          'simple_beret_bear',
+          'simple_bear',
         );
         expect(
-          HaruChipIconRegistry.upgradeLegacyCategoryIcon('baby', '👶'),
-          'simple_baby_face',
+          HaruChipIconRegistry.upgradeLegacyCategoryIcon(
+            'military',
+            'simple_beret_bear',
+          ),
+          'simple_bear',
+        );
+        expect(
+          HaruChipIconRegistry.upgradeLegacyCategoryIcon('fandom', '⭐'),
+          'simple_star',
         );
         expect(
           HaruChipIconRegistry.upgradeLegacyCategoryIcon('pet', 'simple_cat'),
@@ -146,7 +84,7 @@ void main() {
     );
 
     testWidgets(
-      '3. HaruChipIconPicker: 테마 필터 칩(전체/군대/아기 등) 필터링 및 선택 키 반환 검증',
+      '3. HaruChipIconPicker: [심플 파스텔]/[미니멀 라인] 전환, 44x44dp 규격 & #F2B84B 골드 선택 하이라이트 검증',
       (tester) async {
         String? pickedResult;
 
@@ -171,31 +109,29 @@ void main() {
         await tester.tap(find.text('열기'));
         await tester.pumpAndSettle();
 
-        // 카테고리 필터 칩 노출 확인
-        expect(find.byKey(const Key('icon_picker_filter_전체')), findsOneWidget);
-        expect(find.byKey(const Key('icon_picker_filter_군대')), findsOneWidget);
-        expect(find.byKey(const Key('icon_picker_filter_아기')), findsOneWidget);
+        // 상단 [심플 파스텔] / [미니멀 라인] 전환 버튼 존재
+        expect(find.byKey(const Key('icon_picker_style_simple')), findsOneWidget);
+        expect(find.byKey(const Key('icon_picker_style_line')), findsOneWidget);
 
-        // '군대' 필터 칩 선택 -> 베레모 곰돌이 노출, 유모차 숨김
-        await tester.tap(find.byKey(const Key('icon_picker_filter_군대')));
+        // 44x44dp 규격 확인
+        final heartTileSize = tester.getSize(
+          find.byKey(const Key('icon_picker_item_simple_heart')),
+        );
+        expect(heartTileSize.width, 44.0);
+        expect(heartTileSize.height, 44.0);
+
+        // [미니멀 라인] 전환 -> line_star 노출 및 선택 반환 확인
+        await tester.tap(find.byKey(const Key('icon_picker_style_line')));
         await tester.pumpAndSettle();
 
         expect(
-          find.byKey(const Key('icon_picker_item_simple_beret_bear')),
+          find.byKey(const Key('icon_picker_item_line_star')),
           findsOneWidget,
         );
-        expect(
-          find.byKey(const Key('icon_picker_item_simple_stroller')),
-          findsNothing,
-        );
-
-        // 베레모 곰돌이 탭 -> 'simple_beret_bear' 반환
-        await tester.tap(
-          find.byKey(const Key('icon_picker_item_simple_beret_bear')),
-        );
+        await tester.tap(find.byKey(const Key('icon_picker_item_line_star')));
         await tester.pumpAndSettle();
 
-        expect(pickedResult, 'simple_beret_bear');
+        expect(pickedResult, 'line_star');
       },
     );
   });

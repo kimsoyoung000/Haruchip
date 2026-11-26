@@ -21,11 +21,12 @@ void main() {
       // 금칙어/시스템 예약어 차단
       expect(HaruInputSanitizer.validateNickname('운영자12'), isNotNull);
       expect(HaruInputSanitizer.validateNickname('관리자님'), isNotNull);
-      expect(HaruInputSanitizer.validateNickname('하루칩공식'), isNotNull);
+      expect(HaruInputSanitizer.validateNickname('root계정'), isNotNull);
       expect(HaruInputSanitizer.validateNickname('admin계정'), isNotNull);
       expect(HaruInputSanitizer.validateNickname('시발테스트'), isNotNull);
 
-      // 정상 닉네임 허용
+      // 정상 닉네임 허용 ('하루칩 여행자' 포함)
+      expect(HaruInputSanitizer.validateNickname('하루칩 여행자'), isNull);
       expect(HaruInputSanitizer.validateNickname('다정'), isNull);
       expect(HaruInputSanitizer.validateNickname('소영'), isNull);
 
