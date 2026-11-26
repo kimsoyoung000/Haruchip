@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../logic/settlement_calculator.dart';
 import '../models/schedule_room.dart';
@@ -329,8 +330,8 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
                           Navigator.of(modalCtx).pop();
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F172A),
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppColors.chipYellowBg,
+                          foregroundColor: AppColors.chipYellowText,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           elevation: 0,
@@ -782,8 +783,8 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
                   icon: const Icon(Icons.receipt_long_rounded, size: 18),
                   label: const Text('정산 완료 및 영수증 장부에 저장', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F172A),
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.chipYellowBg,
+                    foregroundColor: AppColors.chipYellowText,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,

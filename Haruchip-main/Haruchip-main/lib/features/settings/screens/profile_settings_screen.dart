@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,7 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/icons/haruchip_icon_picker.dart';
 import '../../../core/icons/haruchip_icon_registry.dart';
 import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../../core/security/input_sanitizer.dart';
 import '../../../core/theme/app_font_settings_provider.dart';
+import '../../../core/utils/safe_image_widget.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -54,37 +57,32 @@ class ProfileSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
-  // 프로필 상태
-  String _nickname = '하루칩 여행자';
-  String _selectedAvatarEmoji = 'simple_chick';
   bool _isSyncing = false;
 
   // 모임 공유 캘린더 알림 & 화면 잠금 토글 상태
   bool _groupSharedAlarmEnabled = true;
   bool _screenLockEnabled = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = ref.read(currentUserProvider);
-      if (user?.displayName != null && user!.displayName!.isNotEmpty) {
-        setState(() {
-          _nickname = user.displayName!;
-        });
-      }
-    });
-  }
-
-  /// 프로필 아이콘/사진 변경 바텀시트 (HaruChipIconPicker 연동)
+  /// 프로필 아이콘/사진 변경 바텀시트 (HaruChipIconPicker 연동 + 즉시 전역 상태 & 모임 동기화)
   Future<void> _openAvatarPicker() async {
+    final currentProfile = ref.read(friendSystemProvider).myProfile;
     final picked = await showHaruChipIconPicker(
       context,
-      initialIconKey: _selectedAvatarEmoji,
+      initialIconKey: currentProfile.avatarIcon,
       title: '프로필 아이콘 선택',
     );
     if (picked == null || !mounted) return;
-    setState(() => _selectedAvatarEmoji = picked);
+    ref.read(friendSystemProvider.notifier).updateMyProfile(
+          avatarIcon: picked,
+          clearPhotoUrl: true,
+        );
+    final updated = ref.read(friendSystemProvider).myProfile;
+    ref.read(scheduleRoomsProvider.notifier).syncGlobalProfileToRooms(
+          uid: updated.uid,
+          name: updated.nickname,
+          icon: updated.avatarIcon,
+          photoUrl: updated.photoUrl,
+        );
     final label = HaruChipIconRegistry.labelForKey(picked);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -95,11 +93,13 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     );
   }
 
-  /// 닉네임 & 4자리 배틀태그(#TAG) 수정 팝업 다이얼로그
+  /// 닉네임(2~10자 + 금칙어 필터) & 4자리 배틀태그(#TAG) 글로벌 유니크 수정 팝업 다이얼로그
   void _openEditProfileDialog() {
     final myBattleProfile = ref.read(friendSystemProvider).myProfile;
-    final nameController = TextEditingController(text: _nickname);
+    final nameController =
+        TextEditingController(text: myBattleProfile.nickname);
     final tagController = TextEditingController(text: myBattleProfile.tag);
+    String? nickError;
     String? tagError;
 
     showDialog<void>(
@@ -134,11 +134,18 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 12),
               TextField(
+                key: const Key('profile_nickname_input'),
                 controller: nameController,
-                maxLength: 12,
+                maxLength: 10,
                 autofocus: true,
+                onChanged: (_) {
+                  if (nickError != null) {
+                    setDialogState(() => nickError = null);
+                  }
+                },
                 decoration: InputDecoration(
-                  hintText: '새 닉네임 입력 (최대 12자)',
+                  hintText: '새 닉네임 입력 (2~10자)',
+                  errorText: nickError,
                   filled: true,
                   fillColor: AppColors.cleanCanvasBg,
                   contentPadding: const EdgeInsets.symmetric(
@@ -164,6 +171,11 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                 controller: tagController,
                 maxLength: 4,
                 textCapitalization: TextCapitalization.characters,
+                onChanged: (_) {
+                  if (tagError != null) {
+                    setDialogState(() => tagError = null);
+                  }
+                },
                 decoration: InputDecoration(
                   prefixText: '# ',
                   hintText: '영문 대문자/숫자 4자리 (예: 7F2K)',
@@ -198,26 +210,56 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               ),
             ),
             ElevatedButton(
-              onPressed: () {
+              key: const Key('profile_edit_save_btn'),
+              onPressed: () async {
                 final newName = nameController.text.trim();
                 final newTag = tagController.text.trim().toUpperCase();
+
+                final validatedNickErr =
+                    HaruInputSanitizer.validateNickname(newName);
+                if (validatedNickErr != null) {
+                  setDialogState(() => nickError = validatedNickErr);
+                  return;
+                }
                 if (!isValidBattleTag(newTag)) {
                   setDialogState(() {
                     tagError = '영문 대문자 또는 숫자 4자리를 입력하세요.';
                   });
                   return;
                 }
-                if (newName.isNotEmpty) {
-                  setState(() => _nickname = newName);
-                  ref.read(friendSystemProvider.notifier).updateMyProfile(
-                        nickname: newName,
-                        tag: newTag,
-                        avatarIcon: _selectedAvatarEmoji,
-                      );
+
+                final result = await ref
+                    .read(friendSystemProvider.notifier)
+                    .updateMyProfileValidated(
+                      nickname: newName,
+                      tag: newTag,
+                      avatarIcon: myBattleProfile.avatarIcon,
+                    );
+                if (!result.ok || result.profile == null) {
+                  setDialogState(() => nickError = result.error);
+                  return;
+                }
+
+                final saved = result.profile!;
+                ref.read(scheduleRoomsProvider.notifier).syncGlobalProfileToRooms(
+                      uid: saved.uid,
+                      name: saved.nickname,
+                      icon: saved.avatarIcon,
+                      photoUrl: saved.photoUrl,
+                    );
+
+                if (dialogCtx.mounted) {
                   Navigator.pop(dialogCtx);
+                }
+                if (mounted) {
+                  final suffix = result.tagRegenerated
+                      ? ' (중복 방지를 위해 태그가 자동 변경되었습니다)'
+                      : '';
                   ScaffoldMessenger.of(this.context).showSnackBar(
                     SnackBar(
-                      content: Text('프로필이 "$newName#$newTag"(으)로 변경되었습니다.'),
+                      content: Text(
+                        '프로필이 "${saved.fullHandle}"(으)로 즉시 반영되었습니다.$suffix',
+                      ),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -797,10 +839,37 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                               shape: BoxShape.circle,
                             ),
                             alignment: Alignment.center,
-                            child: HaruChipIconViewer(
-                              iconKey: _selectedAvatarEmoji,
-                              size: 32,
-                              circular: true,
+                            child: StreamBuilder<
+                                DocumentSnapshot<Map<String, dynamic>>>(
+                              stream: watchUserProfileDocument(
+                                ref.watch(friendSystemProvider).myProfile.uid,
+                              ),
+                              builder: (context, snapshot) {
+                                final localProfile =
+                                    ref.watch(friendSystemProvider).myProfile;
+                                final remoteData = snapshot.data?.data();
+                                final photoUrl =
+                                    (remoteData?['photoUrl'] as String?) ??
+                                        localProfile.photoUrl;
+                                final iconKey =
+                                    (remoteData?['avatarIcon'] as String?) ??
+                                        localProfile.avatarIcon;
+                                if (photoUrl != null && photoUrl.isNotEmpty) {
+                                  return ClipOval(
+                                    child: buildUserImage(
+                                      photoUrl,
+                                      width: 52,
+                                      height: 52,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  );
+                                }
+                                return HaruChipIconViewer(
+                                  iconKey: iconKey,
+                                  size: 32,
+                                  circular: true,
+                                );
+                              },
                             ),
                           ),
                           Positioned(
@@ -824,72 +893,90 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                     ),
                     const SizedBox(width: 14),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 5,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
+                      child: StreamBuilder<
+                          DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: watchUserProfileDocument(
+                          ref.watch(friendSystemProvider).myProfile.uid,
+                        ),
+                        builder: (context, snapshot) {
+                          final localProfile =
+                              ref.watch(friendSystemProvider).myProfile;
+                          final remoteData = snapshot.data?.data();
+                          final liveNickname =
+                              (remoteData?['nickname'] as String?) ??
+                                  localProfile.nickname;
+                          final liveTag = (remoteData?['tag'] as String?) ??
+                              localProfile.tag;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              Wrap(
+                                spacing: 5,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    liveNickname,
+                                    key: const Key('profile_live_nickname'),
+                                    style: AppTypography.heading2.copyWith(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.protoHeading,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.cleanCanvasBg,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '#$liveTag',
+                                      key: const Key('profile_live_tag'),
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2.5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.chipYellowBg,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      providerBadgeLabel,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.chipYellowText,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
                               Text(
-                                _nickname,
-                                style: AppTypography.heading2.copyWith(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.protoHeading,
+                                userEmail,
+                                style: AppTypography.caption.copyWith(
+                                  fontSize: 12,
+                                  color: AppColors.protoSubtitle,
                                 ),
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.cleanCanvasBg,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '#${ref.watch(friendSystemProvider).myProfile.tag}',
-                                  style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF6B7280),
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 2.5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.chipYellowBg,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  providerBadgeLabel,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.chipYellowText,
-                                  ),
-                                ),
-                              ),
                             ],
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            userEmail,
-                            style: AppTypography.caption.copyWith(
-                              fontSize: 12,
-                              color: AppColors.protoSubtitle,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -919,7 +1006,87 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 12),
+
+              // ===============================================================
+              // [구역 1-2] 내 친구 (N명) 미니멀 한 줄 타일 -> 친구 관리 바텀시트 모달
+              // ===============================================================
+              _buildWhiteGroupCard(
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final friendState = ref.watch(friendSystemProvider);
+                    final friendCount = friendState.friends.length;
+                    final pendingCount = friendState.incomingRequests.length;
+                    return InkWell(
+                      key: const Key('settings_friends_summary_tile'),
+                      onTap: () => showFriendManagementModal(context),
+                      borderRadius: BorderRadius.circular(18),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: const BoxDecoration(
+                                color: AppColors.chipYellowBg,
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: const Icon(
+                                Icons.group_outlined,
+                                size: 18,
+                                color: AppColors.chipYellowText,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '내 친구 $friendCount명',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.protoHeading,
+                                ),
+                              ),
+                            ),
+                            if (pendingCount > 0) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFEAEA),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '요청 $pendingCount',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFFE11D48),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              size: 20,
+                              color: Color(0xFF9CA3AF),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
 
               // ===============================================================
               // [구역 2-1] 대시보드 (디데이) 설정
@@ -1352,14 +1519,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // ===============================================================
-              // [구역 2-7] 친구 관리 (배틀태그 검색 / 요청 / 목록 / 차단)
-              // ===============================================================
-              _buildSectionHeader('친구 관리'),
-              const SizedBox(height: 8),
-              const FriendManagementCard(),
               const SizedBox(height: 20),
 
               // ===============================================================

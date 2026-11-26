@@ -14,9 +14,9 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Base — 클린 화이트 & 소프트 그레이 통일 캔버스
+  // Base — 클린 화이트 & 럭셔리 소프트 화이트 통일 캔버스
   static const Color cleanWhiteBg = Color(0xFFFFFFFF);
-  static const Color cleanCanvasBg = Color(0xFFF8F9FA);
+  static const Color cleanCanvasBg = Color(0xFFFAFAFC);
   static const Color background = cleanCanvasBg;
   static const Color surface = cleanWhiteBg;
   static const Color surfaceMuted = Color(0xFFF3F4F6);

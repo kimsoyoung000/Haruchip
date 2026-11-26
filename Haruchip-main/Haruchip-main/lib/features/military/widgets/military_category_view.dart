@@ -7,17 +7,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../../plan/models/plan_item.dart';
+import '../../plan/providers/plan_provider.dart' show planItemsByCategoryProvider;
+import '../../shared/widgets/add_event_bottom_sheet.dart';
 import '../../shared/widgets/haru_calendar_picker.dart';
 import '../models/military_rank.dart';
 import '../models/military_service.dart';
 import '../providers/military_provider.dart';
 
-/// 군대(곰신) 카테고리 전용 파스텔 무테두리 대시보드 뷰
+/// 군대(곰신) 카테고리 전용 파스텔 무테두리 컴팩트 대시보드 뷰
 ///
-/// 1) 상단 대표 프로필 + 소수점 6자리 실시간 복무율 게이지
+/// 1) 상단 대표 프로필 + 소수점 6자리 실시간 복무율 게이지 (무스크롤 컴팩트 피팅)
 /// 2) 6대 핵심 복무 지표 2x3 컴팩트 그리드
-/// 3) 호봉/계급 2단계 진급 타임라인 바
+/// 3) 호봉/계급 2단계 진급 타임라인 바 (인라인 날짜 터치 수정 & 동적 재계산)
 /// 4) 휴가·외박·외출·면회 관리 엔진 (단일/연속 자동 일수 계산 + 캘린더 연속 바 동기화)
+/// 5) 군대 전용 D-Day 리스트 (추가/편집 + 섹션 숨김/순서 편집 연동)
 class MilitaryCategoryView extends ConsumerStatefulWidget {
   const MilitaryCategoryView({super.key});
 
@@ -49,11 +53,42 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
   String _fmtDate(DateTime d) =>
       '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
 
+  Future<void> _editHobongDate(
+    BuildContext context,
+    HobongInfo hobongInfo,
+  ) async {
+    final picked = await showHaruDatePicker(
+      context,
+      initialDate: hobongInfo.nextHobongDate,
+      firstDate: DateTime(2015),
+      lastDate: DateTime(2040),
+    );
+    if (picked != null && mounted) {
+      ref.read(militaryServiceProvider.notifier).setCustomNextHobongDate(picked);
+    }
+  }
+
+  Future<void> _editRankDate(
+    BuildContext context,
+    RankPromotionProgress rankProgress,
+  ) async {
+    final picked = await showHaruDatePicker(
+      context,
+      initialDate: rankProgress.targetDate,
+      firstDate: DateTime(2015),
+      lastDate: DateTime(2040),
+    );
+    if (picked != null && mounted) {
+      ref.read(militaryServiceProvider.notifier).setCustomNextRankDate(picked);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = ref.watch(militaryServiceProvider);
     final dischargeDday = ref.watch(militaryDischargeDdayProvider);
     final nextLeaveDday = ref.watch(militaryLeaveDdayProvider);
+    final militaryPlans = ref.watch(planItemsByCategoryProvider('military'));
 
     final effectiveDischarge = service.effectiveDischargeDate;
     final today = DateTime(_now.year, _now.month, _now.day);
@@ -80,11 +115,16 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
     );
     final exactPercentStr = (exactProgress * 100).toStringAsFixed(6);
 
-    final hobongInfo = calculateHobongInfo(service.enlistDate, now: _now);
+    final hobongInfo = calculateHobongInfo(
+      service.enlistDate,
+      now: _now,
+      customNextHobongDate: service.customNextHobongDate,
+    );
     final rankProgress = calculateRankPromotionProgress(
       service.enlistDate,
       effectiveDischarge,
       now: _now,
+      customNextRankDate: service.customNextRankDate,
     );
     final remainingWorkdays = calculateRemainingWorkdays(
       dischargeDate: effectiveDischarge,
@@ -101,10 +141,64 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
     final sortedLeaves = List<MilitaryLeaveRecord>.from(service.leaves)
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
 
+    final customDdayItems = militaryPlans
+        .where((item) => !item.id.startsWith('mil-leave-'))
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    final orderedSections = service.sectionOrder.isNotEmpty
+        ? service.sectionOrder
+        : kDefaultMilitarySectionOrder;
+
+    final sectionWidgets = <Widget>[];
+    for (final secKey in orderedSections) {
+      if (service.hiddenSections.contains(secKey)) continue;
+      Widget? section;
+      switch (secKey) {
+        case 'metrics':
+          section = _buildSixMetricsGrid(
+            totalDays: totalDays,
+            servedDays: servedDays,
+            remainingDays: remainingDays,
+            nextRankDdayStr: nextRankDdayStr,
+            remainingWorkdays: remainingWorkdays,
+            nextLeaveDday: nextLeaveDday ?? '미등록',
+          );
+          break;
+        case 'timeline':
+          section = _buildPromotionTimelineCard(
+            context: context,
+            service: service,
+            hobongInfo: hobongInfo,
+            rankProgress: rankProgress,
+          );
+          break;
+        case 'leaves':
+          section = _buildLeaveManagementSection(
+            context: context,
+            service: service,
+            leaves: sortedLeaves,
+            today: today,
+          );
+          break;
+        case 'ddayList':
+          section = _buildMilitaryDdayListSection(
+            context: context,
+            items: customDdayItems,
+            today: today,
+          );
+          break;
+      }
+      if (section != null) {
+        sectionWidgets.add(const SizedBox(height: 9));
+        sectionWidgets.add(section);
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. 상단 대표 프로필 & 실시간 정밀 복무율 게이지 (탭 -> 복무 정보 수정 시트)
+        // 1. 상단 대표 프로필 & 실시간 정밀 복무율 게이지 (무스크롤 컴팩트 피팅)
         _buildHeroProfileCard(
           context: context,
           service: service,
@@ -114,36 +208,7 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
           exactProgress: exactProgress,
           exactPercentStr: exactPercentStr,
         ),
-
-        const SizedBox(height: 14),
-
-        // 2. 6대 핵심 군 복무 지표 카드 (2x3 컴팩트 무테두리 그리드)
-        _buildSixMetricsGrid(
-          totalDays: totalDays,
-          servedDays: servedDays,
-          remainingDays: remainingDays,
-          nextRankDdayStr: nextRankDdayStr,
-          remainingWorkdays: remainingWorkdays,
-          nextLeaveDday: nextLeaveDday ?? '미등록',
-        ),
-
-        const SizedBox(height: 14),
-
-        // 3. 계급 및 호봉 승급 그래프 (Timeline Bar)
-        _buildPromotionTimelineCard(
-          hobongInfo: hobongInfo,
-          rankProgress: rankProgress,
-        ),
-
-        const SizedBox(height: 14),
-
-        // 4. 휴가 / 외박 / 외출 / 면회 관리 엔진
-        _buildLeaveManagementSection(
-          context: context,
-          service: service,
-          leaves: sortedLeaves,
-          today: today,
-        ),
+        ...sectionWidgets,
       ],
     );
   }
@@ -165,10 +230,10 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
       child: InkWell(
         key: const Key('military_hero_profile_card'),
         onTap: () => showMilitaryProfileEditSheet(context, ref),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
@@ -178,12 +243,12 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                 Color(0xFFF3FAF4),
               ],
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -192,13 +257,13 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
             children: [
               Row(
                 children: [
-                  // 베레모 곰돌이 벡터 아바타
+                  // 베레모 곰돌이 벡터 아바타 (컴팩트 44x44)
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
                       Container(
-                        width: 54,
-                        height: 54,
+                        width: 44,
+                        height: 44,
                         decoration: const BoxDecoration(
                           color: Color(0xFFE8F5E9),
                           shape: BoxShape.circle,
@@ -206,28 +271,28 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                         alignment: Alignment.center,
                         child: const HaruChipIconViewer(
                           iconKey: 'simple_bear',
-                          size: 34,
+                          size: 28,
                         ),
                       ),
                       Positioned(
-                        top: -3,
-                        right: -3,
+                        top: -2,
+                        right: -2,
                         child: Container(
-                          padding: const EdgeInsets.all(3.5),
+                          padding: const EdgeInsets.all(3),
                           decoration: const BoxDecoration(
                             color: AppColors.chipYellowBg,
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
                             Icons.military_tech_rounded,
-                            size: 12,
+                            size: 11,
                             color: AppColors.chipYellowText,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
 
                   // 닉네임 + 계급/호봉 뱃지 + 입대~전역일
                   Expanded(
@@ -242,7 +307,7 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.heading2.copyWith(
-                                  fontSize: 16.5,
+                                  fontSize: 15.5,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.protoHeading,
                                 ),
@@ -251,17 +316,17 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                             const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
+                                horizontal: 7,
+                                vertical: 2,
                               ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFE8F5E9),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(7),
                               ),
                               child: Text(
                                 rankBadgeText,
                                 style: const TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.w800,
                                   color: Color(0xFF2E6B3E),
                                 ),
@@ -269,13 +334,13 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 3),
                         Text(
                           '${_fmtDate(service.enlistDate)} ~ ${_fmtDate(effectiveDischarge)} ($dischargeDday)',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF6B7280),
                           ),
@@ -285,13 +350,13 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                   ),
                   const Icon(
                     Icons.chevron_right_rounded,
-                    size: 18,
+                    size: 17,
                     color: Color(0xFF9CA3AF),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 9),
 
               // 실시간 정밀 복무율 수치 (소수점 6자리)
               Row(
@@ -300,7 +365,7 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                   const Text(
                     '실시간 복무율',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF4B5563),
                     ),
@@ -309,7 +374,7 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                     '$exactPercentStr%',
                     key: const Key('military_live_percent_text'),
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w900,
                       color: AppColors.chipYellowText,
                       fontFeatures: [FontFeature.tabularFigures()],
@@ -317,13 +382,13 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                   ),
                 ],
               ),
-              const SizedBox(height: 7),
+              const SizedBox(height: 5),
 
               // 부드러운 크림 옐로우 트랙 + 파스텔 옐로우~세이지 그린 채움 바
               ClipRRect(
                 borderRadius: BorderRadius.circular(999),
                 child: Container(
-                  height: 10,
+                  height: 8,
                   width: double.infinity,
                   color: const Color(0xFFFFF8E1),
                   alignment: Alignment.centerLeft,
@@ -368,26 +433,27 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
     ];
 
     return GridView.builder(
+      key: const Key('military_metrics_section'),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: metrics.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 1.48,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 1.82,
       ),
       itemBuilder: (context, index) {
         final m = metrics[index];
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 8,
+                blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -401,19 +467,19 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF6B7280),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(
                   m.value,
                   style: TextStyle(
-                    fontSize: 15.5,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w900,
                     color: m.accent,
                   ),
@@ -427,18 +493,25 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
   }
 
   Widget _buildPromotionTimelineCard({
+    required BuildContext context,
+    required MilitaryService service,
     required HobongInfo hobongInfo,
     required RankPromotionProgress rankProgress,
   }) {
     final hobongPercent = (hobongInfo.progress * 100).toStringAsFixed(2);
     final rankPercent = (rankProgress.progress * 100).toStringAsFixed(2);
+    final hobongDdayLabel =
+        hobongInfo.dDay == 0 ? 'D-Day' : 'D-${hobongInfo.dDay}';
+    final rankDdayLabel =
+        rankProgress.dDay == 0 ? 'D-Day' : 'D-${rankProgress.dDay}';
     final rankTitle = rankProgress.nextRank != null
-        ? '${rankProgress.currentRank.labelKo} → ${rankProgress.nextRank!.labelKo} 진급 D-${rankProgress.dDay}'
-        : '병장 만기 전역 D-${rankProgress.dDay}';
+        ? '${rankProgress.currentRank.labelKo} → ${rankProgress.nextRank!.labelKo} 진급 $rankDdayLabel'
+        : '병장 만기 전역 $rankDdayLabel';
 
     return Container(
+      key: const Key('military_timeline_section'),
       width: double.infinity,
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -453,35 +526,64 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '계급 · 호봉 승급 타임라인',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: AppColors.protoHeading,
-            ),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '계급 · 호봉 승급 타임라인',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.protoHeading,
+                ),
+              ),
+              Text(
+                '탭하여 날짜 수정',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF9CA3AF),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
-          // 1) 호봉 승급 바
+          // 1) 호봉 승급 바 (탭 -> 인라인 날짜 피커로 수정)
           _buildTimelineBarRow(
-            title: '${hobongInfo.nextHobong}호봉 승급 D-${hobongInfo.dDay}',
+            rowKey: const Key('military_hobong_bar'),
+            title: '${hobongInfo.nextHobong}호봉 승급 $hobongDdayLabel',
             percentText: '$hobongPercent%',
             dateText: _fmtDate(hobongInfo.nextHobongDate),
             progress: hobongInfo.progress,
             trackColor: const Color(0xFFFFF8E1),
             fillColor: AppColors.chipYellowBg,
+            isCustomized: service.customNextHobongDate != null,
+            onTap: () => _editHobongDate(context, hobongInfo),
+            onReset: service.customNextHobongDate != null
+                ? () => ref
+                    .read(militaryServiceProvider.notifier)
+                    .setCustomNextHobongDate(null)
+                : null,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
-          // 2) 계급 진급 바
+          // 2) 계급 진급 바 (탭 -> 인라인 날짜 피커로 수정)
           _buildTimelineBarRow(
+            rowKey: const Key('military_rank_bar'),
             title: rankTitle,
             percentText: '$rankPercent%',
             dateText: _fmtDate(rankProgress.targetDate),
             progress: rankProgress.progress,
             trackColor: const Color(0xFFE8F5E9),
             fillColor: const Color(0xFF81C784),
+            isCustomized: service.customNextRankDate != null,
+            onTap: () => _editRankDate(context, rankProgress),
+            onReset: service.customNextRankDate != null
+                ? () => ref
+                    .read(militaryServiceProvider.notifier)
+                    .setCustomNextRankDate(null)
+                : null,
           ),
         ],
       ),
@@ -489,52 +591,259 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
   }
 
   Widget _buildTimelineBarRow({
+    required Key rowKey,
     required String title,
     required String percentText,
     required String dateText,
     required double progress,
     required Color trackColor,
     required Color fillColor,
+    required bool isCustomized,
+    required VoidCallback onTap,
+    VoidCallback? onReset,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '$title · $percentText',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: rowKey,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$title · $percentText',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.protoHeading,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    dateText,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  const Icon(
+                    Icons.edit_calendar_rounded,
+                    size: 12,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                  if (isCustomized && onReset != null) ...[
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: onReset,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1.5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          '복원',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: progress.clamp(0.0, 1.0),
+                  minHeight: 6.5,
+                  backgroundColor: trackColor,
+                  valueColor: AlwaysStoppedAnimation<Color>(fillColor),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMilitaryDdayListSection({
+    required BuildContext context,
+    required List<PlanItem> items,
+    required DateTime today,
+  }) {
+    return Container(
+      key: const Key('military_dday_list_section'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'D-Day 리스트',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
                   color: AppColors.protoHeading,
                 ),
               ),
+              ElevatedButton.icon(
+                key: const Key('military_add_dday_inline_button'),
+                onPressed: () => showAddEventBottomSheet(
+                  context,
+                  categoryKey: 'military',
+                ),
+                icon: const Icon(Icons.add_rounded, size: 14),
+                label: const Text(
+                  'D-Day 추가',
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.chipYellowBg,
+                  foregroundColor: AppColors.chipYellowText,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (items.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                '등록된 군대 D-Day 일정이 없습니다. (수료식 · 면회 등)',
+                style: TextStyle(fontSize: 11.5, color: Color(0xFF9CA3AF)),
+              ),
+            )
+          else
+            for (final item in items) ...[
+              _buildMilitaryDdayTile(context, item, today),
+              const SizedBox(height: 6),
+            ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMilitaryDdayTile(
+    BuildContext context,
+    PlanItem item,
+    DateTime today,
+  ) {
+    final target = DateTime(item.date.year, item.date.month, item.date.day);
+    final diff = target.difference(today).inDays;
+    final dDayText = diff == 0
+        ? 'D-Day'
+        : (diff > 0 ? 'D-$diff' : 'D+${diff.abs()}');
+    final isPast = diff < 0;
+
+    return InkWell(
+      onTap: () => showAddEventBottomSheet(
+        context,
+        categoryKey: 'military',
+        existingItem: item,
+      ),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.protoHeading,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    _fmtDate(item.date),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              dateText,
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF6B7280),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: isPast
+                    ? const Color(0xFFF1F5F9)
+                    : AppColors.chipYellowBg.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                dDayText,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: isPast
+                      ? const Color(0xFF94A3B8)
+                      : AppColors.chipYellowText,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: progress.clamp(0.0, 1.0),
-            minHeight: 7,
-            backgroundColor: trackColor,
-            valueColor: AlwaysStoppedAnimation<Color>(fillColor),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -545,8 +854,9 @@ class _MilitaryCategoryViewState extends ConsumerState<MilitaryCategoryView> {
     required DateTime today,
   }) {
     return Container(
+      key: const Key('military_leaves_section'),
       width: double.infinity,
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1623,4 +1933,328 @@ Future<void> showMilitaryGomshinShareModal(
     ),
   );
   codeCtrl.dispose();
+}
+
+/// 군대 카테고리 상단 앱바 [+] 터치 시: [출타 등록] vs [일반 D-Day 등록] 선택 시트
+Future<void> showMilitaryAddActionSheet(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              '군대 일정 추가',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.protoHeading,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Material(
+              color: const Color(0xFFF6FBF7),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                key: const Key('military_choice_add_leave'),
+                borderRadius: BorderRadius.circular(14),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showMilitaryLeaveModal(context, ref);
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                  child: Row(
+                    children: [
+                      Text('🌴', style: TextStyle(fontSize: 20)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '출타 등록',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.protoHeading,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '정기휴가 · 포상휴가 · 외박 · 외출 (일수 자동 차감)',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Material(
+              color: const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                key: const Key('military_choice_add_dday'),
+                borderRadius: BorderRadius.circular(14),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showAddEventBottomSheet(context, categoryKey: 'military');
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                  child: Row(
+                    children: [
+                      Text('📅', style: TextStyle(fontSize: 20)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '일반 D-Day 등록',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.protoHeading,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '수료식 · 면회 · 기념일 등 자유로운 D-Day 일정',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// 군대 카테고리 섹션 순서 & 숨김 관리 바텀시트 (드래그 순서 변경 + 숨김 토글)
+Future<void> showMilitarySectionManagementModal(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final current = ref.read(militaryServiceProvider);
+  final order = List<String>.from(
+    current.sectionOrder.isNotEmpty
+        ? current.sectionOrder
+        : kDefaultMilitarySectionOrder,
+  );
+  final hidden = Set<String>.from(current.hiddenSections);
+
+  const sectionLabels = <String, ({String title, String subtitle})>{
+    'metrics': (title: '복무 지표', subtitle: '전체·현재·남은 복무일 및 일과일 6대 지표'),
+    'timeline': (title: '진급 타임라인', subtitle: '호봉 승급 및 계급 진급 프로그레스 바'),
+    'leaves': (title: '출타 관리', subtitle: '정기휴가 · 포상휴가 · 외박 · 외출 리스트'),
+    'ddayList': (title: 'D-Day 리스트', subtitle: '수료식 · 면회 등 군대 전용 D-Day 목록'),
+  };
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setModalState) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '군대 섹션 순서 및 숨김 관리',
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.protoHeading,
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                '드래그하여 순서를 바꾸거나 스위치를 꺼서 원하는 섹션을 숨길 수 있어요.',
+                style: TextStyle(fontSize: 11.5, color: Color(0xFF6B7280)),
+              ),
+              const SizedBox(height: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 248),
+                child: ReorderableListView.builder(
+                  shrinkWrap: true,
+                  buildDefaultDragHandles: false,
+                  itemCount: order.length,
+                  onReorderItem: (oldIndex, newIndex) {
+                    setModalState(() {
+                      final moved = order.removeAt(oldIndex);
+                      order.insert(newIndex, moved);
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    final key = order[index];
+                    final meta = sectionLabels[key] ??
+                        (title: key, subtitle: '');
+                    final isVisible = !hidden.contains(key);
+                    return Container(
+                      key: ValueKey('mil_sec_$key'),
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FA),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          ReorderableDragStartListener(
+                            index: index,
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 10),
+                              child: Icon(
+                                Icons.drag_handle_rounded,
+                                size: 20,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  meta.title,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.protoHeading,
+                                  ),
+                                ),
+                                Text(
+                                  meta.subtitle,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            key: Key('military_section_toggle_$key'),
+                            value: isVisible,
+                            activeTrackColor: AppColors.chipYellowBg,
+                            activeThumbColor: AppColors.chipYellowText,
+                            onChanged: (val) {
+                              setModalState(() {
+                                if (val) {
+                                  hidden.remove(key);
+                                } else {
+                                  hidden.add(key);
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                key: const Key('military_section_save_button'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.chipYellowBg,
+                  foregroundColor: AppColors.chipYellowText,
+                  elevation: 0,
+                  minimumSize: const Size(double.infinity, 46),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: () {
+                  ref.read(militaryServiceProvider.notifier).updateSectionConfig(
+                        order: order,
+                        hidden: hidden,
+                      );
+                  Navigator.pop(ctx);
+                },
+                child: const Text(
+                  '적용하기',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }

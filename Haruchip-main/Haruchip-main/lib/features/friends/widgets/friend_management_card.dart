@@ -2,18 +2,87 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../../core/security/input_sanitizer.dart';
 import '../../../design_system/colors.dart';
 import '../models/battle_tag_user.dart';
 import '../providers/friend_system_provider.dart';
 
-/// [프로필 & 설정] 화면 내 [계정 및 보안] 상단 독립 화이트 카드 그룹: 통합 친구 관리 모듈
-///
-/// 1) 배틀태그(`닉네임#TAG`) 검색 및 친구 요청
-/// 2) 받은 친구 요청 (수락 / 거절)
-/// 3) 내 친구 목록 (N명) + 우측 ⋮ 메뉴 (친구 삭제 / 차단하기)
-/// 4) 차단 목록 관리 (차단 해제)
+/// [설정 > 내 친구 N명] 터치 시 열리는 독립 [친구 관리] 바텀시트 모달
+Future<void> showFriendManagementModal(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.84,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 4),
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 10, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '친구 관리',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.protoHeading,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                const Flexible(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    child: FriendManagementCard(embeddedInModal: true),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// 통합 친구 관리 모듈 (배틀태그 검색 · 받은 요청 · 내 친구 목록 · 차단 목록 관리)
 class FriendManagementCard extends ConsumerStatefulWidget {
-  const FriendManagementCard({super.key});
+  const FriendManagementCard({super.key, this.embeddedInModal = false});
+
+  final bool embeddedInModal;
 
   @override
   ConsumerState<FriendManagementCard> createState() =>
@@ -23,6 +92,7 @@ class FriendManagementCard extends ConsumerStatefulWidget {
 class _FriendManagementCardState extends ConsumerState<FriendManagementCard> {
   final TextEditingController _searchController = TextEditingController();
   BattleTagUser? _searchResult;
+  List<BattleTagUser> _suggestions = const [];
   bool _hasSearched = false;
   bool _isSearching = false;
   bool _showBlockedList = false;
@@ -33,12 +103,41 @@ class _FriendManagementCardState extends ConsumerState<FriendManagementCard> {
     super.dispose();
   }
 
+  Future<void> _onSearchChanged(String raw) async {
+    final compact = raw.replaceAll(' ', '');
+    if (compact.length < 2) {
+      if (_suggestions.isNotEmpty) {
+        setState(() => _suggestions = const []);
+      }
+      return;
+    }
+    final list = await ref
+        .read(friendSystemProvider.notifier)
+        .suggestUsersByPrefix(raw, limit: 4);
+    if (!mounted) return;
+    setState(() => _suggestions = list);
+  }
+
+  void _selectSuggestion(BattleTagUser user) {
+    _searchController.text = user.fullHandle;
+    _searchController.selection = TextSelection.fromPosition(
+      TextPosition(offset: user.fullHandle.length),
+    );
+    setState(() {
+      _suggestions = const [];
+      _searchResult = user;
+      _hasSearched = true;
+      _isSearching = false;
+    });
+  }
+
   Future<void> _performSearch() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
     setState(() {
       _isSearching = true;
       _hasSearched = false;
+      _suggestions = const [];
     });
     final found = await ref
         .read(friendSystemProvider.notifier)
@@ -49,6 +148,89 @@ class _FriendManagementCardState extends ConsumerState<FriendManagementCard> {
       _hasSearched = true;
       _isSearching = false;
     });
+  }
+
+  Future<void> _showAliasEditDialog(
+    BuildContext context,
+    BattleTagUser friend,
+    String? currentAlias,
+  ) async {
+    final ctrl = TextEditingController(text: currentAlias ?? '');
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          '친구 별명 설정',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: AppColors.protoHeading,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${friend.fullHandle}님에게 나만 볼 수 있는 별명을 지정할 수 있어요.',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: const Key('friend_alias_input'),
+              controller: ctrl,
+              maxLength: 12,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: '별명 입력 (비우면 원래 닉네임 표시)',
+                filled: true,
+                fillColor: AppColors.cleanCanvasBg,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(11),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('취소', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            key: const Key('friend_alias_save_btn'),
+            onPressed: () {
+              ref
+                  .read(friendSystemProvider.notifier)
+                  .setFriendAlias(friend.uid, ctrl.text);
+              Navigator.pop(dialogCtx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.chipYellowBg,
+              foregroundColor: AppColors.chipYellowText,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              '저장',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
   }
 
   @override
@@ -80,9 +262,13 @@ class _FriendManagementCardState extends ConsumerState<FriendManagementCard> {
                 child: TextField(
                   key: const Key('friend_search_input'),
                   controller: _searchController,
+                  inputFormatters: [
+                    HaruInputSanitizer.battleTagInputFormatter,
+                  ],
+                  onChanged: _onSearchChanged,
                   onSubmitted: (_) => _performSearch(),
                   decoration: InputDecoration(
-                    hintText: '닉네임#태그 검색 (예: 소영#7F2K)',
+                    hintText: '닉네임 또는 닉네임#태그 검색 (2글자 이상)',
                     hintStyle: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF9CA3AF),
@@ -124,6 +310,73 @@ class _FriendManagementCardState extends ConsumerState<FriendManagementCard> {
               ),
             ],
           ),
+
+          // 실시간 자동완성 추천 드롭다운 (최대 4명 노출)
+          if (_suggestions.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              key: const Key('friend_autocomplete_dropdown'),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < _suggestions.length; i++) ...[
+                    InkWell(
+                      key: Key('friend_suggestion_${_suggestions[i].uid}'),
+                      onTap: () => _selectSuggestion(_suggestions[i]),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        child: Row(
+                          children: [
+                            HaruChipIconViewer(
+                              iconKey: _suggestions[i].avatarIcon,
+                              size: 24,
+                              circular: true,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _suggestions[i].fullHandle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.protoHeading,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.north_west_rounded,
+                              size: 14,
+                              color: Color(0xFF9CA3AF),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (i != _suggestions.length - 1)
+                      const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                  ],
+                ],
+              ),
+            ),
+          ],
 
           // 검색 결과 카드
           if (_hasSearched) ...[
@@ -276,7 +529,7 @@ class _FriendManagementCardState extends ConsumerState<FriendManagementCard> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        friend.fullHandle,
+                        state.displayLabelFor(friend),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -284,6 +537,23 @@ class _FriendManagementCardState extends ConsumerState<FriendManagementCard> {
                           fontWeight: FontWeight.w700,
                           color: AppColors.protoHeading,
                         ),
+                      ),
+                    ),
+                    IconButton(
+                      key: Key('friend_alias_btn_${friend.uid}'),
+                      tooltip: '별명 설정',
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 30, minHeight: 30),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 16,
+                        color: Color(0xFF8C7E6A),
+                      ),
+                      onPressed: () => _showAliasEditDialog(
+                        context,
+                        friend,
+                        state.aliasFor(friend.uid),
                       ),
                     ),
                     PopupMenuButton<String>(
@@ -300,13 +570,26 @@ class _FriendManagementCardState extends ConsumerState<FriendManagementCard> {
                       onSelected: (action) {
                         final notifier =
                             ref.read(friendSystemProvider.notifier);
-                        if (action == 'delete') {
+                        if (action == 'alias') {
+                          _showAliasEditDialog(
+                            context,
+                            friend,
+                            state.aliasFor(friend.uid),
+                          );
+                        } else if (action == 'delete') {
                           notifier.removeFriend(friend.uid);
                         } else if (action == 'block') {
                           notifier.blockUser(friend);
                         }
                       },
                       itemBuilder: (_) => const [
+                        PopupMenuItem<String>(
+                          value: 'alias',
+                          child: Text(
+                            '별명 설정',
+                            style: TextStyle(fontSize: 13),
+                          ),
+                        ),
                         PopupMenuItem<String>(
                           value: 'delete',
                           child: Text(

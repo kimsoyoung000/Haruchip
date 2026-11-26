@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/icons/haruchip_icon_registry.dart';
 import '../../../services/storage/local_store.dart';
 import '../data/category_types.dart';
 import '../models/category.dart';
@@ -22,6 +23,13 @@ class CategoryListNotifier extends Notifier<List<Category>> {
             const <Category>[];
     return restored
         .where((c) => !kRemovedDdayCategoryKeys.contains(c.categoryKey))
+        .map((c) {
+          final upgraded = HaruChipIconRegistry.upgradeLegacyCategoryIcon(
+            c.categoryKey,
+            c.emoji,
+          );
+          return upgraded == c.emoji ? c : c.copyWith(emoji: upgraded);
+        })
         .toList();
   }
 

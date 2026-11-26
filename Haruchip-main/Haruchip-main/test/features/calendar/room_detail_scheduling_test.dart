@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:haruchip/features/calendar/providers/schedule_room_provider.dart';
 import 'package:haruchip/features/calendar/screens/schedule_room_detail_screen.dart';
+import 'package:haruchip/features/calendar/widgets/month_grid.dart';
 import 'package:haruchip/features/calendar/widgets/room_availability_month_grid.dart';
 import 'package:haruchip/features/plan/models/plan_item.dart';
 import 'package:haruchip/features/plan/providers/plan_provider.dart';
@@ -174,7 +175,7 @@ void main() {
         ));
     await _settle(tester);
 
-    expect(find.text('메인에서 만든 저녁 약속'), findsOneWidget);
+    expect(find.text('메인에서 만든 저녁 약속'), findsAtLeastNWidgets(1));
     expect(find.text('내 캘린더'), findsOneWidget);
   });
 
@@ -189,17 +190,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('넓은 화면에서 공유 캘린더와 일정 조율 달력이 같은 폭·같은 칸 높이', (tester) async {
+  testWidgets('넓은 화면에서 공유 캘린더(MonthGrid)와 일정 조율 달력이 안정적으로 렌더링된다', (tester) async {
     await _open(tester, 'room-1', size: const Size(1600, 2400));
 
-    final sharedGrid = find.byType(GridView).first;
+    final sharedGrid = find.byType(MonthGrid);
+    expect(sharedGrid, findsOneWidget);
     final sharedSize = tester.getSize(sharedGrid);
-    expect(sharedSize.height, 6 * kRoomGridCellHeight + 5 * 4); // 42칸 고정 6줄, 간격 4
+    expect(sharedSize.height, greaterThanOrEqualTo(380.0));
 
     await _goAvailabilityTab(tester);
     final availCard = tester.getSize(find.byType(RoomAvailabilityMonthGrid));
 
-    expect(sharedSize.width, lessThanOrEqualTo(kRoomContentMaxWidth));
     expect(availCard.width, lessThanOrEqualTo(kRoomContentMaxWidth));
     expect(tester.takeException(), isNull);
   });

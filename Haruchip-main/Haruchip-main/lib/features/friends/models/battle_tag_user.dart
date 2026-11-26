@@ -26,12 +26,14 @@ class BattleTagUser {
     required this.nickname,
     required this.tag,
     this.avatarIcon = 'simple_chick',
+    this.photoUrl,
   });
 
   final String uid;
   final String nickname;
   final String tag; // 4-char uppercase alphanumeric e.g. '7F2K'
   final String avatarIcon;
+  final String? photoUrl;
 
   /// 검색 및 친구 식별용 유니크 핸들 (예: '소영#7F2K')
   String get fullHandle => '$nickname#$tag';
@@ -41,12 +43,15 @@ class BattleTagUser {
     String? nickname,
     String? tag,
     String? avatarIcon,
+    String? photoUrl,
+    bool clearPhotoUrl = false,
   }) {
     return BattleTagUser(
       uid: uid ?? this.uid,
       nickname: nickname ?? this.nickname,
       tag: tag ?? this.tag,
       avatarIcon: avatarIcon ?? this.avatarIcon,
+      photoUrl: clearPhotoUrl ? null : (photoUrl ?? this.photoUrl),
     );
   }
 
@@ -56,6 +61,7 @@ class BattleTagUser {
         'tag': tag,
         'fullHandle': fullHandle,
         'avatarIcon': avatarIcon,
+        if (photoUrl != null && photoUrl!.isNotEmpty) 'photoUrl': photoUrl,
       };
 
   factory BattleTagUser.fromJson(Map<String, dynamic> json) {
@@ -67,6 +73,7 @@ class BattleTagUser {
           ? rawTag
           : generateBattleTag(),
       avatarIcon: json['avatarIcon'] as String? ?? 'simple_chick',
+      photoUrl: json['photoUrl'] as String?,
     );
   }
 }
@@ -139,7 +146,7 @@ class CategoryPartnerLink {
   }
 }
 
-/// 친구·차단·파트너 연결 통합 상태
+/// 친구·차단·파트너 연결·로컬 별명 통합 상태
 @immutable
 class FriendSystemState {
   const FriendSystemState({
@@ -149,6 +156,7 @@ class FriendSystemState {
     this.sentRequestUids = const {},
     this.blockedUsers = const [],
     this.partnerLinks = const {},
+    this.friendAliases = const {},
   });
 
   final BattleTagUser myProfile;
@@ -158,11 +166,35 @@ class FriendSystemState {
   final List<BattleTagUser> blockedUsers;
   final Map<String, CategoryPartnerLink> partnerLinks;
 
+  /// 나만 볼 수 있는 친구별 로컬 별명(별칭) 맵 (`uid -> 별명`)
+  final Map<String, String> friendAliases;
+
   bool isFriend(String uid) => friends.any((f) => f.uid == uid);
   bool isBlocked(String uid) => blockedUsers.any((b) => b.uid == uid);
   bool hasSentRequest(String uid) => sentRequestUids.contains(uid);
   CategoryPartnerLink? partnerFor(String categoryKey) =>
       partnerLinks[categoryKey];
+
+  String? aliasFor(String uid) {
+    final v = friendAliases[uid]?.trim();
+    return (v != null && v.isNotEmpty) ? v : null;
+  }
+
+  /// 별명이 있으면 `설정한 별명 (본래 닉네임#태그)` 표기, 없으면 `본래 닉네임#태그`
+  String displayLabelFor(BattleTagUser user) {
+    final alias = aliasFor(user.uid);
+    if (alias != null) return '$alias (${user.fullHandle})';
+    return user.fullHandle;
+  }
+
+  /// 모임 대화상대 목록용 표시명: 별명이 있으면 `설정한 별명 (원래이름#태그 또는 원래이름)`
+  String displayMemberName(String uid, String fallbackName) {
+    final alias = aliasFor(uid);
+    if (alias == null) return fallbackName;
+    final friend = friends.where((f) => f.uid == uid).firstOrNull;
+    if (friend != null) return '$alias (${friend.fullHandle})';
+    return '$alias ($fallbackName)';
+  }
 
   FriendSystemState copyWith({
     BattleTagUser? myProfile,
@@ -171,6 +203,7 @@ class FriendSystemState {
     Set<String>? sentRequestUids,
     List<BattleTagUser>? blockedUsers,
     Map<String, CategoryPartnerLink>? partnerLinks,
+    Map<String, String>? friendAliases,
   }) {
     return FriendSystemState(
       myProfile: myProfile ?? this.myProfile,
@@ -179,6 +212,7 @@ class FriendSystemState {
       sentRequestUids: sentRequestUids ?? this.sentRequestUids,
       blockedUsers: blockedUsers ?? this.blockedUsers,
       partnerLinks: partnerLinks ?? this.partnerLinks,
+      friendAliases: friendAliases ?? this.friendAliases,
     );
   }
 
@@ -190,10 +224,13 @@ class FriendSystemState {
         'blockedUsers': blockedUsers.map((b) => b.toJson()).toList(),
         'partnerLinks':
             partnerLinks.map((k, v) => MapEntry(k, v.toJson())),
+        'friendAliases': friendAliases,
       };
 
   factory FriendSystemState.fromJson(Map<String, dynamic> json) {
     final rawLinks = json['partnerLinks'] as Map<String, dynamic>? ?? const {};
+    final rawAliases =
+        json['friendAliases'] as Map<String, dynamic>? ?? const {};
     return FriendSystemState(
       myProfile: BattleTagUser.fromJson(
         Map<String, dynamic>.from(json['myProfile'] as Map),
@@ -223,6 +260,7 @@ class FriendSystemState {
           CategoryPartnerLink.fromJson(Map<String, dynamic>.from(v as Map)),
         ),
       ),
+      friendAliases: rawAliases.map((k, v) => MapEntry(k, v.toString())),
     );
   }
 }

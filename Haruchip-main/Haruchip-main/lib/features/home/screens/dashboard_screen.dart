@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
+import '../../../design_system/layout_tokens.dart';
 import '../../../design_system/typography.dart';
 import '../../categories/models/category_model.dart';
 import '../../categories/providers/category_provider.dart';
@@ -13,8 +14,6 @@ import '../../onboarding/providers/dashboard_view_mode_provider.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
 import '../providers/dashboard_filter_provider.dart';
-import '../widgets/add_category_dashboard_card.dart';
-import '../widgets/add_category_dashboard_modal.dart';
 import '../widgets/category_summary_dashboard_card.dart';
 import '../widgets/dashboard_category_filter_sheet.dart';
 
@@ -218,30 +217,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       backgroundColor: AppColors.protoBackground,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 24),
+          padding: AppLayoutTokens.dashboardScreenPadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 모든 카테고리 카드: 높이 완전 고정 & 컴팩트 여백
+              // 모든 카테고리 카드: 높이 완전 고정 & 럭셔리 화이트 컴팩트 여백
               if (isBoxGrid) ...[
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
+                    mainAxisSpacing: AppLayoutTokens.cardVerticalGap,
+                    crossAxisSpacing: AppLayoutTokens.cardVerticalGap,
                     mainAxisExtent:
                         CategorySummaryDashboardCard.kFixedCardHeight,
                   ),
-                  itemCount: displayedCategories.length + 1,
+                  itemCount: displayedCategories.length,
                   itemBuilder: (context, index) {
-                    if (index == displayedCategories.length) {
-                      return AddCategoryDashboardCard(
-                        onTap: () => showAddCategoryDashboardModal(context),
-                      );
-                    }
-
                     final category = displayedCategories[index];
                     final items = ref.watch(
                         planItemsByCategoryProvider(category.categoryKey));
@@ -274,17 +267,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ] else ...[
                 Column(
                   children: [
-                    for (final category in displayedCategories) ...[
+                    for (int i = 0; i < displayedCategories.length; i++) ...[
                       Builder(builder: (context) {
+                        final category = displayedCategories[i];
                         final items = ref.watch(
                             planItemsByCategoryProvider(category.categoryKey));
                         final countUpItems = items
-                            .where((i) =>
-                                i.displayMode == DdayDisplayMode.daysCount)
+                            .where((item) =>
+                                item.displayMode == DdayDisplayMode.daysCount)
                             .toList();
                         final countDownItems = items
-                            .where((i) =>
-                                i.displayMode != DdayDisplayMode.daysCount)
+                            .where((item) =>
+                                item.displayMode != DdayDisplayMode.daysCount)
                             .toList();
 
                         String? customCountUp;
@@ -305,11 +299,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           onHide: () => _hideCategoryWithFeedback(category),
                         );
                       }),
-                      const SizedBox(height: 8),
+                      if (i < displayedCategories.length - 1)
+                        const SizedBox(height: AppLayoutTokens.cardVerticalGap),
                     ],
-                    AddCategoryDashboardCard(
-                      onTap: () => showAddCategoryDashboardModal(context),
-                    ),
                   ],
                 ),
               ],

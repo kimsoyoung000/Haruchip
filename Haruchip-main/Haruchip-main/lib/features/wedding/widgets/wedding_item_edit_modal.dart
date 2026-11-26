@@ -6,7 +6,8 @@ import '../../shared/widgets/common_date_time_picker.dart';
 import '../models/wedding_item.dart';
 import '../providers/wedding_provider.dart';
 
-/// 단일 결혼 준비 항목 상세 커스텀 편집 모달 (하루칩 공통 캘린더 피커 + 장소/메모)
+/// 단일 결혼 준비 항목 3초 빠른 수정/추가 바텀시트
+/// (일정명, 날짜/시간, 장소, 담당자[공동/신랑/신부], 시기 그룹, 메모)
 class WeddingItemEditModal extends ConsumerStatefulWidget {
   const WeddingItemEditModal({
     super.key,
@@ -30,6 +31,10 @@ class WeddingItemEditModal extends ConsumerStatefulWidget {
 }
 
 class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
+  static const Color _butterYellow = AppColors.chipYellowBg; // #FFE699
+  static const Color _deepBrown = AppColors.chipYellowText; // #3A2E1A
+  static const Color _softGray = Color(0xFFF8F9FA);
+
   late final TextEditingController _titleController;
   late final TextEditingController _locationController;
   late final TextEditingController _memoController;
@@ -38,6 +43,8 @@ class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
   TimeOfDay? _selectedTime;
   late bool _isAllDay;
   late bool _isCompleted;
+  late WeddingAssignee _assignee;
+  late WeddingDomainGroup _domainGroup;
 
   @override
   void initState() {
@@ -46,10 +53,13 @@ class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
     _locationController = TextEditingController(text: widget.item?.location ?? '');
     _memoController = TextEditingController(text: widget.item?.memo ?? '');
 
-    _selectedDate = widget.item?.targetDate ?? DateTime.now();
+    _selectedDate = widget.item?.targetDate;
     _selectedTime = widget.item?.deadlineTime;
     _isAllDay = widget.item?.deadlineTime == null;
     _isCompleted = widget.item?.isCompleted ?? false;
+    _assignee = widget.item?.assignee ?? WeddingAssignee.joint;
+    _domainGroup =
+        widget.item?.domainGroup ?? WeddingDomainGroup.hallAndCeremony;
   }
 
   @override
@@ -64,13 +74,15 @@ class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('내용을 입력해주세요.')),
+        const SnackBar(
+          content: Text('일정명을 입력해주세요.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
     final location = _locationController.text.trim();
     final memo = _memoController.text.trim();
-
     final deadlineTime = _isAllDay ? null : _selectedTime;
 
     if (widget.item != null) {
@@ -81,6 +93,8 @@ class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
         location: location,
         memo: memo,
         isCompleted: _isCompleted,
+        assignee: _assignee,
+        domainGroupOverride: _domainGroup,
         clearDate: _selectedDate == null,
         clearTime: _isAllDay || deadlineTime == null,
       );
@@ -96,6 +110,8 @@ class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
         location: location,
         memo: memo,
         isCompleted: _isCompleted,
+        assignee: _assignee,
+        domainGroupOverride: _domainGroup,
         standardOffsetDays: 30,
         stage: WeddingStage.finalCheckAndCeremony,
       );
@@ -106,7 +122,7 @@ class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('✨ 일정이 안전하게 저장 및 캘린더에 동기화되었습니다.'),
+        content: Text('일정이 저장 및 캘린더에 동기화되었습니다.'),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
       ),
@@ -132,131 +148,139 @@ class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-        24,
-        16,
-        24,
-        MediaQuery.of(context).viewInsets.bottom + 28,
+        18,
+        10,
+        18,
+        MediaQuery.of(context).viewInsets.bottom + 20,
       ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 드래그 바
             Center(
               child: Container(
-                width: 36,
+                width: 34,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
+                margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
+                  color: const Color(0xFFE5E7EB),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
 
-            // 상단 타이틀 및 완료 체크 토글
+            // 상단 타이틀 + 완료 토글 + 삭제
             Row(
               children: [
-                Checkbox(
-                  value: _isCompleted,
-                  activeColor: const Color(0xFFE53E3E),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
+                InkWell(
+                  onTap: () => setState(() => _isCompleted = !_isCompleted),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: _isCompleted ? _butterYellow : _softGray,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: _isCompleted
+                        ? const Icon(Icons.check_rounded, size: 15, color: _deepBrown)
+                        : null,
                   ),
-                  onChanged: (val) =>
-                      setState(() => _isCompleted = val ?? false),
                 ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    widget.item != null ? '결혼 준비 항목 수정' : '새 결혼 준비 항목 추가',
+                    widget.item != null ? '일정 수정' : '새 일정 추가',
                     style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.protoHeading,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _deepBrown,
                     ),
                   ),
                 ),
                 if (widget.item != null)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded,
-                        color: Color(0xFFE11D48)),
-                    tooltip: '항목 삭제',
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      size: 20,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                    tooltip: '일정 삭제',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     onPressed: _delete,
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
-            // 1. 항목 이름
-            const Text(
-              '항목명 (준비 내용)',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF64748B),
-              ),
-            ),
-            const SizedBox(height: 6),
+            // 1. 일정명
+            _buildFieldLabel('일정명'),
+            const SizedBox(height: 4),
             TextField(
+              key: const Key('wedding_item_title_input'),
               controller: _titleController,
-              decoration: InputDecoration(
-                hintText: '예: 웨딩홀 투어 진행, 스튜디오 촬영',
-                hintStyle:
-                    const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
+              style: const TextStyle(fontSize: 13.5, color: _deepBrown),
+              decoration: _inputDecoration('예: 드레스 투어, 스튜디오 촬영'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
-            // 2. 어디서 (위치/장소)
-            const Text(
-              '📍 장소 / 업체명',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF64748B),
-              ),
-            ),
-            const SizedBox(height: 6),
+            // 2. 장소 / 업체명
+            _buildFieldLabel('장소 / 업체명'),
+            const SizedBox(height: 4),
             TextField(
+              key: const Key('wedding_item_location_input'),
               controller: _locationController,
-              decoration: InputDecoration(
-                hintText: '예: 아펠가모 공덕 라포레홀, 로브드K',
-                hintStyle:
-                    const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
+              style: const TextStyle(fontSize: 13.5, color: _deepBrown),
+              decoration: _inputDecoration('예: 아펠가모 공덕, 로브드K'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
-            // 3. 언제 (일시 - 하루칩 앱 공통 달력 팝업 및 월간 그리드 로직)
-            const Text(
-              '📅 일정 및 시간 (하루칩 공통 캘린더)',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF64748B),
-              ),
+            // 3. 담당자 (공동 / 신랑 / 신부)
+            _buildFieldLabel('담당자'),
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                for (final a in WeddingAssignee.values) ...[
+                  Expanded(
+                    child: InkWell(
+                      key: Key('wedding_item_assignee_${a.name}'),
+                      onTap: () => setState(() => _assignee = a),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: _assignee == a ? _butterYellow : _softGray,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          a.labelKo,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight:
+                                _assignee == a ? FontWeight.w800 : FontWeight.w600,
+                            color: _assignee == a
+                                ? _deepBrown
+                                : const Color(0xFF6B7280),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (a != WeddingAssignee.values.last) const SizedBox(width: 6),
+                ],
+              ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
+
+            // 4. 일정 및 시간
+            _buildFieldLabel('날짜 및 시간'),
+            const SizedBox(height: 4),
             CommonDateTimePicker(
               initialStartDate: _selectedDate != null
                   ? DateTime(
@@ -270,67 +294,82 @@ class _WeddingItemEditModalState extends ConsumerState<WeddingItemEditModal> {
               hasEndDate: false,
               isAllDay: _isAllDay,
               showAllDayToggle: true,
-              accentColor: const Color(0xFFE53E3E),
+              accentColor: const Color(0xFFF2B84B),
               onDateTimeChanged: (start, _, isAllDay) {
                 setState(() {
                   _selectedDate = DateTime(start.year, start.month, start.day);
-                  _selectedTime = isAllDay ? null : TimeOfDay(hour: start.hour, minute: start.minute);
+                  _selectedTime = isAllDay
+                      ? null
+                      : TimeOfDay(hour: start.hour, minute: start.minute);
                   _isAllDay = isAllDay;
                 });
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
-            // 4. 메모 & 준비 팁
-            const Text(
-              '메모 & 준비 팁',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF64748B),
-              ),
-            ),
-            const SizedBox(height: 6),
+            // 5. 메모
+            _buildFieldLabel('메모'),
+            const SizedBox(height: 4),
             TextField(
               controller: _memoController,
               maxLines: 2,
-              decoration: InputDecoration(
-                hintText: '업체 담당자 연락처, 준비물, 특이사항 등을 적어두세요.',
-                hintStyle:
-                    const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                contentPadding: const EdgeInsets.all(12),
-              ),
+              style: const TextStyle(fontSize: 13, color: _deepBrown),
+              decoration: _inputDecoration('담당자 연락처, 준비물, 특이사항'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             // 저장 버튼
             SizedBox(
               width: double.infinity,
-              height: 52,
+              height: 46,
               child: ElevatedButton(
+                key: const Key('wedding_item_save_btn'),
                 onPressed: _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE53E3E),
-                  foregroundColor: Colors.white,
+                  backgroundColor: _butterYellow,
+                  foregroundColor: _deepBrown,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
                 child: Text(
-                  widget.item != null ? '수정 사항 저장하기' : '새 일정 추가하기',
-                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold),
+                  widget.item != null ? '수정 사항 저장' : '일정 추가하기',
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFieldLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF8C7E6A),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+      filled: true,
+      fillColor: _softGray,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(11),
+        borderSide: BorderSide.none,
       ),
     );
   }

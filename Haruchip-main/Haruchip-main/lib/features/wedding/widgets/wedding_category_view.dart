@@ -2,71 +2,125 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design_system/colors.dart';
+import '../models/wedding_extras_models.dart';
 import '../models/wedding_item.dart';
+import '../providers/wedding_extras_provider.dart';
 import '../providers/wedding_provider.dart';
 import 'wedding_budget_section_widget.dart';
+import 'wedding_invitation_meeting_section.dart';
 import 'wedding_item_edit_modal.dart';
 import 'wedding_template_manager_modal.dart';
 
-/// 결혼 준비 전용 카테고리 뷰 위젯
-/// 1) 일정 등록/변경 시 D-Day 실시간 자동 재정렬 (임박순 우선, 미지정 하단 배치)
-/// 2) 원터치 아코디언 메모/상세 토글 (인라인 메모, 상세 장소, 준비 팁 즉시 노출)
-/// 3) [+ 항목/일정 추가] -> '결혼 준비 항목' 모달 연동
-/// 4) 하단 60개 마스터 템플릿 기반 독립 예산 & 지출 정리표 섹션
+/// 결혼 준비 전용 카테고리 뷰 위젯 (D-Day 임박순 단일 리스트 + 청모 + 통합 예산표)
+///
+/// 1) 웨딩 체크리스트: 인위적 폴더 그룹핑 폐기 → D-Day 임박순(오름차순) 단일 리스트 + 최하단 [날짜 미정 항목 (N개)] 접기/펼치기
+/// 2) 청첩장 모임: D-Day 임박순 자동 정렬 + 보증인원 카운터
+/// 3) 웨딩 예산·지출표: 본식 전 준비 지출 + 본식 당일/사후 정산 완전 통합
+/// 4) 3대 메인 섹션 순서 편집 & 독립 숨김 커스터마이징
 class WeddingCategoryView extends ConsumerStatefulWidget {
   const WeddingCategoryView({super.key});
 
   @override
-  ConsumerState<WeddingCategoryView> createState() => _WeddingCategoryViewState();
+  ConsumerState<WeddingCategoryView> createState() =>
+      _WeddingCategoryViewState();
 }
 
 class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
-  WeddingStage? _selectedStageFilter;
-  final Set<String> _expandedItemIds = {};
+  static const Color _butterYellow = AppColors.chipYellowBg; // #FFE699
+  static const Color _deepBrown = AppColors.chipYellowText; // #3A2E1A
+  static const Color _softGray = Color(0xFFF8F9FA);
 
-  void _toggleAccordion(String itemId) {
-    setState(() {
-      if (_expandedItemIds.contains(itemId)) {
-        _expandedItemIds.remove(itemId);
-      } else {
-        _expandedItemIds.add(itemId);
-      }
-    });
-  }
+  /// 날짜 미정 항목 섹션 사용자 수동 접기/펼치기 상태 (null이면 날짜 지정 항목 유무에 따라 자동 결정)
+  bool? _undatedExpandedOverride;
 
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(weddingListProvider);
+    final stats = ref.watch(weddingStatsProvider);
+    final extras = ref.watch(weddingExtrasProvider);
 
-    // 1. 카테고리 필터 적용
-    final filteredItems = _selectedStageFilter == null
-        ? items
-        : items.where((i) => i.stage == _selectedStageFilter).toList();
+    final order = extras.sectionOrder.isNotEmpty
+        ? extras.sectionOrder
+        : kDefaultWeddingSectionOrder;
 
-    // 2. 실시간 D-Day 순서 재정렬 (날짜 지정된 임박순 우선, 일정 미지정 항목 하단 배치)
-    final sortedItems = [...filteredItems]..sort(compareWeddingItemsByCloseness);
+    final children = <Widget>[];
+    for (final secKey in order) {
+      if (extras.hiddenSections.contains(secKey)) continue;
+      Widget? section;
+      switch (secKey) {
+        case 'checklist':
+          section = _buildChronologicalChecklistSection(items, stats);
+          break;
+        case 'invitationMeetings':
+          section = const WeddingInvitationMeetingSection();
+          break;
+        case 'budget':
+          section = const WeddingBudgetSectionWidget();
+          break;
+      }
+      if (section != null) {
+        if (children.isNotEmpty) {
+          children.add(const SizedBox(height: 18));
+        }
+        children.add(section);
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. 체크리스트 섹션 상단 헤더 & [+ 항목/일정 추가] 버튼
+        ...children,
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  /// 단일 D-Day 임박순(오름차순) 체크리스트 + 하단 [날짜 미정 항목 (N개)] 접기/펼치기
+  Widget _buildChronologicalChecklistSection(
+    List<WeddingItem> items,
+    ({int completed, int total, double ratio}) stats,
+  ) {
+    final datedItems = items.where((i) => i.targetDate != null).toList()
+      ..sort(compareWeddingItemsByCloseness);
+    final undatedItems = items.where((i) => i.targetDate == null).toList()
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+
+    final isUndatedExpanded =
+        _undatedExpandedOverride ?? datedItems.isEmpty;
+
+    return Column(
+      key: const Key('wedding_checklist_section'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 상단 헤더 + 단일 [+] 라운드 아이콘 버튼
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(
               child: Row(
                 children: [
-                  const Text('📋', style: TextStyle(fontSize: 18)),
-                  const SizedBox(width: 8),
-                  Flexible(
+                  const Text(
+                    '웨딩 체크리스트',
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                      color: _deepBrown,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF8E1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                     child: Text(
-                      '준비 항목 체크리스트 (${items.length})',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      '${stats.completed}/${stats.total}',
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.protoHeading,
+                        color: _deepBrown,
                       ),
                     ),
                   ),
@@ -74,412 +128,459 @@ class _WeddingCategoryViewState extends ConsumerState<WeddingCategoryView> {
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: () => WeddingTemplateManagerModal.show(context),
-              icon: const Icon(Icons.add_rounded, size: 16),
-              label: const Text(
-                '항목/일정 추가',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE53E3E),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            InkWell(
+              key: const Key('wedding_open_smart_picker_btn'),
+              onTap: () => WeddingTemplateManagerModal.show(context),
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                  color: _butterYellow,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.add_rounded,
+                  size: 19,
+                  color: _deepBrown,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 9),
 
-        // 2. 단계 필터 탭
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
-            children: [
-              _buildStageChip(null, '전체 (${items.length})'),
-              for (final stage in WeddingStage.values)
-                _buildStageChip(
-                  stage,
-                  '${stage.emoji} ${stage.labelKo} (${items.where((i) => i.stage == stage).length})',
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // 3. 준비 항목 카드 리스트 (실시간 D-Day 임박순 자동 정렬 + 원터치 아코디언 메모)
-        if (sortedItems.isEmpty)
+        // 1. D-Day 임박순(오름차순) 단일 리스트
+        if (items.isEmpty)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+            padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-            child: Column(
-              children: [
-                const Text('💍', style: TextStyle(fontSize: 36)),
-                const SizedBox(height: 10),
-                const Text(
-                  '선택된 결혼 준비 일정이 없습니다.',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF334155),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  '상단의 [+ 항목/일정 추가] 버튼을 눌러\n원하는 결혼 일정을 담아보세요!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8), height: 1.4),
-                ),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: () => WeddingTemplateManagerModal.show(context),
-                  icon: const Icon(Icons.playlist_add_rounded, size: 18),
-                  label: const Text('결혼 일정 담기'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFE53E3E),
-                    side: const BorderSide(color: Color(0xFFFECDD3)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
+            child: const Text(
+              '등록된 결혼 준비 일정이 없습니다. 우측 [+]로 담아보세요.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+            ),
           )
-        else
-          for (final item in sortedItems) ...[
-            _buildRefinedItemCard(item),
+        else ...[
+          if (datedItems.isNotEmpty)
+            Container(
+              key: const Key('wedding_chronological_list'),
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(9, 8, 9, 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  for (final item in datedItems) _buildSlimChecklistTile(item),
+                ],
+              ),
+            ),
+
+          // 2. 최하단 [날짜 미정 항목 (N개)] 접기/펼치기 섹션
+          if (undatedItems.isNotEmpty) ...[
+            if (datedItems.isNotEmpty) const SizedBox(height: 8),
+            Container(
+              key: const Key('wedding_undated_section'),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.025),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  InkWell(
+                    key: const Key('wedding_undated_section_header'),
+                    onTap: () {
+                      setState(() {
+                        _undatedExpandedOverride = !isUndatedExpanded;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(15),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '날짜 미정 항목 (${undatedItems.length}개)',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF8C7E6A),
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            isUndatedExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 18,
+                            color: const Color(0xFF9CA3AF),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (isUndatedExpanded)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(9, 0, 9, 5),
+                      child: Column(
+                        children: [
+                          for (final item in undatedItems)
+                            _buildSlimChecklistTile(item),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ],
-
-        const SizedBox(height: 28),
-        const Divider(height: 1, color: Color(0xFFE2E8F0)),
-        const SizedBox(height: 24),
-
-        // 4. 하단 독립된 [60개 마스터 템플릿 기반 결혼 예산 & 지출 정리표] 섹션
-        const WeddingBudgetSectionWidget(),
-        const SizedBox(height: 20),
+        ],
       ],
     );
   }
 
-  /// 준비 항목 카드 UI (세로 패딩 압축 컴팩트 핏 + 원터치 아코디언 메모/상세 인라인 토글)
-  Widget _buildRefinedItemCard(WeddingItem item) {
-    final isExpanded = _expandedItemIds.contains(item.id);
+  /// 체크리스트 1줄 슬림 타일
+  /// - 날짜 미지정: `[ 미정 ]`
+  /// - 날짜 지정: `[ 2026.05.14(목) · D-35 ]`
+  Widget _buildSlimChecklistTile(WeddingItem item) {
+    final badgeText = item.formattedDateWithWeekdayAndDday();
+    final hasDate = item.targetDate != null;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 5),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isExpanded ? 0.03 : 0.015),
-            blurRadius: isExpanded ? 6 : 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // 카드 본문 행 (탭 시 아코디언 토글)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: _softGray,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          key: Key('wedding_slim_tile_${item.id}'),
+          onTap: () => WeddingItemEditModal.show(context, item),
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // [좌측]: 완료 체크박스 (체크 토글 전용, 아코디언 탭 분리)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: InkWell(
-                    onTap: () => ref.read(weddingListProvider.notifier).toggleItemCompletion(item.id),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: item.isCompleted ? const Color(0xFFE53E3E) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: item.isCompleted ? const Color(0xFFE53E3E) : const Color(0xFFCBD5E1),
-                          width: 1.8,
-                        ),
-                      ),
-                      child: item.isCompleted
-                          ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
-                          : null,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // [중앙]: 항목명 + 일시/장소 (탭 시 원터치 아코디언 펼침/접힘)
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _toggleAccordion(item.id),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // [중앙 상단]: 항목명
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                item.title,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: item.isCompleted
-                                      ? const Color(0xFF94A3B8)
-                                      : const Color(0xFF1E293B),
-                                  decoration: item.isCompleted ? TextDecoration.lineThrough : null,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                              size: 18,
-                              color: isExpanded ? const Color(0xFFE53E3E) : const Color(0xFF94A3B8),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-
-                        // [중앙 하단]: 일시 및 장소 (한눈에 확인)
-                        Wrap(
-                          spacing: 14,
-                          runSpacing: 4,
-                          children: [
-                            // 📅 일시
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('📅 ', style: TextStyle(fontSize: 12.5)),
-                                Text(
-                                  item.targetDate != null
-                                      ? '${item.formattedDateTime} (${item.dDayLabel()})'
-                                      : '일정 미지정',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: item.targetDate != null
-                                        ? const Color(0xFF475569)
-                                        : const Color(0xFF94A3B8),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            // 📍 장소
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('📍 ', style: TextStyle(fontSize: 12.5)),
-                                Text(
-                                  item.location.isNotEmpty ? item.location : '장소 미지정',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: item.location.isNotEmpty
-                                        ? const Color(0xFF475569)
-                                        : const Color(0xFF94A3B8),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-
-                // [우측]: 편집(연필) 아이콘 (모달 열기)
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 20, color: Color(0xFF64748B)),
-                  tooltip: '일정 및 장소 수정',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onPressed: () => WeddingItemEditModal.show(context, item),
-                ),
-              ],
-            ),
-          ),
-
-          // [아코디언 인라인 확장 상세 영역]
-          if (isExpanded)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                  const SizedBox(height: 12),
-
-                  // 1) 작성된 메모
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                // 라운드 체크박스
+                InkWell(
+                  key: Key('wedding_tile_checkbox_${item.id}'),
+                  onTap: () => ref
+                      .read(weddingListProvider.notifier)
+                      .toggleItemCompletion(item.id),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 19,
+                    height: 19,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
-                    
-boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
-),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.notes_rounded, size: 15, color: Color(0xFF64748B)),
-                            SizedBox(width: 6),
-                            Text(
-                              '작성된 메모',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF64748B),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          item.memo.isNotEmpty
-                              ? item.memo
-                              : '작성된 메모가 없습니다. 우측 연필 아이콘을 눌러 메모를 작성해보세요.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: item.memo.isNotEmpty ? const Color(0xFF1E293B) : const Color(0xFF94A3B8),
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
+                      color: item.isCompleted ? _butterYellow : Colors.white,
+                      borderRadius: BorderRadius.circular(6),
                     ),
+                    child: item.isCompleted
+                        ? const Icon(
+                            Icons.check_rounded,
+                            size: 13,
+                            color: _deepBrown,
+                          )
+                        : null,
                   ),
-                  const SizedBox(height: 8),
+                ),
+                const SizedBox(width: 8),
 
-                  // 2) 상세 장소 & 카테고리 팁 인라인
-                  Row(
+                // 일정명 (장소 있으면 함께 1줄 압축)
+                Expanded(
+                  child: Row(
                     children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF5F5),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFFECDD3)),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(item.stage.emoji, style: const TextStyle(fontSize: 14)),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  '카테고리: ${item.stage.labelKo}',
-                                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF881337)),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                      Flexible(
+                        child: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: item.isCompleted
+                                ? const Color(0xFF9CA3AF)
+                                : _deepBrown,
+                            decoration: item.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
                           ),
                         ),
                       ),
-                      if (item.weekdayNotice != null && item.weekdayNotice!.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEFF6FF),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFFBFDBFE)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Text('💡', style: TextStyle(fontSize: 13)),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    item.weekdayNotice!,
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
+                      if (item.location.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '· 📍${item.location}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: item.isCompleted
+                                  ? const Color(0xFFB0B7C3)
+                                  : const Color(0xFF8C7E6A),
                             ),
                           ),
                         ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 10),
+                ),
+                const SizedBox(width: 6),
 
-                  // 3) 빠른 일정/장소 수정 액션 바
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => WeddingItemEditModal.show(context, item),
-                      icon: const Icon(Icons.edit_calendar_rounded, size: 15, color: Color(0xFFE53E3E)),
-                      label: const Text(
-                        '일정 / 장소 / 메모 수정하기',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFE53E3E)),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
+                // 우측 날짜(요일) · D-Day 슬림 뱃지
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: item.isCompleted
+                        ? const Color(0xFFECEEF1)
+                        : (hasDate ? const Color(0xFFFFF4CC) : Colors.white),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: item.isCompleted
+                          ? const Color(0xFF9CA3AF)
+                          : (hasDate ? _deepBrown : const Color(0xFF9CA3AF)),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
+}
 
-  Widget _buildStageChip(WeddingStage? stage, String label) {
-    final isSelected = _selectedStageFilter == stage;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: FilterChip(
-        label: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: isSelected ? Colors.white : const Color(0xFF475569),
-          ),
-        ),
-        selected: isSelected,
-        selectedColor: const Color(0xFFE53E3E),
-        backgroundColor: Colors.white,
-        showCheckmark: false,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(
-            color: isSelected ? const Color(0xFFE53E3E) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        onSelected: (val) {
-          setState(() {
-            _selectedStageFilter = val ? stage : null;
-          });
-        },
-      ),
-    );
+/// 결혼 준비 카테고리 3대 메인 섹션 순서 변경 & 숨김 관리 바텀시트
+Future<void> showWeddingSectionManagementModal(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final current = ref.read(weddingExtrasProvider);
+  final order = List<String>.from(
+    current.sectionOrder.isNotEmpty
+        ? current.sectionOrder
+            .where((k) => kDefaultWeddingSectionOrder.contains(k))
+        : kDefaultWeddingSectionOrder,
+  );
+  for (final k in kDefaultWeddingSectionOrder) {
+    if (!order.contains(k)) order.add(k);
   }
+  final hidden = Set<String>.from(current.hiddenSections);
+
+  const sectionLabels = <String, ({String title, String subtitle})>{
+    'checklist': (
+      title: '웨딩 체크리스트',
+      subtitle: 'D-Day 임박순 자동 정렬 & 날짜 미정 관리',
+    ),
+    'invitationMeetings': (
+      title: '청첩장 모임',
+      subtitle: '임박순 청모 리스트 및 보증인원 카운터',
+    ),
+    'budget': (
+      title: '웨딩 예산 · 지출표',
+      subtitle: '본식 전 준비 + 당일/사후 정산 통합 예산 관리',
+    ),
+  };
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setModalState) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 34,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '결혼 준비 섹션 순서 및 숨김 관리',
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.chipYellowText,
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                '드래그로 순서를 바꾸거나 스위치를 꺼서 원하는 섹션을 숨길 수 있어요.',
+                style: TextStyle(fontSize: 11.5, color: Color(0xFF8C7E6A)),
+              ),
+              const SizedBox(height: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: ReorderableListView.builder(
+                  shrinkWrap: true,
+                  buildDefaultDragHandles: false,
+                  itemCount: order.length,
+                  onReorderItem: (oldIndex, newIndex) {
+                    setModalState(() {
+                      final moved = order.removeAt(oldIndex);
+                      order.insert(newIndex, moved);
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    final key = order[index];
+                    final meta =
+                        sectionLabels[key] ?? (title: key, subtitle: '');
+                    final isVisible = !hidden.contains(key);
+                    return Container(
+                      key: ValueKey('wed_sec_$key'),
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FA),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          ReorderableDragStartListener(
+                            index: index,
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 10),
+                              child: Icon(
+                                Icons.drag_handle_rounded,
+                                size: 20,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  meta.title,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.chipYellowText,
+                                  ),
+                                ),
+                                Text(
+                                  meta.subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    color: Color(0xFF8C7E6A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            key: Key('wedding_section_toggle_$key'),
+                            value: isVisible,
+                            activeTrackColor: AppColors.chipYellowBg,
+                            activeThumbColor: AppColors.chipYellowText,
+                            onChanged: (val) {
+                              setModalState(() {
+                                if (val) {
+                                  hidden.remove(key);
+                                } else {
+                                  hidden.add(key);
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: ElevatedButton(
+                  key: const Key('wedding_section_save_button'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.chipYellowBg,
+                    foregroundColor: AppColors.chipYellowText,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                  ),
+                  onPressed: () {
+                    ref
+                        .read(weddingExtrasProvider.notifier)
+                        .updateSectionConfig(order: order, hidden: hidden);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text(
+                    '적용하기',
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }

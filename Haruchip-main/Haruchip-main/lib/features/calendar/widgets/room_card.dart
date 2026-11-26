@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
@@ -41,11 +40,10 @@ class RoomCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 6,
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
@@ -53,8 +51,9 @@ class RoomCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: Category Tag & Invite Code & Member Count
+            // Header: Category Tag & Member Count (초대 코드 UI 영구 삭제)
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -71,41 +70,6 @@ class RoomCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: InkWell(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: room.inviteCode));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('초대 코드 [${room.inviteCode}]가 복사되었습니다.')),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              '코드: ${room.inviteCode}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          const Icon(Icons.copy_rounded, size: 11, color: Color(0xFF94A3B8)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -171,7 +135,7 @@ class RoomCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 3),
                         Text(
-                          '${m.name}${m.isHost ? ' (방장)' : ''}',
+                          '${m.name}${m.isHost ? ' (방장)' : (m.isCoHost ? ' (부방장)' : '')}',
                           style: const TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,

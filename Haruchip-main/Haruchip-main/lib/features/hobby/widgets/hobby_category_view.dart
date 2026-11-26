@@ -19,13 +19,13 @@ class HobbyCategoryView extends ConsumerWidget {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. 복수 취미 전환 미니 칩 바 & [+ 새 취미 추가] 액션
           _buildHobbySelectorBar(context, ref, hobbies, selectedHobbyId),
-          const SizedBox(height: 12),
+          const SizedBox(height: 9),
 
           // 2. 상단 대표 취미 요약 카드 (소프트 세이지 톤 규격 카드)
           if (selectedHobby != null)
@@ -33,7 +33,7 @@ class HobbyCategoryView extends ConsumerWidget {
           else
             _buildEmptyHobbyCard(context),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 10),
 
           // 3. 세부 D-Day 리스트 (취미 일정 스케줄러)
           if (selectedHobby != null)

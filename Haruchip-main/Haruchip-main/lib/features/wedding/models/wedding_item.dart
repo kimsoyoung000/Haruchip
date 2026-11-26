@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 
-/// 결혼 준비 6대 주요 진행 단계
+/// 결혼 준비 6대 주요 진행 단계 (기존 데이터 모델 100% 호환 유지)
 enum WeddingStage {
   hallAndPlanner('상견례 및 웨딩홀/플래너', '🏛️', 1),
   studimeAndRing('스드메 및 웨딩밴드', '💍', 2),
@@ -14,6 +14,185 @@ enum WeddingStage {
   final String labelKo;
   final String emoji;
   final int order;
+}
+
+/// 준비 영역별 5대 도메인 분류 (스마트 추천 피커용 — 메인 리스트는 D-Day 임박순 단일 리스트)
+enum WeddingDomainGroup {
+  hallAndCeremony('웨딩홀 & 본식', 1),
+  studimeAndShoot('스드메 & 촬영', 2),
+  ringAndSuit('예물 & 예복', 3),
+  honeymoonAndHome('신혼여행 & 신혼집', 4),
+  beautyAndCare('뷰티 & 케어', 5);
+
+  const WeddingDomainGroup(this.labelKo, this.order);
+
+  final String labelKo;
+  final int order;
+
+  static WeddingDomainGroup fromName(String? raw) {
+    return WeddingDomainGroup.values.firstWhere(
+      (g) => g.name == raw,
+      orElse: () => WeddingDomainGroup.hallAndCeremony,
+    );
+  }
+
+  /// 항목 제목과 기존 단계(stage)를 기반으로 가장 적합한 도메인 그룹을 자동 매핑
+  static WeddingDomainGroup infer(String title, WeddingStage stage) {
+    final t = title.toLowerCase();
+    if (t.contains('피부') ||
+        t.contains('다이어트') ||
+        t.contains('네일') ||
+        t.contains('염색') ||
+        t.contains('헤어라인') ||
+        t.contains('관리') ||
+        t.contains('케어') ||
+        t.contains('경락') ||
+        t.contains('치아') ||
+        t.contains('왁싱') ||
+        t.contains('에스테틱')) {
+      return WeddingDomainGroup.beautyAndCare;
+    }
+    if (t.contains('신혼여행') ||
+        t.contains('항공') ||
+        t.contains('숙소') ||
+        t.contains('신혼집') ||
+        t.contains('가전') ||
+        t.contains('가구') ||
+        t.contains('혼수') ||
+        t.contains('이사') ||
+        t.contains('입주') ||
+        t.contains('여권') ||
+        t.contains('환전')) {
+      return WeddingDomainGroup.honeymoonAndHome;
+    }
+    if (t.contains('반지') ||
+        t.contains('웨딩밴드') ||
+        t.contains('예물') ||
+        t.contains('예복') ||
+        t.contains('수제화') ||
+        t.contains('예단') ||
+        (t.contains('한복') && !t.contains('혼주'))) {
+      return WeddingDomainGroup.ringAndSuit;
+    }
+    if (t.contains('스드메') ||
+        t.contains('플래너') ||
+        t.contains('드레스') ||
+        t.contains('스튜디오') ||
+        t.contains('촬영') ||
+        t.contains('셀렉') ||
+        t.contains('메이크업') ||
+        t.contains('부케') ||
+        t.contains('헬퍼') ||
+        t.contains('가봉') ||
+        t.contains('모바일 청첩장 사진')) {
+      return WeddingDomainGroup.studimeAndShoot;
+    }
+    if (t.contains('웨딩홀') ||
+        t.contains('본식') ||
+        t.contains('스냅') ||
+        t.contains('dvd') ||
+        t.contains('사회자') ||
+        t.contains('축가') ||
+        t.contains('주례') ||
+        t.contains('혼주') ||
+        t.contains('상견례') ||
+        t.contains('부모님') ||
+        t.contains('식권') ||
+        t.contains('가방순이') ||
+        t.contains('청첩장') ||
+        t.contains('답례')) {
+      return WeddingDomainGroup.hallAndCeremony;
+    }
+
+    switch (stage) {
+      case WeddingStage.hallAndPlanner:
+      case WeddingStage.invitationAndGuest:
+      case WeddingStage.finalCheckAndCeremony:
+        return WeddingDomainGroup.hallAndCeremony;
+      case WeddingStage.studimeAndRing:
+      case WeddingStage.studioShoot:
+        return WeddingDomainGroup.studimeAndShoot;
+      case WeddingStage.houseAndLiving:
+        return WeddingDomainGroup.honeymoonAndHome;
+    }
+  }
+}
+
+/// 시기별 웨딩 타임라인 5대 그룹 (하위 호환 유지)
+enum WeddingTimelineGroup {
+  d1Year('D-1년 전', 300, 1),
+  d6Months('D-6개월', 180, 2),
+  d3Months('D-3개월', 90, 3),
+  d1Month('D-1개월', 30, 4),
+  weddingWeek('본식 주', 7, 5);
+
+  const WeddingTimelineGroup(this.labelKo, this.defaultOffsetDays, this.order);
+
+  final String labelKo;
+  final int defaultOffsetDays;
+  final int order;
+
+  static WeddingTimelineGroup fromOffsetDays(int offsetDays) {
+    if (offsetDays >= 210) return WeddingTimelineGroup.d1Year;
+    if (offsetDays >= 120) return WeddingTimelineGroup.d6Months;
+    if (offsetDays >= 45) return WeddingTimelineGroup.d3Months;
+    if (offsetDays >= 8) return WeddingTimelineGroup.d1Month;
+    return WeddingTimelineGroup.weddingWeek;
+  }
+}
+
+/// 일정 담당자 (공동 / 신랑 / 신부)
+enum WeddingAssignee {
+  joint('공동'),
+  groom('신랑'),
+  bride('신부');
+
+  const WeddingAssignee(this.labelKo);
+
+  final String labelKo;
+
+  static WeddingAssignee fromName(String? raw) {
+    return WeddingAssignee.values.firstWhere(
+      (a) => a.name == raw,
+      orElse: () => WeddingAssignee.joint,
+    );
+  }
+}
+
+/// 한글 초성 추출 및 키워드/초성 통합 매칭 헬퍼 (예: 'ㅅㄴ' -> '본식 스냅 계약')
+const List<String> _kHangulChosung = [
+  'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ',
+  'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ',
+];
+
+String extractKoreanChosung(String input) {
+  final buffer = StringBuffer();
+  for (final codeUnit in input.codeUnits) {
+    if (codeUnit >= 0xAC00 && codeUnit <= 0xD7A3) {
+      final chosungIndex = (codeUnit - 0xAC00) ~/ 588;
+      buffer.write(_kHangulChosung[chosungIndex]);
+    } else {
+      buffer.writeCharCode(codeUnit);
+    }
+  }
+  return buffer.toString();
+}
+
+bool matchesKoreanQuery(String source, String rawQuery) {
+  final query = rawQuery.trim().toLowerCase();
+  if (query.isEmpty) return true;
+  final normalizedSource = source.toLowerCase();
+  if (normalizedSource.contains(query)) return true;
+
+  // 공백 제거 일반 매칭
+  final compactQuery = query.replaceAll(' ', '');
+  final compactSource = normalizedSource.replaceAll(' ', '');
+  if (compactSource.contains(compactQuery)) return true;
+
+  // 초성 매칭
+  final sourceChosung = extractKoreanChosung(compactSource);
+  final queryChosung = extractKoreanChosung(compactQuery);
+  return sourceChosung.contains(queryChosung);
 }
 
 /// 단일 결혼 준비 체크리스트 항목 모델 (1:1 개별 분리)
@@ -35,6 +214,8 @@ class WeddingItem {
     this.isWeekdayPreferred = false,
     this.weekdayNotice,
     this.syncedPlanId,
+    this.assignee = WeddingAssignee.joint,
+    this.domainGroupOverride,
   });
 
   final String id;
@@ -53,6 +234,16 @@ class WeddingItem {
   final bool isWeekdayPreferred;
   final String? weekdayNotice;
   final String? syncedPlanId;
+  final WeddingAssignee assignee;
+  final WeddingDomainGroup? domainGroupOverride;
+
+  /// 준비 영역별 5대 도메인 그룹 반환
+  WeddingDomainGroup get domainGroup =>
+      domainGroupOverride ?? WeddingDomainGroup.infer(title, stage);
+
+  /// 시기별 아코디언/추천 그룹 반환 (하위 호환)
+  WeddingTimelineGroup get timelineGroup =>
+      WeddingTimelineGroup.fromOffsetDays(standardOffsetDays);
 
   WeddingItem copyWith({
     String? id,
@@ -71,6 +262,8 @@ class WeddingItem {
     bool? isWeekdayPreferred,
     String? weekdayNotice,
     String? syncedPlanId,
+    WeddingAssignee? assignee,
+    WeddingDomainGroup? domainGroupOverride,
     bool clearDate = false,
     bool clearTime = false,
   }) {
@@ -91,6 +284,8 @@ class WeddingItem {
       isWeekdayPreferred: isWeekdayPreferred ?? this.isWeekdayPreferred,
       weekdayNotice: weekdayNotice ?? this.weekdayNotice,
       syncedPlanId: syncedPlanId ?? this.syncedPlanId,
+      assignee: assignee ?? this.assignee,
+      domainGroupOverride: domainGroupOverride ?? this.domainGroupOverride,
     );
   }
 
@@ -136,6 +331,32 @@ class WeddingItem {
     }
   }
 
+  /// 슬림 1줄 타일용 짧은 D-Day 뱃지 텍스트
+  String compactDdayBadge({DateTime? relativeNow}) {
+    if (targetDate == null) return '미정';
+    final now = relativeNow ?? DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(targetDate!.year, targetDate!.month, targetDate!.day);
+    final diffDays = target.difference(today).inDays;
+    if (diffDays > 0) return 'D-$diffDays';
+    if (diffDays < 0) return 'D+${diffDays.abs()}';
+    return 'D-Day';
+  }
+
+  /// 체크리스트 타일 우측 표기 규격:
+  /// - 날짜 미지정: '미정'
+  /// - 날짜 지정: '2026.05.14(목) · D-35'
+  String formattedDateWithWeekdayAndDday({DateTime? relativeNow}) {
+    if (targetDate == null) return '미정';
+    const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+    final d = targetDate!;
+    final wd = weekdays[(d.weekday - 1).clamp(0, 6)];
+    final dateStr =
+        '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}($wd)';
+    final dday = compactDdayBadge(relativeNow: relativeNow);
+    return '$dateStr · $dday';
+  }
+
   /// 포맷된 날짜/시간 문자열 (ex. "2026.05.16 14:00" 또는 "2026.05.16")
   String get formattedDateTime {
     if (targetDate == null) return '일정 미지정';
@@ -169,6 +390,9 @@ class WeddingItem {
       'isWeekdayPreferred': isWeekdayPreferred,
       'weekdayNotice': weekdayNotice,
       'syncedPlanId': syncedPlanId,
+      'assignee': assignee.name,
+      if (domainGroupOverride != null)
+        'domainGroupOverride': domainGroupOverride!.name,
     };
   }
 
@@ -206,6 +430,10 @@ class WeddingItem {
       isWeekdayPreferred: json['isWeekdayPreferred'] as bool? ?? false,
       weekdayNotice: json['weekdayNotice'] as String?,
       syncedPlanId: json['syncedPlanId'] as String?,
+      assignee: WeddingAssignee.fromName(json['assignee'] as String?),
+      domainGroupOverride: json['domainGroupOverride'] != null
+          ? WeddingDomainGroup.fromName(json['domainGroupOverride'] as String?)
+          : null,
     );
   }
 }
@@ -258,4 +486,3 @@ int compareWeddingItemsByCloseness(WeddingItem a, WeddingItem b, [DateTime? rela
 
   return a.orderIndex.compareTo(b.orderIndex);
 }
-

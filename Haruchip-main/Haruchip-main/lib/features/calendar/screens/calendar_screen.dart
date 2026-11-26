@@ -108,28 +108,31 @@ class CalendarScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 8),
 
-                  // 중앙/좌측 서브: 미니멀 [월간 | 주간 | 목록] 세그먼트 텍스트 탭
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        height: 28,
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildViewModeTab(context, ref, '월간',
-                                CalendarViewMode.month, viewMode),
-                            _buildViewModeTab(context, ref, '주간',
-                                CalendarViewMode.week, viewMode),
-                            _buildViewModeTab(context, ref, '목록',
-                                CalendarViewMode.list, viewMode),
-                          ],
+                  // 우측 정렬 고정: [월간 | 주간 | 목록] 세그먼트 + [검색 🔍] + [카테고리 필터 📅]
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          height: 28,
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildViewModeTab(context, ref, '월간',
+                                  CalendarViewMode.month, viewMode),
+                              _buildViewModeTab(context, ref, '주간',
+                                  CalendarViewMode.week, viewMode),
+                              _buildViewModeTab(context, ref, '목록',
+                                  CalendarViewMode.list, viewMode),
+                            ],
+                          ),
                         ),
                       ),
                     ),

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
+import '../../../design_system/layout_tokens.dart';
 import '../../../design_system/typography.dart';
 import '../../friends/widgets/partner_soft_dropdown_button.dart';
 import '../../military/widgets/military_category_view.dart';
@@ -63,8 +64,6 @@ import '../../group/widgets/group_category_view.dart';
 import '../../travel/widgets/add_trip_modal.dart';
 import '../../travel/widgets/travel_category_view.dart';
 import '../../wedding/widgets/wedding_category_view.dart';
-import '../../wedding/widgets/wedding_couple_share_modal.dart';
-import '../../wedding/widgets/wedding_smart_scheduler_modal.dart';
 
 /// 전체 카테고리 범용 상세 화면 (듀얼 리스트 & 카테고리 온보딩 & 꾸미기 에디터 연동)
 class CategoryDetailScreen extends ConsumerStatefulWidget {
@@ -1541,223 +1540,99 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
           },
         ),
         actions: [
-          if (_isProfessionalCategory) ...[
+          // 카테고리별 보조 유틸리티 아이콘 (최소화·동일 다크 브라운 톤 통일)
+          if (_isProfessionalCategory)
             IconButton(
               onPressed: _openProfessionalArchiveModal,
-              icon: const Icon(Icons.inventory_2_outlined, size: 20, color: Color(0xFF64748B)),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.inventory_2_outlined,
+                size: 20,
+                color: AppColors.protoHeading,
+              ),
               tooltip: '기록 (보관함)',
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TextButton.icon(
-                onPressed: () {
-                  if (_category.categoryKey == 'goal') {
-                    _openAddGoalModal();
-                  } else if (_category.categoryKey == 'plan') {
-                    _openAddAppointmentModal();
-                  } else if (_category.categoryKey == 'routine') {
-                    _openAddRoutineModal();
-                  }
-                },
-                icon: const Icon(Icons.add, size: 17, color: Color(0xFF0F172A)),
-                label: const Text(
-                  '항목 추가',
-                  style: TextStyle(
-                    color: Color(0xFF0F172A),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ),
-          ] else if (_category.categoryKey == 'birthday')
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TextButton.icon(
-                onPressed: _openAddBirthdayFriend,
-                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Color(0xFFDB2777)),
-                label: const Text(
-                  '+ 친구 추가',
-                  style: TextStyle(
-                    color: Color(0xFFDB2777),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
             )
           else if (_category.categoryKey == 'exam')
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextButton.icon(
-                  onPressed: _openExamOfficialDbModal,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  icon: const Text('📚', style: TextStyle(fontSize: 14)),
-                  label: const Text(
-                    '공식 DB',
-                    style: TextStyle(
-                      color: Color(0xFF2563EB),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => _openAddExamModal(),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF0F172A)),
-                  label: const Text(
-                    '시험 추가',
-                    style: TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else if (_category.categoryKey == 'wedding')
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (ctx) => const WeddingSmartSchedulerModal(),
-                  ),
-                  icon: const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFE53E3E)),
-                  label: const Text(
-                    '스케줄러',
-                    style: TextStyle(
-                      color: Color(0xFFE53E3E),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => WeddingCoupleShareModal.show(context),
-                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 20, color: Color(0xFFE53E3E)),
-                  tooltip: '신랑/신부 공동 관리 초대',
-                ),
-                const SizedBox(width: 4),
-              ],
-            )
-          else if (_category.categoryKey == 'travel')
-            TextButton.icon(
-              onPressed: () => AddTripModal.show(context),
-              icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF0284C7)),
-              label: const Text(
-                '새 여행',
-                style: TextStyle(
-                  color: Color(0xFF0284C7),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
+            IconButton(
+              onPressed: _openExamOfficialDbModal,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.menu_book_rounded,
+                size: 20,
+                color: AppColors.protoHeading,
               ),
-            )
-          else if (_category.categoryKey == 'hobby')
-            TextButton.icon(
-              onPressed: () => AddHobbyModal.show(context),
-              icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF354235)),
-              label: const Text(
-                '새 취미',
-                style: TextStyle(
-                  color: Color(0xFF354235),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            )
-          else if (_category.categoryKey == 'group')
-            TextButton.icon(
-              onPressed: () => AddGroupModal.show(context),
-              icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFFE26D5C)),
-              label: const Text(
-                '새 모임',
-                style: TextStyle(
-                  color: Color(0xFFE26D5C),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            )
-          else ...[
-            // 좁은 폰(<400)에서는 앱바 버튼이 넘치므로 섹션 관리는 아이콘만 보여준다.
-            if (_category.categoryKey == 'baby' && MediaQuery.sizeOf(context).width < 400)
-              IconButton(
-                onPressed: _openBabySectionManagementModal,
-                tooltip: '섹션 관리',
-                icon: const Icon(Icons.tune_rounded, size: 20, color: Color(0xFF2563EB)),
-              )
-            else if (_category.categoryKey == 'baby')
-              TextButton.icon(
-                onPressed: _openBabySectionManagementModal,
-                icon: const Icon(Icons.tune_rounded, size: 16, color: Color(0xFF2563EB)),
-                label: const Text(
-                  '섹션 관리',
-                  style: TextStyle(
-                    color: Color(0xFF2563EB),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            TextButton.icon(
-              onPressed: () => showAddEventBottomSheet(
-                context,
-                categoryKey: _category.categoryKey,
-              ),
-              icon: const Icon(Icons.add, size: 17, color: Color(0xFF007AFF)),
-              label: const Text(
-                '항목 추가',
-                style: TextStyle(
-                  color: Color(0xFF007AFF),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
+              tooltip: '공식 시험 DB',
             ),
-          ],
-          // 커플·군대·결혼 카테고리 우측 상단 소프트 드롭다운 파트너 공유 버튼
+
+          // 1) [+] 공통 항목/일정 추가 아이콘 (결혼 준비는 섹션별 [+]로 일원화하여 상단 중복 제거)
+          if (_category.categoryKey != 'wedding')
+            IconButton(
+              key: const Key('category_add_item_button'),
+              onPressed: () {
+                switch (_category.categoryKey) {
+                  case 'goal':
+                    _openAddGoalModal();
+                    break;
+                  case 'plan':
+                    _openAddAppointmentModal();
+                    break;
+                  case 'routine':
+                    _openAddRoutineModal();
+                    break;
+                  case 'birthday':
+                    _openAddBirthdayFriend();
+                    break;
+                  case 'exam':
+                    _openAddExamModal();
+                    break;
+                  case 'travel':
+                    AddTripModal.show(context);
+                    break;
+                  case 'hobby':
+                    AddHobbyModal.show(context);
+                    break;
+                  case 'group':
+                    AddGroupModal.show(context);
+                    break;
+                  case 'military':
+                    showMilitaryAddActionSheet(context, ref);
+                    break;
+                  default:
+                    showAddEventBottomSheet(
+                      context,
+                      categoryKey: _category.categoryKey,
+                    );
+                }
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.add_rounded,
+                size: 22,
+                color: AppColors.protoHeading,
+              ),
+              tooltip: '일정 추가',
+            ),
+
+          // 2) [👥] 커플·군대·결혼 카테고리 우측 상단 소프트 드롭다운 파트너 공유 아이콘
           if (_category.categoryKey == 'military' ||
               _category.categoryKey == 'wedding')
             PartnerSoftDropdownButton(
               categoryKey: _category.categoryKey,
               categoryName: _category.name,
             ),
-          // 군대(곰신) 카테고리 우측 상단 [초대/공유] 버튼
-          if (_category.categoryKey == 'military')
-            IconButton(
-              key: const Key('military_share_button'),
-              onPressed: () => showMilitaryGomshinShareModal(context, ref),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(
-                Icons.person_add_alt_1_outlined,
-                size: 20,
-                color: AppColors.protoHeading,
-              ),
-              tooltip: '초대/공유',
-            ),
-          // 전 카테고리 공통 꾸미기(단일 스킨 엔진) 진입 버튼
+
+          // 3) [🎨] 전 카테고리 공통 꾸미기(단일 스킨 엔진) 아이콘
           IconButton(
             key: const Key('category_decorate_button'),
             onPressed: _openEditModal,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
             visualDensity: VisualDensity.compact,
             icon: const Icon(
               Icons.palette_outlined,
@@ -1766,14 +1641,41 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
             ),
             tooltip: '꾸미기',
           ),
-          const SizedBox(width: 2),
+
+          // 4) [⚙️] 섹션 순서 및 숨김 관리 아이콘 (아기 · 군대 · 결혼 준비)
+          if (_category.categoryKey == 'baby' ||
+              _category.categoryKey == 'military' ||
+              _category.categoryKey == 'wedding')
+            IconButton(
+              key: const Key('category_section_manage_button'),
+              onPressed: () {
+                if (_category.categoryKey == 'baby') {
+                  _openBabySectionManagementModal();
+                } else if (_category.categoryKey == 'military') {
+                  showMilitarySectionManagementModal(context, ref);
+                } else {
+                  showWeddingSectionManagementModal(context, ref);
+                }
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.tune_rounded,
+                size: 20,
+                color: AppColors.protoHeading,
+              ),
+              tooltip: '섹션 관리',
+            ),
+
+          const SizedBox(width: 4),
         ],
       ),
       body: Stack(
         children: [
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+              padding: AppLayoutTokens.detailScreenPadding,
               child: _category.categoryKey == 'goal'
                   ? GoalCategoryView(
                       goals: _getGoals(),
@@ -3278,18 +3180,15 @@ boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8
     });
 
     return Container(
-      margin: const EdgeInsets.only(top: 24, bottom: 20),
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(
+        top: AppLayoutTokens.cardVerticalGap,
+        bottom: AppLayoutTokens.cardVerticalGap,
+      ),
+      padding: AppLayoutTokens.cardInternalPadding,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppLayoutTokens.luxuryCardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

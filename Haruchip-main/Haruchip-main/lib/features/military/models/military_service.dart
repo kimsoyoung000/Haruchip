@@ -109,7 +109,15 @@ class MilitaryLeaveRecord {
   }
 }
 
-/// 군대(곰신) 카테고리 도메인 모델 — 핸드오프 문서 §5.3 + 출타/곰신 공유 확장
+/// 군대 카테고리 기본 섹션 순서 (복무 지표 · 진급 타임라인 · 출타 관리 · D-Day 리스트)
+const List<String> kDefaultMilitarySectionOrder = [
+  'metrics',
+  'timeline',
+  'leaves',
+  'ddayList',
+];
+
+/// 군대(곰신) 카테고리 도메인 모델 — 핸드오프 문서 §5.3 + 출타/곰신 공유/커스텀 진급일/섹션 편집 확장
 @immutable
 class MilitaryService {
   const MilitaryService({
@@ -125,6 +133,10 @@ class MilitaryService {
     this.leaves = const [],
     this.shareCode,
     this.connectedPartnerCode,
+    this.customNextHobongDate,
+    this.customNextRankDate,
+    this.sectionOrder = kDefaultMilitarySectionOrder,
+    this.hiddenSections = const {},
   });
 
   final DateTime enlistDate;
@@ -155,6 +167,18 @@ class MilitaryService {
 
   /// 연결된 상대방 공유 방 코드
   final String? connectedPartnerCode;
+
+  /// 사용자가 직접 수정한 다음 호봉 승급일 (null이면 자동 매월 1일 계산)
+  final DateTime? customNextHobongDate;
+
+  /// 사용자가 직접 수정한 다음 계급 진급일 (null이면 입대일 기준 규정 자동 계산)
+  final DateTime? customNextRankDate;
+
+  /// 군대 상세 화면 섹션 노출 순서 ('metrics', 'timeline', 'leaves', 'ddayList')
+  final List<String> sectionOrder;
+
+  /// 군대 상세 화면에서 숨김 처리된 섹션 키 집합
+  final Set<String> hiddenSections;
 
   /// 단축일수가 반영된 실 전역일
   DateTime get effectiveDischargeDate =>
@@ -203,6 +227,12 @@ class MilitaryService {
     String? shareCode,
     String? connectedPartnerCode,
     bool clearConnectedPartnerCode = false,
+    DateTime? customNextHobongDate,
+    bool clearCustomNextHobongDate = false,
+    DateTime? customNextRankDate,
+    bool clearCustomNextRankDate = false,
+    List<String>? sectionOrder,
+    Set<String>? hiddenSections,
   }) {
     return MilitaryService(
       enlistDate: enlistDate ?? this.enlistDate,
@@ -221,6 +251,14 @@ class MilitaryService {
       connectedPartnerCode: clearConnectedPartnerCode
           ? null
           : (connectedPartnerCode ?? this.connectedPartnerCode),
+      customNextHobongDate: clearCustomNextHobongDate
+          ? null
+          : (customNextHobongDate ?? this.customNextHobongDate),
+      customNextRankDate: clearCustomNextRankDate
+          ? null
+          : (customNextRankDate ?? this.customNextRankDate),
+      sectionOrder: sectionOrder ?? this.sectionOrder,
+      hiddenSections: hiddenSections ?? this.hiddenSections,
     );
   }
 
@@ -239,9 +277,29 @@ class MilitaryService {
         if (shareCode != null) 'shareCode': shareCode,
         if (connectedPartnerCode != null)
           'connectedPartnerCode': connectedPartnerCode,
+        if (customNextHobongDate != null)
+          'customNextHobongDate': customNextHobongDate!.toIso8601String(),
+        if (customNextRankDate != null)
+          'customNextRankDate': customNextRankDate!.toIso8601String(),
+        'sectionOrder': sectionOrder,
+        'hiddenSections': hiddenSections.toList(),
       };
 
   factory MilitaryService.fromJson(Map<String, dynamic> json) {
+    final rawOrder = (json['sectionOrder'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .where((k) => kDefaultMilitarySectionOrder.contains(k))
+        .toList();
+    final mergedOrder = <String>[
+      ...?rawOrder,
+      for (final k in kDefaultMilitarySectionOrder)
+        if (rawOrder == null || !rawOrder.contains(k)) k,
+    ];
+    final rawHidden = (json['hiddenSections'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toSet() ??
+        const <String>{};
+
     return MilitaryService(
       enlistDate: DateTime.parse(json['enlistDate'] as String),
       dischargeDate: DateTime.parse(json['dischargeDate'] as String),
@@ -261,6 +319,14 @@ class MilitaryService {
           const [],
       shareCode: json['shareCode'] as String?,
       connectedPartnerCode: json['connectedPartnerCode'] as String?,
+      customNextHobongDate: json['customNextHobongDate'] != null
+          ? DateTime.parse(json['customNextHobongDate'] as String)
+          : null,
+      customNextRankDate: json['customNextRankDate'] != null
+          ? DateTime.parse(json['customNextRankDate'] as String)
+          : null,
+      sectionOrder: mergedOrder,
+      hiddenSections: rawHidden,
     );
   }
 }

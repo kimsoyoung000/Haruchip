@@ -6,7 +6,12 @@ import '../data/wedding_standard_items.dart';
 import '../models/wedding_item.dart';
 import '../providers/wedding_provider.dart';
 
-/// 57개 마스터 템플릿 (+/-) 선택 및 나만의 새 항목 카테고리 태깅 직접 추가 바텀시트 모달
+/// 57종 이상 웨딩 마스터 추천 라이브러리 스마트 피커 모달
+///
+/// 1) 최상단: [직접 입력창] + [추가] 버튼 (추가 시 미완료·날짜 미정 상태로 안전 등록)
+/// 2) 상단 슬림 검색바: 키워드 및 초성(예: 'ㅅㄴ', '한복') 즉시 필터링
+/// 3) 5대 준비 영역 도메인 탭([1. 웨딩홀 & 본식] ~ [5. 뷰티 & 케어]) + 라운드 칩 그리드
+/// 4) 하단 하루칩 버터 옐로우 [선택한 N개 추가하기] CTA
 class WeddingTemplateManagerModal extends ConsumerStatefulWidget {
   const WeddingTemplateManagerModal({super.key});
 
@@ -26,13 +31,20 @@ class WeddingTemplateManagerModal extends ConsumerStatefulWidget {
 
 class _WeddingTemplateManagerModalState
     extends ConsumerState<WeddingTemplateManagerModal> {
+  static const Color _butterYellow = AppColors.chipYellowBg; // #FFE699
+  static const Color _chipGold = Color(0xFFF2B84B);
+  static const Color _deepBrown = AppColors.chipYellowText; // #3A2E1A
+  static const Color _softGray = Color(0xFFF8F9FA);
+
   late final List<WeddingItem> _allTemplates;
   late final Set<String> _selectedIds;
   final List<WeddingItem> _newCustomItems = [];
 
   final TextEditingController _customTitleController = TextEditingController();
-  WeddingStage? _selectedStageFilter;
-  WeddingStage _customStage = WeddingStage.hallAndPlanner;
+  final TextEditingController _searchController = TextEditingController();
+
+  WeddingDomainGroup _selectedGroup = WeddingDomainGroup.hallAndCeremony;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -45,7 +57,23 @@ class _WeddingTemplateManagerModalState
   @override
   void dispose() {
     _customTitleController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  WeddingStage _stageForDomain(WeddingDomainGroup group) {
+    switch (group) {
+      case WeddingDomainGroup.hallAndCeremony:
+        return WeddingStage.hallAndPlanner;
+      case WeddingDomainGroup.studimeAndShoot:
+        return WeddingStage.studioShoot;
+      case WeddingDomainGroup.ringAndSuit:
+        return WeddingStage.studimeAndRing;
+      case WeddingDomainGroup.honeymoonAndHome:
+        return WeddingStage.houseAndLiving;
+      case WeddingDomainGroup.beautyAndCare:
+        return WeddingStage.finalCheckAndCeremony;
+    }
   }
 
   void _toggleTemplate(String id) {
@@ -62,7 +90,10 @@ class _WeddingTemplateManagerModalState
     final title = _customTitleController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('내용을 입력해주세요.'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text('추가할 일정명을 입력해주세요.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -73,21 +104,16 @@ class _WeddingTemplateManagerModalState
       orderIndex: currentCount + 1,
       title: title,
       standardOffsetDays: 30,
-      stage: _customStage,
+      stage: _stageForDomain(_selectedGroup),
+      domainGroupOverride: _selectedGroup,
+      isCompleted: false,
+      targetDate: null,
     );
 
     setState(() {
       _newCustomItems.add(customItem);
       _customTitleController.clear();
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('✨ [${_customStage.labelKo}] 카테고리에 "$title" 항목이 담겼습니다.'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 1),
-      ),
-    );
   }
 
   void _applySelection() {
@@ -101,7 +127,7 @@ class _WeddingTemplateManagerModalState
     final total = _selectedIds.length + _newCustomItems.length;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('총 $total개의 결혼 준비 일정이 메인 리스트에 반영되었습니다.'),
+        content: Text('선택한 $total개의 결혼 준비 일정이 반영되었습니다.'),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
       ),
@@ -110,38 +136,45 @@ class _WeddingTemplateManagerModalState
 
   @override
   Widget build(BuildContext context) {
-    final filteredTemplates = _selectedStageFilter == null
-        ? _allTemplates
-        : _allTemplates.where((i) => i.stage == _selectedStageFilter).toList();
+    final hasSearch = _searchQuery.trim().isNotEmpty;
 
-    final filteredCustomItems = _selectedStageFilter == null
-        ? _newCustomItems
-        : _newCustomItems.where((i) => i.stage == _selectedStageFilter).toList();
+    final visibleTemplates = _allTemplates.where((item) {
+      if (hasSearch) {
+        return matchesKoreanQuery(item.title, _searchQuery);
+      }
+      return item.domainGroup == _selectedGroup;
+    }).toList();
+
+    final visibleCustoms = _newCustomItems.where((item) {
+      if (hasSearch) {
+        return matchesKoreanQuery(item.title, _searchQuery);
+      }
+      return item.domainGroup == _selectedGroup;
+    }).toList();
 
     final totalSelected = _selectedIds.length + _newCustomItems.length;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.90,
+      height: MediaQuery.of(context).size.height * 0.86,
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Column(
         children: [
-          // 상단 고정 헤더
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 20, 12),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 드래그 바
                 Center(
                   child: Container(
-                    width: 36,
+                    width: 34,
                     height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(bottom: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
+                      color: const Color(0xFFE5E7EB),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -153,304 +186,263 @@ class _WeddingTemplateManagerModalState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '결혼 준비 항목',
+                          '결혼 준비 항목 라이브러리',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.protoHeading,
+                            color: _deepBrown,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        SizedBox(height: 1),
                         Text(
-                          '원하는 일정을 담거나 직접 추가해보세요',
-                          style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                          '영역별 추천 항목을 담고 날짜를 자유롭게 지정하세요',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: Color(0xFF8C7E6A),
+                          ),
                         ),
                       ],
                     ),
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // 나만의 새 항목 직접 추가 인풋 필드
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _customTitleController,
-                        decoration: InputDecoration(
-                          hintText: '새 항목 직접 입력 (예: 청모 식당 예약)',
-                          hintStyle: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)),
-                          filled: true,
-                          fillColor: const Color(0xFFF8FAFC),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE53E3E), width: 1.5),
-                          ),
-                        ),
-                        onSubmitted: (_) => _addCustomItem(),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _addCustomItem,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F172A),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('직접 추가', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // 직접 추가할 때 소속 카테고리 태깅 칩 선택
-                Row(
-                  children: [
-                    const Text(
-                      '소속 카테고리: ',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                    ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        child: Row(
-                          children: [
-                            for (final stage in WeddingStage.values)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 5),
-                                child: ChoiceChip(
-                                  label: Text('${stage.emoji} ${stage.labelKo}'),
-                                  selected: _customStage == stage,
-                                  selectedColor: const Color(0xFFE53E3E),
-                                  labelStyle: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: _customStage == stage ? Colors.white : const Color(0xFF475569),
-                                  ),
-                                  showCheckmark: false,
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-                                  onSelected: (val) {
-                                    if (val) setState(() => _customStage = stage);
-                                  },
-                                ),
-                              ),
-                          ],
-                        ),
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 32, minHeight: 32),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: Color(0xFF9CA3AF),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
 
-                // 상단 필터 칩
+                // (1) 최상단: 직접 입력창 + [추가] 버튼
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const Key('wedding_picker_custom_input'),
+                        controller: _customTitleController,
+                        style: const TextStyle(fontSize: 13, color: _deepBrown),
+                        decoration: InputDecoration(
+                          hintText: '나만의 일정 직접 입력 (예: 아이폰 스냅 예약)',
+                          hintStyle: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                          filled: true,
+                          fillColor: _softGray,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(11),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onSubmitted: (_) => _addCustomItem(),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    ElevatedButton(
+                      key: const Key('wedding_picker_custom_add_btn'),
+                      onPressed: _addCustomItem,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _butterYellow,
+                        foregroundColor: _deepBrown,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                      ),
+                      child: const Text(
+                        '추가',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+
+                // (2) 상단 슬림 검색바 (키워드/초성 지원)
+                TextField(
+                  key: const Key('wedding_picker_search_input'),
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 13, color: _deepBrown),
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  decoration: InputDecoration(
+                    hintText: '57종 추천 항목 검색 (예: 스냅, ㅅㄴ, 한복)',
+                    hintStyle: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      size: 17,
+                      color: Color(0xFF8C7E6A),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 34),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                            icon: const Icon(
+                              Icons.cancel_rounded,
+                              size: 16,
+                              color: Color(0xFF9CA3AF),
+                            ),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: _softGray,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(11),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 9),
+
+                // (3) 5대 준비 영역 도메인 탭
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
                   child: Row(
                     children: [
-                      _buildFilterChip(null, '전체 (57)'),
-                      for (final stage in WeddingStage.values)
-                        _buildFilterChip(stage, '${stage.emoji} ${stage.labelKo}'),
+                      for (final group in WeddingDomainGroup.values)
+                        _buildDomainTabChip(group),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
-          // 템플릿 스크롤 리스트
+          const Divider(height: 1, color: Color(0xFFF1F1EE)),
+
+          // 라운드 칩 그리드 영역
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-              itemCount: filteredTemplates.length + filteredCustomItems.length,
-              itemBuilder: (context, index) {
-                // 직접 추가된 항목 먼저 표시
-                if (index < filteredCustomItems.length) {
-                  final custom = filteredCustomItems[index];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF1F2),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFFECDD3)),
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle, color: Color(0xFFE11D48)),
-                          onPressed: () {
-                            setState(() => _newCustomItems.remove(custom));
-                          },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                custom.title,
-                                style: const TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF881337),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '✨ 직접 추가 · ${custom.stage.emoji} ${custom.stage.labelKo}',
-                                style: const TextStyle(fontSize: 11.5, color: Color(0xFFE53E3E)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                final template = filteredTemplates[index - filteredCustomItems.length];
-                final isSelected = _selectedIds.contains(template.id);
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFFFF5F5) : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isSelected ? const Color(0xFFFED7D7) : const Color(0xFFE2E8F0),
-                      width: isSelected ? 1.5 : 1.0,
-                    ),
-                  ),
-                  child: Row(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // [+] / [-] 토글 버튼
-                      InkWell(
-                        onTap: () => _toggleTemplate(template.id),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFE53E3E) : Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isSelected ? const Color(0xFFE53E3E) : const Color(0xFFCBD5E1),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Icon(
-                            isSelected ? Icons.remove_rounded : Icons.add_rounded,
-                            size: 20,
-                            color: isSelected ? Colors.white : const Color(0xFF64748B),
-                          ),
+                      Text(
+                        hasSearch
+                            ? '검색 결과 (${visibleTemplates.length + visibleCustoms.length})'
+                            : '${_selectedGroup.labelKo} (${visibleTemplates.length})',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF8C7E6A),
                         ),
                       ),
-                      const SizedBox(width: 12),
-
-                      // 항목 정보 (T-360일 추천 등 기술 문구 제거)
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              template.title,
-                              style: TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700,
-                                color: isSelected ? const Color(0xFF1E293B) : const Color(0xFF475569),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '${template.stage.emoji} ${template.stage.labelKo}',
-                              style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // 상태 태그
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFFFF1F2) : Colors.white,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isSelected ? const Color(0xFFFECDD3) : const Color(0xFFE2E8F0),
-                          ),
-                        ),
-                        child: Text(
-                          isSelected ? '선택됨' : '미선택',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: isSelected ? const Color(0xFFE11D48) : const Color(0xFF94A3B8),
-                          ),
+                      const Text(
+                        '칩 터치 시 담기 / 해제',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9CA3AF),
                         ),
                       ),
                     ],
                   ),
-                );
-              },
+                  const SizedBox(height: 10),
+                  if (visibleTemplates.isEmpty && visibleCustoms.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 28),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _softGray,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Text(
+                        '일치하는 추천 항목이 없어요.\n상단 입력창에서 직접 추가해 보세요.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF9CA3AF),
+                          height: 1.4,
+                        ),
+                      ),
+                    )
+                  else
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: [
+                        for (final custom in visibleCustoms)
+                          _buildCustomChip(custom),
+                        for (final template in visibleTemplates)
+                          _buildRecommendationChip(template),
+                      ],
+                    ),
+                ],
+              ),
             ),
           ),
 
-          // 하단 고정 액션 버튼
+          // 하단 고정 CTA 버튼
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
-                  offset: const Offset(0, -4),
+                  offset: const Offset(0, -3),
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _applySelection,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE53E3E),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  key: const Key('wedding_picker_apply_btn'),
+                  onPressed: _applySelection,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _butterYellow,
+                    foregroundColor: _deepBrown,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Text(
-                      '선택한 $totalSelected개 일정 추가/반영하기',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  child: Text(
+                    '선택한 $totalSelected개 추가하기',
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -458,35 +450,135 @@ class _WeddingTemplateManagerModalState
     );
   }
 
-  Widget _buildFilterChip(WeddingStage? stage, String label) {
-    final isSelected = _selectedStageFilter == stage;
+  Widget _buildDomainTabChip(WeddingDomainGroup group) {
+    final isSelected = _selectedGroup == group && _searchQuery.trim().isEmpty;
+    final selectedInGroup = _allTemplates
+        .where((i) => i.domainGroup == group && _selectedIds.contains(i.id))
+        .length;
+
     return Padding(
       padding: const EdgeInsets.only(right: 6),
-      child: FilterChip(
-        label: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: isSelected ? Colors.white : const Color(0xFF475569),
-          ),
-        ),
-        selected: isSelected,
-        selectedColor: const Color(0xFFE53E3E),
-        backgroundColor: const Color(0xFFF1F5F9),
-        showCheckmark: false,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(
-            color: isSelected ? const Color(0xFFE53E3E) : Colors.transparent,
-          ),
-        ),
-        onSelected: (val) {
+      child: InkWell(
+        key: Key('wedding_domain_tab_${group.name}'),
+        onTap: () {
           setState(() {
-            _selectedStageFilter = val ? stage : null;
+            _selectedGroup = group;
+            if (_searchQuery.isNotEmpty) {
+              _searchController.clear();
+              _searchQuery = '';
+            }
           });
         },
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? _butterYellow : _softGray,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                group.labelKo,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? _deepBrown : const Color(0xFF6B7280),
+                ),
+              ),
+              if (selectedInGroup > 0) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? _deepBrown.withValues(alpha: 0.12)
+                        : _chipGold.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$selectedInGroup',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: _deepBrown,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecommendationChip(WeddingItem template) {
+    final isSelected = _selectedIds.contains(template.id);
+    return InkWell(
+      key: Key('wedding_recommend_chip_${template.id}'),
+      onTap: () => _toggleTemplate(template.id),
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? _butterYellow : _softGray,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? Icons.check_rounded : Icons.add_rounded,
+              size: 14,
+              color: isSelected ? _deepBrown : const Color(0xFF8C7E6A),
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                template.title,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? _deepBrown : const Color(0xFF4B5563),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomChip(WeddingItem custom) {
+    return InkWell(
+      onTap: () => setState(() => _newCustomItems.remove(custom)),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF4CC),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add_task_rounded, size: 13, color: _chipGold),
+            const SizedBox(width: 4),
+            Text(
+              custom.title,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                color: _deepBrown,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.close_rounded, size: 13, color: Color(0xFF8C7E6A)),
+          ],
+        ),
       ),
     );
   }

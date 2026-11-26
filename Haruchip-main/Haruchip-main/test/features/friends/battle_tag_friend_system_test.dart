@@ -178,12 +178,7 @@ void main() {
       },
     );
 
-    testWidgets('4. ProfileSettingsScreen에 [친구 관리] 섹션이 [계정 및 보안] 상단에 노출된다', (tester) async {
-      tester.view.physicalSize = const Size(412, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
+    testWidgets('4. ProfileSettingsScreen 최상단 프로필 카드 바로 밑에 [내 친구 N명] 타일이 노출되고 터치 시 친구 관리 모달이 열린다', (tester) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(home: ProfileSettingsScreen()),
@@ -191,14 +186,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final friendHeader = find.text('친구 관리');
-      final accountHeader = find.text('계정 및 보안');
-      expect(friendHeader, findsOneWidget);
-      expect(accountHeader, findsOneWidget);
+      final friendTile = find.byKey(const Key('settings_friends_summary_tile'));
+      expect(friendTile, findsOneWidget);
+      expect(find.text('내 친구 0명'), findsOneWidget);
 
-      final friendY = tester.getTopLeft(friendHeader).dy;
-      final accountY = tester.getTopLeft(accountHeader).dy;
-      expect(friendY, lessThan(accountY));
+      await tester.tap(friendTile);
+      await tester.pumpAndSettle();
+      expect(find.text('친구 관리'), findsOneWidget);
+      expect(find.byKey(const Key('friend_search_input')), findsOneWidget);
     });
   });
 }

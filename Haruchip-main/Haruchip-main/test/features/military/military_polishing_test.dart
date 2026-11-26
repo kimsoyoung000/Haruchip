@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:haruchip/features/categories/models/category.dart';
 import 'package:haruchip/features/categories/screens/category_detail_screen.dart';
+import 'package:haruchip/features/home/widgets/category_summary_dashboard_card.dart';
 import 'package:haruchip/features/military/models/military_rank.dart';
 import 'package:haruchip/features/military/models/military_service.dart';
 import 'package:haruchip/features/military/providers/military_provider.dart';
+import 'package:haruchip/features/plan/models/plan_item.dart';
 import 'package:haruchip/features/plan/providers/plan_provider.dart';
 
 void main() {
@@ -170,17 +172,190 @@ void main() {
         Navigator.of(tester.element(find.text('복무 정보 설정'))).pop();
         await tester.pump(const Duration(milliseconds: 300));
 
-        // 5) 앱바 [초대/공유] 버튼 탭 -> 곰신 실시간 공유 모달 & 난수 코드 확인
-        await tester.tap(find.byKey(const Key('military_share_button')));
+        // 5) 앱바 [파트너 공유] 소프트 드롭다운 버튼 확인 (텍스트 초대 코드 영구 제거)
+        await tester.tap(
+          find.byKey(const Key('partner_share_dropdown_button_military')),
+        );
         await tester.pump(const Duration(milliseconds: 300));
-        expect(find.text('곰신 · 군인 실시간 공유'), findsOneWidget);
-        final codeText = tester.widget<Text>(
-          find.byKey(const Key('military_my_invite_code')),
+        expect(find.text('아직 함께하는 파트너가 없어요'), findsOneWidget);
+        expect(find.text('내 친구에서 초대하기'), findsOneWidget);
+      },
+    );
+
+    test('4. 호봉/계급 진급일 커스텀 수정 시 D-Day·진행률 동적 재계산 및 JSON 직렬화 검증', () {
+      final enlist = DateTime(2025, 12, 13);
+      final discharge = defaultDischargeDate(enlist, MilitaryBranch.army);
+      final now = DateTime(2026, 5, 14, 12, 0, 0);
+
+      final customHobong = DateTime(2026, 5, 24);
+      final hobong = calculateHobongInfo(
+        enlist,
+        now: now,
+        customNextHobongDate: customHobong,
+      );
+      expect(hobong.nextHobongDate, customHobong);
+      expect(hobong.dDay, 10);
+      expect(hobong.progress, greaterThan(0.6));
+      expect(hobong.progress, lessThan(0.75));
+
+      final customRank = DateTime(2026, 7, 1);
+      final rankProg = calculateRankPromotionProgress(
+        enlist,
+        discharge,
+        now: now,
+        customNextRankDate: customRank,
+      );
+      expect(rankProg.targetDate, customRank);
+      expect(rankProg.dDay, 48);
+      expect(rankProg.progress, greaterThan(0.5));
+
+      final service = MilitaryService(
+        enlistDate: enlist,
+        dischargeDate: discharge,
+        customNextHobongDate: customHobong,
+        customNextRankDate: customRank,
+        sectionOrder: const ['timeline', 'metrics', 'ddayList', 'leaves'],
+        hiddenSections: const {'leaves'},
+      );
+      final restored = MilitaryService.fromJson(service.toJson());
+      expect(restored.customNextHobongDate, customHobong);
+      expect(restored.customNextRankDate, customRank);
+      expect(
+        restored.sectionOrder,
+        const ['timeline', 'metrics', 'ddayList', 'leaves'],
+      );
+      expect(restored.hiddenSections, const {'leaves'});
+    });
+
+    testWidgets(
+      '5. 앱바 아이콘 통일, 무스크롤 상단 피팅, [+] 출타/D-Day 선택 시트, 섹션 숨김 관리 검증',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final now = DateTime.now();
+        final category = CategoryModel(
+          id: 'cat_mil_compact',
+          categoryKey: 'military',
+          name: '군대 (곰신)',
+          icon: 'simple_medal',
+          createdAt: now,
+          metadata: const {'isInitialized': true},
         );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              home: CategoryDetailScreen(category: category),
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 250));
+
+        // 1) 파란 '+ 항목 추가' 텍스트 버튼 제거 & 4대 공통 아이콘 노출
+        expect(find.text('항목 추가'), findsNothing);
+        expect(find.byKey(const Key('category_add_item_button')), findsOneWidget);
         expect(
-          RegExp(r'^MIL-[A-Z0-9]{4}-[A-Z0-9]{4}$').hasMatch(codeText.data ?? ''),
-          isTrue,
+          find.byKey(const Key('partner_share_dropdown_button_military')),
+          findsOneWidget,
         );
+        expect(find.byKey(const Key('category_decorate_button')), findsOneWidget);
+        expect(
+          find.byKey(const Key('category_section_manage_button')),
+          findsOneWidget,
+        );
+
+        // 2) 무스크롤 상단 피팅: 히어로 + 6대 지표 + 진급 타임라인이 첫 화면(844px) 안에 모두 수용
+        final timelineRect = tester.getRect(
+          find.byKey(const Key('military_timeline_section')),
+        );
+        expect(timelineRect.bottom, lessThan(650));
+
+        // 3) [+] 아이콘 탭 -> [출타 등록] vs [일반 D-Day 등록] 선택 시트 오픈
+        await tester.tap(find.byKey(const Key('category_add_item_button')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byKey(const Key('military_choice_add_leave')), findsOneWidget);
+        expect(find.byKey(const Key('military_choice_add_dday')), findsOneWidget);
+        Navigator.of(tester.element(find.text('군대 일정 추가'))).pop();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        // 4) [⚙️] 섹션 관리 아이콘 탭 -> D-Day 리스트 숨김 적용
+        expect(
+          find.byKey(const Key('military_dday_list_section')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const Key('category_section_manage_button')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text('군대 섹션 순서 및 숨김 관리'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('military_section_toggle_ddayList')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.tap(find.byKey(const Key('military_section_save_button')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          find.byKey(const Key('military_dday_list_section')),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      '6. 메인 대시보드 군대 카드: 복수(최대 2개) D-Day 화이트 바 오버플로우 없이 표기',
+      (tester) async {
+        final now = DateTime.now();
+        final category = CategoryModel(
+          id: 'cat_mil_dash',
+          categoryKey: 'military',
+          name: '군대 (곰신)',
+          icon: 'simple_medal',
+          createdAt: now,
+          metadata: const {'isInitialized': true},
+        );
+        final customPlan1 = PlanItem(
+          id: 'mil-custom-1',
+          title: '훈련소 수료식',
+          date: now.add(const Duration(days: 5)),
+          categoryKey: 'military',
+          displayMode: DdayDisplayMode.dday,
+        );
+        final customPlan2 = PlanItem(
+          id: 'mil-custom-2',
+          title: '첫 정기휴가',
+          date: now.add(const Duration(days: 20)),
+          categoryKey: 'military',
+          displayMode: DdayDisplayMode.dday,
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              home: Scaffold(
+                body: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: CategorySummaryDashboardCard(
+                    category: category,
+                    countUpItems: const [],
+                    countDownItems: [customPlan1, customPlan2],
+                    onTap: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 250));
+
+        // 1) 수료식 + 첫 정기휴가 2개 모두 오버플로우 없이 표시
+        expect(find.text('훈련소 수료식'), findsOneWidget);
+        expect(find.text('첫 정기휴가'), findsOneWidget);
+        expect(find.textContaining('D-'), findsAtLeastNWidgets(2));
+        expect(tester.takeException(), isNull);
       },
     );
   });

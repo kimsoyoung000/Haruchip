@@ -162,8 +162,13 @@ class HobongInfo {
   final double progress;
 }
 
-/// 현재 계급의 호봉 및 다음 달 1일 호봉 승급 진행률 계산
-HobongInfo calculateHobongInfo(DateTime enlistDate, {DateTime? now}) {
+/// 현재 계급의 호봉 및 다음 호봉 승급 진행률 계산
+/// [customNextHobongDate]가 지정되면 해당 날짜를 다음 호봉 승급일로 우선 적용한다.
+HobongInfo calculateHobongInfo(
+  DateTime enlistDate, {
+  DateTime? now,
+  DateTime? customNextHobongDate,
+}) {
   final current = now ?? DateTime.now();
   final today = DateTime(current.year, current.month, current.day);
   final milestones = rankMilestones(enlistDate);
@@ -180,18 +185,30 @@ HobongInfo calculateHobongInfo(DateTime enlistDate, {DateTime? now}) {
       .clamp(0, 12);
   final currentHobong = monthsInRank + 1;
 
-  final monthStart = DateTime(today.year, today.month, 1);
-  final nextMonthFirst = DateTime(today.year, today.month + 1, 1);
-  final totalUs = nextMonthFirst.difference(monthStart).inMicroseconds;
-  final elapsedUs = current.difference(monthStart).inMicroseconds;
-  final progress = totalUs > 0 ? (elapsedUs / totalUs).clamp(0.0, 1.0) : 0.0;
-  final dDay = nextMonthFirst.difference(today).inDays.clamp(0, 31);
+  final DateTime periodStart;
+  final DateTime targetDate;
+  if (customNextHobongDate != null) {
+    targetDate = DateTime(
+      customNextHobongDate.year,
+      customNextHobongDate.month,
+      customNextHobongDate.day,
+    );
+    periodStart = _addMonths(targetDate, -1);
+  } else {
+    periodStart = DateTime(today.year, today.month, 1);
+    targetDate = DateTime(today.year, today.month + 1, 1);
+  }
+
+  final totalUs = targetDate.difference(periodStart).inMicroseconds;
+  final elapsedUs = current.difference(periodStart).inMicroseconds;
+  final progress = totalUs > 0 ? (elapsedUs / totalUs).clamp(0.0, 1.0) : 1.0;
+  final dDay = targetDate.difference(today).inDays.clamp(0, 9999);
 
   return HobongInfo(
     currentRank: active.rank,
     currentHobong: currentHobong,
     nextHobong: currentHobong + 1,
-    nextHobongDate: nextMonthFirst,
+    nextHobongDate: targetDate,
     dDay: dDay,
     progress: progress,
   );
@@ -216,10 +233,12 @@ class RankPromotionProgress {
 }
 
 /// 현재 계급 시작일 → 다음 계급 진급일(병장은 전역일) 진행률 계산
+/// [customNextRankDate]가 지정되면 해당 날짜를 진급 목표로 우선 적용한다.
 RankPromotionProgress calculateRankPromotionProgress(
   DateTime enlistDate,
   DateTime dischargeDate, {
   DateTime? now,
+  DateTime? customNextRankDate,
 }) {
   final current = now ?? DateTime.now();
   final today = DateTime(current.year, current.month, current.day);
@@ -237,9 +256,15 @@ RankPromotionProgress calculateRankPromotionProgress(
   }
 
   final start = DateTime(active.startDate.year, active.startDate.month, active.startDate.day);
-  final end = next != null
-      ? DateTime(next.startDate.year, next.startDate.month, next.startDate.day)
-      : DateTime(dischargeDate.year, dischargeDate.month, dischargeDate.day);
+  final end = customNextRankDate != null
+      ? DateTime(
+          customNextRankDate.year,
+          customNextRankDate.month,
+          customNextRankDate.day,
+        )
+      : (next != null
+          ? DateTime(next.startDate.year, next.startDate.month, next.startDate.day)
+          : DateTime(dischargeDate.year, dischargeDate.month, dischargeDate.day));
 
   final totalUs = end.difference(start).inMicroseconds;
   final elapsedUs = current.difference(start).inMicroseconds;

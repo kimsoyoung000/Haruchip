@@ -108,6 +108,39 @@ class MilitaryServiceNotifier extends Notifier<MilitaryService> {
     );
   }
 
+  /// 다음 호봉 승급일 직접 수정 (null 전달 시 자동 계산으로 복원)
+  void setCustomNextHobongDate(DateTime? date) {
+    state = state.copyWith(
+      customNextHobongDate: date != null ? _dateOnly(date) : null,
+      clearCustomNextHobongDate: date == null,
+    );
+  }
+
+  /// 다음 계급 진급일 직접 수정 (null 전달 시 자동 계산으로 복원)
+  void setCustomNextRankDate(DateTime? date) {
+    state = state.copyWith(
+      customNextRankDate: date != null ? _dateOnly(date) : null,
+      clearCustomNextRankDate: date == null,
+    );
+  }
+
+  /// 군대 카테고리 섹션 순서 및 숨김 설정 저장
+  void updateSectionConfig({
+    required List<String> order,
+    required Set<String> hidden,
+  }) {
+    final normalizedOrder = <String>[
+      for (final key in order)
+        if (kDefaultMilitarySectionOrder.contains(key)) key,
+      for (final key in kDefaultMilitarySectionOrder)
+        if (!order.contains(key)) key,
+    ];
+    state = state.copyWith(
+      sectionOrder: normalizedOrder,
+      hiddenSections: hidden,
+    );
+  }
+
   /// 출타(정기휴가·포상휴가·외박·외출·직접입력) 등록 + 칩 캘린더 연속 라벨 바 자동 연동
   void addLeave(MilitaryLeaveRecord record) {
     final updatedLeaves = [...state.leaves, record]
@@ -348,9 +381,18 @@ final militaryCurrentRankProvider = Provider<MilitaryRank>((ref) {
 });
 
 /// 다음 진급 시점 — 이미 병장이면 null(더 이상 진급 없음).
+/// 사용자가 customNextRankDate를 지정한 경우 해당 날짜를 우선 반영한다.
 final militaryNextRankMilestoneProvider = Provider<RankMilestone?>((ref) {
-  final enlist = ref.watch(militaryServiceProvider).enlistDate;
-  return nextRankMilestone(enlist);
+  final service = ref.watch(militaryServiceProvider);
+  final auto = nextRankMilestone(service.enlistDate);
+  if (auto == null) return null;
+  if (service.customNextRankDate != null) {
+    return RankMilestone(
+      rank: auto.rank,
+      startDate: service.customNextRankDate!,
+    );
+  }
+  return auto;
 });
 
 /// 다음 진급 D-day 라벨 — 병장이면 null.

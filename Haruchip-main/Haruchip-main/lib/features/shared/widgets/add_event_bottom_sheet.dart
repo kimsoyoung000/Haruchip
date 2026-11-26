@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/icons/haruchip_icon_picker.dart';
 import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../calendar/models/calendar_event.dart';
+import '../../calendar/models/schedule_room.dart';
 import '../../calendar/providers/schedule_room_provider.dart';
 import '../../calendar/widgets/themed_color_palette_sheet.dart';
 import '../../categories/logic/repeat_rule.dart';
@@ -407,6 +408,32 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
           naverCalendarId: _selectedNaverCalendarId,
           categoryColorHex: selectedCatColorHex,
         );
+
+        // 현재 모임방 + 선택된 타 모임방 공유 캘린더에 Firestore Batch 동시 연동 등록
+        final targetRoomIds = <String>{
+          if (widget.initialRoomId != null && widget.initialRoomId!.isNotEmpty)
+            widget.initialRoomId!,
+          ..._selectedRoomIds,
+        }.toList();
+        if (targetRoomIds.isNotEmpty) {
+          final myProfile = ref.read(currentUserProfileProvider);
+          final sharedEvent = RoomSharedEvent(
+            id: 'room-plan-${item.id}',
+            roomId: targetRoomIds.first,
+            title: title,
+            authorUid: myProfile.uid,
+            date: _startDate,
+            endDate: _hasEndDate ? _endDate : null,
+            isAllDay: _isAllDay || _startTime == null,
+            time: _startTime == null
+                ? null
+                : '${_startTime!.hour.toString().padLeft(2, '0')}:${_startTime!.minute.toString().padLeft(2, '0')}',
+          );
+          ref.read(scheduleRoomsProvider.notifier).addRoomEventToMultipleRooms(
+                roomIds: targetRoomIds,
+                baseEvent: sharedEvent,
+              );
+        }
       }
     }
 
@@ -450,7 +477,13 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
     );
 
     final isEdit = widget.existingItem != null;
-    final headerTitle = isEdit ? '${currentCategory.name} 일정 수정' : '${currentCategory.name} 일정 추가';
+    final isGroupRoomMode =
+        widget.initialRoomId != null && widget.initialRoomId!.isNotEmpty;
+    final headerTitle = isGroupRoomMode
+        ? (isEdit ? '모임 일정 수정' : '모임 일정 추가')
+        : (isEdit
+            ? '${currentCategory.name} 일정 수정'
+            : '${currentCategory.name} 일정 추가');
 
     return Container(
       height: mediaQuery.size.height * 0.92,
@@ -1044,55 +1077,59 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        // Card 2: 카테고리
-        Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            onTap: () => _showCategoryPickerModal(categories),
+        // Card 2: 카테고리 (모임 내부 일정 등록 시 불필요한 카테고리 필드 완전 삭제)
+        if (widget.initialRoomId == null || widget.initialRoomId!.isEmpty) ...[
+          const SizedBox(height: 12),
+          Material(
+            key: const Key('add_event_category_selector'),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-              child: Row(
-                children: [
-                  const Text(
-                    '카테고리',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: _kLabel,
+            child: InkWell(
+              onTap: () => _showCategoryPickerModal(categories),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                child: Row(
+                  children: [
+                    const Text(
+                      '카테고리',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _kLabel,
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: currentCategory.color,
+                    const Spacer(),
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: currentCategory.color,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    currentCategory.name,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: _kLabel,
+                    const SizedBox(width: 6),
+                    Text(
+                      currentCategory.name,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _kLabel,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.keyboard_arrow_down,
-                    size: 20,
-                    color: Color(0xFF9CA3AF),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 20,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1957,6 +1994,15 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
 
   Widget _buildRoomSection() {
     final rooms = ref.watch(scheduleRoomsProvider);
+    final isGroupRoomMode =
+        widget.initialRoomId != null && widget.initialRoomId!.isNotEmpty;
+    final currentRoom = isGroupRoomMode
+        ? rooms.where((r) => r.id == widget.initialRoomId).firstOrNull
+        : null;
+    // 모임 내부 일정 등록 시: 현재 모임은 기본 고정, 하단 선택 칩에는 '다른 모임방'만 노출
+    final selectableRooms = isGroupRoomMode
+        ? rooms.where((r) => r.id != widget.initialRoomId).toList()
+        : rooms;
 
     return _buildGroupCard(
       child: Padding(
@@ -1964,58 +2010,109 @@ class _AddEventBottomSheetState extends ConsumerState<AddEventBottomSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.group_outlined, size: 18, color: _kLabel),
-                SizedBox(width: 6),
-                Text('모임 방 연동', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _kLabel)),
+                const Icon(Icons.group_outlined, size: 18, color: _kLabel),
+                const SizedBox(width: 6),
+                Text(
+                  isGroupRoomMode ? '다른 모임방 동시 연동' : '모임 방 연동',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: _kLabel,
+                  ),
+                ),
+                if (currentRoom != null) ...[
+                  const Spacer(),
+                  Container(
+                    key: const Key('add_event_current_room_fixed_badge'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4CC),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${currentRoom.name} (현재 모임 고정)',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF3A2E1A),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 12),
-            if (rooms.isEmpty)
-              const Text('생성된 모임 방이 없습니다.', style: TextStyle(fontSize: 13, color: _kSubLabel))
+            if (selectableRooms.isEmpty)
+              Text(
+                isGroupRoomMode
+                    ? '동시 연동할 다른 모임방이 없습니다.'
+                    : '생성된 모임 방이 없습니다.',
+                style: const TextStyle(fontSize: 13, color: _kSubLabel),
+              )
             else
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final room in rooms)
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          if (_selectedRoomIds.contains(room.id)) {
-                            _selectedRoomIds.remove(room.id);
-                          } else {
-                            _selectedRoomIds.add(room.id);
-                          }
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _selectedRoomIds.contains(room.id) ? _kBlue : _kChipBg,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              room.name,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: _selectedRoomIds.contains(room.id) ? Colors.white : _kLabel,
+                  for (final room in selectableRooms)
+                    () {
+                      final isSelected = _selectedRoomIds.contains(room.id);
+                      return InkWell(
+                        key: Key('add_event_room_chip_${room.id}'),
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedRoomIds.remove(room.id);
+                            } else {
+                              _selectedRoomIds.add(room.id);
+                            }
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFFFFE699)
+                                : _kChipBg,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.check_box_rounded
+                                    : Icons.check_box_outline_blank_rounded,
+                                size: 15,
+                                color: isSelected
+                                    ? const Color(0xFF3A2E1A)
+                                    : _kSubLabel,
                               ),
-                            ),
-                            if (_selectedRoomIds.contains(room.id)) ...[
-                              const SizedBox(width: 4),
-                              const Icon(Icons.close, size: 14, color: Colors.white),
+                              const SizedBox(width: 5),
+                              Text(
+                                room.name,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? const Color(0xFF3A2E1A)
+                                      : _kLabel,
+                                ),
+                              ),
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    }(),
                 ],
               ),
           ],

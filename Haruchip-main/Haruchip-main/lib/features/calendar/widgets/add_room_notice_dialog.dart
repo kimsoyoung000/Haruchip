@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/security/input_sanitizer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
 import '../models/schedule_room.dart';
@@ -121,6 +122,7 @@ class _AddRoomNoticeDialogState extends State<_AddRoomNoticeDialog> {
             const SizedBox(height: 16),
             TextField(
               controller: _contentController,
+              inputFormatters: [HaruInputSanitizer.safeTextInputFormatter],
               maxLines: 4,
               autofocus: true,
               decoration: InputDecoration(
@@ -145,7 +147,7 @@ class _AddRoomNoticeDialogState extends State<_AddRoomNoticeDialog> {
                 Checkbox(
                   value: _isPinned,
                   onChanged: (val) => setState(() => _isPinned = val ?? false),
-                  activeColor: const Color(0xFF0F172A),
+                  activeColor: AppColors.chipYellowText,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                 ),
                 const Text(
@@ -173,8 +175,8 @@ class _AddRoomNoticeDialogState extends State<_AddRoomNoticeDialog> {
                   child: ElevatedButton(
                     onPressed: _save,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F172A),
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppColors.chipYellowBg,
+                      foregroundColor: AppColors.chipYellowText,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,

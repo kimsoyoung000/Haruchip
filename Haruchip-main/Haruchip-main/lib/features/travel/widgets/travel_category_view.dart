@@ -25,7 +25,7 @@ class TravelCategoryView extends ConsumerWidget {
       children: [
         // 1. 상단 요약 카드 (파스텔 스카이 블루 #F0F8FF / #D6ECFF / #2C3E50)
         _buildTopSummaryCard(context, nextTrip),
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
 
         // 2. 타임라인 헤더
         Row(
@@ -59,7 +59,7 @@ class TravelCategoryView extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 9),
 
         // 3. 세로 타임라인 로드맵 (Trip Nodes & Between-Trips Inserts)
         if (trips.isEmpty)

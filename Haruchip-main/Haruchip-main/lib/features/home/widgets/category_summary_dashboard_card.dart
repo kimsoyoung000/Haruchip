@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
+import '../../../design_system/layout_tokens.dart';
 import '../../../design_system/typography.dart';
 import '../../categories/controllers/baby_category_controller.dart';
 import '../../categories/data/baby_health_database.dart';
@@ -191,7 +192,7 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
   });
 
   /// 모든 메인 카테고리 카드의 통일 고정 세로 높이 (일정 0개 ~ 최대치 동일)
-  static const double kFixedCardHeight = 148.0;
+  static const double kFixedCardHeight = 154.0;
 
   /// 그룹 2 (D-Day 전용, 최대 3개) 카테고리 키 집합
   static const Set<String> _kGroup2Keys = {
@@ -370,16 +371,14 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
             backgroundImageUrl: category.background.type == BackgroundType.image
                 ? category.background.imageUrl
                 : null,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: AppLayoutTokens.cardInternalPadding,
             child: cardContent,
           ),
         ),
       );
     }
 
-    // 무테두리 플랫 라운드 카드 (BorderRadius 18 + 은은한 파스텔 배경 + 미세 그림자)
-    final softenedBg = Color.lerp(Colors.white, palette.bg, 0.85) ?? palette.bg;
-
+    // 무테두리 순백색(#FFFFFF) 럭셔리 플랫 카드 + 초미세 소프트 섀도우
     return SizedBox(
       height: kFixedCardHeight,
       child: InkWell(
@@ -387,17 +386,11 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
         onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: AppLayoutTokens.cardInternalPadding,
           decoration: BoxDecoration(
-            color: softenedBg,
+            color: AppColors.cleanWhiteBg,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            boxShadow: AppLayoutTokens.luxuryCardShadow,
           ),
           child: cardContent,
         ),
@@ -776,7 +769,7 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
   }
 
   /// 그룹 3: [군대 (곰신)]
-  /// - 슬림 복무율 프로그레스 바(%) 유지 + 바로 아래 가장 가까운 다가오는 D-Day 일정 1개만 표기
+  /// - 슬림 복무율 프로그레스 바(%) 유지 + 바로 아래 가장 가까운 다가오는 D-Day 일정 최대 2개 표기
   Widget _buildGroup3MilitaryBody(
     WidgetRef ref,
     CategoryThemePalette palette,
@@ -789,7 +782,7 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
     final nextRankMilestone = ref.watch(militaryNextRankMilestoneProvider);
     final progressPercent = (progress * 100).toStringAsFixed(1);
 
-    // 가장 가까운 다가오는 군대 D-Day 1개 산출 (등록된 출타 + 진급 + 전역 + 커스텀 일정)
+    // 가장 가까운 다가오는 군대 D-Day 최대 2개 산출 (등록된 출타 + 진급 + 전역 + 커스텀 일정)
     final candidates = <_UpcomingDdayEntry>[];
     for (final leave in service.leaves) {
       final ld = DateTime(
@@ -836,10 +829,13 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
         sortDateTime: dd,
       ));
     }
-    candidates.addAll(_upcomingFromPlanItems(countDownItems, now, today));
+    final customMilitaryItems = countDownItems
+        .where((item) => !item.id.startsWith('mil-leave-'))
+        .toList();
+    candidates.addAll(_upcomingFromPlanItems(customMilitaryItems, now, today));
     candidates.sort((a, b) => a.sortDateTime.compareTo(b.sortDateTime));
 
-    final closest = candidates.isNotEmpty ? candidates.first : null;
+    final topTwo = candidates.take(2).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -853,9 +849,10 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF2E6B3E),
+                  height: 1.1,
                 ),
               ),
             ),
@@ -863,18 +860,19 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
             Text(
               '전역 $dischargeDday',
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w800,
                 color: AppColors.chipYellowText,
+                height: 1.1,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 3),
         ClipRRect(
           borderRadius: BorderRadius.circular(999),
           child: Container(
-            height: 7,
+            height: 6,
             width: double.infinity,
             color: const Color(0xFFFFF8E1),
             alignment: Alignment.centerLeft,
@@ -891,29 +889,37 @@ class CategorySummaryDashboardCard extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        if (closest != null)
-          _buildWhiteDdayBar(closest.title, closest.dDayBadge, palette)
-        else
-          Expanded(child: _buildEmptyPlaceholder()),
+        const SizedBox(height: 6),
+        Expanded(
+          child: topTwo.isNotEmpty
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    for (final entry in topTwo)
+                      _buildWhiteDdayBar(entry.title, entry.dDayBadge, palette),
+                  ],
+                )
+              : _buildEmptyPlaceholder(),
+        ),
       ],
     );
   }
 
-  /// 표준 화이트 라운드 D-Day 바 (콤팩트 고정 높이 28px)
+  /// 표준 파스텔 소프트 라운드 D-Day 바 (순백색 카드 위 은은한 대비, 콤팩트 고정 높이 28px)
   Widget _buildWhiteDdayBar(
     String title,
     String dDayBadge,
     CategoryThemePalette palette,
   ) {
+    final rowBg = Color.lerp(const Color(0xFFF8F9FA), palette.bg, 0.72) ??
+        const Color(0xFFF8F9FA);
     return Container(
       height: 28,
       margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
+        color: rowBg,
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: palette.border.withValues(alpha: 0.7)),
       ),
       child: Row(
         children: [

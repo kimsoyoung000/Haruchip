@@ -1,10 +1,18 @@
 import 'dart:math';
-import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseException;
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show FirebaseException, FirebaseFirestore;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/security/input_sanitizer.dart';
+import '../../friends/models/battle_tag_user.dart';
+import '../../friends/providers/friend_system_provider.dart';
 import '../data/calendar_mock_data.dart';
 import '../data/room_remote.dart';
 import '../models/schedule_room.dart';
+
+/// 받은 모임 초대 목록 (100% 친구 초대 수락 방식)
+final pendingRoomInvitationsProvider =
+    StateProvider<List<RoomInvitation>>((ref) => const []);
 
 /// 내 고유 사용자 ID 코드 (로그인 시 자동 발급되는 영문+숫자 프로필 코드)
 final myUserCodeProvider = Provider<String>((ref) => 'HC-7X9B2K');
@@ -24,17 +32,28 @@ class CurrentUserProfile {
   final String colorHex;
 }
 
-/// 로그인돼 있으면 Firebase 계정 uid/이름 — 모임방 멤버 구분은 반드시 계정 uid로
-/// 한다(닉네임을 uid로 쓰면 같은 닉네임끼리 섞인다). 로그인 전·테스트는 목업.
+/// 로그인돼 있으면 Firebase 계정 uid + friendSystemProvider 최신 닉네임/아바타를 실시간 반영
 final currentUserProfileProvider = Provider<CurrentUserProfile>((ref) {
   final user = ref.watch(roomAuthUserProvider).valueOrNull;
+  final myBattleProfile = ref.watch(
+    friendSystemProvider.select((s) => s.myProfile),
+  );
   if (user != null) {
-    return CurrentUserProfile(uid: user.uid, name: user.displayName, icon: '🐥', colorHex: '#DFE7FD');
+    return CurrentUserProfile(
+      uid: user.uid,
+      name: myBattleProfile.nickname.isNotEmpty
+          ? myBattleProfile.nickname
+          : user.displayName,
+      icon: myBattleProfile.avatarIcon,
+      colorHex: '#DFE7FD',
+    );
   }
-  return const CurrentUserProfile(
+  return CurrentUserProfile(
     uid: '하루',
-    name: '하루',
-    icon: '🐥',
+    name: myBattleProfile.nickname.isNotEmpty
+        ? myBattleProfile.nickname
+        : '하루',
+    icon: myBattleProfile.avatarIcon,
     colorHex: '#DFE7FD',
   );
 });
@@ -134,22 +153,27 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     return buffer.toString();
   }
 
-  /// 1. 새 모임 방 생성
+  /// 1. 새 모임 방 생성 (CSPRNG + SHA-256 내부 groupId 및 입력 살균 적용)
   ScheduleRoom createRoom({
     required String name,
     String? description,
     String categoryTag = '모임',
     required RoomMember hostMember,
   }) {
-    final roomId = 'room-${DateTime.now().microsecondsSinceEpoch}';
+    final roomId = HaruInputSanitizer.generateSecureGroupId();
     final inviteCode = _generateSecurityCode();
+    final safeName = HaruInputSanitizer.sanitizeText(name);
+    final safeDesc = description != null
+        ? HaruInputSanitizer.sanitizeText(description)
+        : null;
+    final safeTag = HaruInputSanitizer.sanitizeText(categoryTag);
 
     final newRoom = ScheduleRoom(
       id: roomId,
-      name: name,
+      name: safeName.isNotEmpty ? safeName : '새 모임',
       inviteCode: inviteCode,
-      description: description,
-      categoryTag: categoryTag,
+      description: safeDesc,
+      categoryTag: safeTag.isNotEmpty ? safeTag : '모임',
       members: [hostMember.copyWith(isHost: true)],
       dates: {},
       events: const [],
@@ -161,6 +185,145 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
 
     state = [newRoom, ...state];
     return newRoom;
+  }
+
+  /// 부방장 지정 / 해제 (방장 전용)
+  void toggleCoHost(String roomId, String targetUid) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            members: [
+              for (final m in room.members)
+                if (m.uid == targetUid && !m.isHost)
+                  m.copyWith(isCoHost: !m.isCoHost)
+                else
+                  m,
+            ],
+          )
+        else
+          room,
+    ];
+  }
+
+  /// 방장 권한 위임
+  void delegateHost(String roomId, String newHostUid) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            members: [
+              for (final m in room.members)
+                if (m.uid == newHostUid)
+                  m.copyWith(isHost: true, isCoHost: false)
+                else if (m.isHost)
+                  m.copyWith(isHost: false)
+                else
+                  m,
+            ],
+          )
+        else
+          room,
+    ];
+  }
+
+  /// 멤버 내보내기 (강퇴)
+  void kickMember(String roomId, String targetUid) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          room.copyWith(
+            members: room.members
+                .where((m) => m.uid != targetUid || m.isHost)
+                .toList(),
+          )
+        else
+          room,
+    ];
+  }
+
+  /// 친구 목록에서 다중 선택하여 모임에 초대 (즉시 멤버 합류)
+  void inviteFriendsToRoom(String roomId, List<BattleTagUser> friends) {
+    state = [
+      for (final room in state)
+        if (room.id == roomId)
+          () {
+            final existingUids = room.members.map((m) => m.uid).toSet();
+            final takenColors =
+                room.members.map((m) => m.colorHex.toUpperCase()).toSet();
+            final added = <RoomMember>[];
+            for (final f in friends) {
+              if (existingUids.contains(f.uid)) continue;
+              final assignedColor = kPreset50PastelColors.firstWhere(
+                (c) => !takenColors.contains(c.toUpperCase()),
+                orElse: () => kPreset50PastelColors.first,
+              );
+              takenColors.add(assignedColor.toUpperCase());
+              added.add(
+                RoomMember(
+                  uid: f.uid,
+                  name: f.nickname,
+                  icon: f.avatarIcon,
+                  colorHex: assignedColor,
+                ),
+              );
+            }
+            return room.copyWith(members: [...room.members, ...added]);
+          }()
+        else
+          room,
+    ];
+  }
+
+  /// 모임 나가기 (방장이면서 다른 멤버가 남아 있으면 위임이 필요하므로 false 반환)
+  bool leaveRoom(String roomId, String myUid) {
+    final idx = state.indexWhere((r) => r.id == roomId);
+    if (idx < 0) return false;
+    final room = state[idx];
+    final me = room.members.where((m) => m.uid == myUid).firstOrNull;
+    if (me != null && me.isHost && room.members.length > 1) {
+      return false; // 방장 위임 선행 필요
+    }
+    state = state.where((r) => r.id != roomId).toList();
+    return true;
+  }
+
+  /// 모임 영구 삭제 (방장/부방장 전용)
+  void deleteRoom(String roomId) {
+    state = state.where((r) => r.id != roomId).toList();
+  }
+
+  /// 받은 모임 초대 수락 -> 모임 방 합류
+  void acceptRoomInvitation(RoomInvitation invite, RoomMember me) {
+    final exists = state.any((r) => r.id == invite.roomId);
+    if (!exists) {
+      final joined = ScheduleRoom(
+        id: invite.roomId,
+        name: invite.roomName,
+        inviteCode: _generateSecurityCode(),
+        categoryTag: invite.categoryTag,
+        members: [
+          RoomMember(
+            uid: 'host_${invite.roomId}',
+            name: invite.inviterName,
+            icon: 'simple_bear',
+            isHost: true,
+          ),
+          me.copyWith(isHost: false),
+        ],
+        dates: const {},
+        events: const [],
+        notices: const [],
+        votes: const [],
+        rounds: const [],
+        settlementHistory: const [],
+      );
+      state = [joined, ...state];
+    }
+    ref.read(pendingRoomInvitationsProvider.notifier).state = ref
+        .read(pendingRoomInvitationsProvider)
+        .where((i) => i.id != invite.id)
+        .toList();
   }
 
   /// 2. 초대 코드로 모임 방 참가
@@ -195,14 +358,30 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     return true;
   }
 
-  /// 3. 멤버 식별 컬러 & 이모티콘 변경
-  void updateMemberCustomization({
+  /// 3. 멤버 식별 컬러 & 모임 전용 프로필/사진 변경 (1인 1색 중복 선택 방어 포함)
+  /// 다른 멤버가 이미 선점한 컬러를 지정하면 false를 반환하고 변경을 차단한다.
+  bool updateMemberCustomization({
     required String roomId,
     required String uid,
     String? name,
     String? icon,
     String? colorHex,
+    bool? usesCustomProfile,
+    String? customPhotoUrl,
+    bool clearCustomPhotoUrl = false,
   }) {
+    final targetRoom = state.where((r) => r.id == roomId).firstOrNull;
+    if (targetRoom == null) return false;
+
+    // 1인 1색 중복 선점 방어
+    if (colorHex != null) {
+      final upperColor = colorHex.toUpperCase();
+      final takenByOther = targetRoom.members.any(
+        (m) => m.uid != uid && m.colorHex.toUpperCase() == upperColor,
+      );
+      if (takenByOther) return false;
+    }
+
     state = [
       for (final room in state)
         if (room.id == roomId)
@@ -213,6 +392,9 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
                   name: name ?? m.name,
                   icon: icon ?? m.icon,
                   colorHex: colorHex ?? m.colorHex,
+                  usesCustomProfile: usesCustomProfile ?? m.usesCustomProfile,
+                  customPhotoUrl: customPhotoUrl,
+                  clearCustomPhotoUrl: clearCustomPhotoUrl,
                 );
               }
               return m;
@@ -224,11 +406,46 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     final s = _sync;
     // 규칙상 본인 멤버 정보만 바꿀 수 있다.
     if (s != null && s.user.uid == uid) {
-      _push(() => s.remote.updateMyMember(roomId: roomId, uid: uid, name: name, icon: icon, colorHex: colorHex));
+      _push(
+        () => s.remote.updateMyMember(
+          roomId: roomId,
+          uid: uid,
+          name: name,
+          icon: icon,
+          colorHex: colorHex,
+        ),
+      );
     }
+    return true;
   }
 
-  /// 4. 모임 공유 캘린더 일정 추가 / 삭제
+  /// 전역 기본 프로필(닉네임·아바타·사진) 변경 시 `usesCustomProfile == false`인 모든 모임 멤버 즉시 동기화
+  void syncGlobalProfileToRooms({
+    required String uid,
+    required String name,
+    required String icon,
+    String? photoUrl,
+  }) {
+    state = [
+      for (final room in state)
+        room.copyWith(
+          members: [
+            for (final m in room.members)
+              if (m.uid == uid && !m.usesCustomProfile)
+                m.copyWith(
+                  name: name,
+                  icon: icon,
+                  customPhotoUrl: photoUrl,
+                  clearCustomPhotoUrl: photoUrl == null || photoUrl.isEmpty,
+                )
+              else
+                m,
+          ],
+        ),
+    ];
+  }
+
+  /// 4. 모임 공유 캘린더 일정 추가 / 다중 모임방 동시 Batch 연동 / 삭제
   void addRoomEvent(String roomId, RoomSharedEvent event) {
     state = [
       for (final room in state)
@@ -241,6 +458,47 @@ class ScheduleRoomListNotifier extends Notifier<List<ScheduleRoom>> {
     ];
     final s = _sync;
     if (s != null) _push(() => s.remote.addEvent(roomId: roomId, event: event));
+  }
+
+  /// 다중 모임방 동시 일정 연동 (로컬 상태 즉시 반영 + Firestore WriteBatch 원자적 동기화)
+  Future<void> addRoomEventToMultipleRooms({
+    required List<String> roomIds,
+    required RoomSharedEvent baseEvent,
+  }) async {
+    final uniqueRoomIds = roomIds.where((id) => id.isNotEmpty).toSet();
+    if (uniqueRoomIds.isEmpty) return;
+
+    // 1) 로컬 상태 즉시 반영 (중복 id 방지)
+    state = [
+      for (final room in state)
+        if (uniqueRoomIds.contains(room.id))
+          room.copyWith(
+            events: [
+              baseEvent.copyWith(roomId: room.id),
+              ...room.events.where((e) => e.id != baseEvent.id),
+            ],
+          )
+        else
+          room,
+    ];
+
+    // 2) 온라인 환경: Firestore WriteBatch 원자적 일괄 기록
+    try {
+      final db = FirebaseFirestore.instance;
+      final batch = db.batch();
+      for (final rid in uniqueRoomIds) {
+        final ev = baseEvent.copyWith(roomId: rid);
+        final docRef = db
+            .collection('rooms')
+            .doc(rid)
+            .collection('events')
+            .doc(ev.id);
+        batch.set(docRef, ev.toJson());
+      }
+      await batch.commit();
+    } catch (_) {
+      // 오프라인/테스트 환경에서는 로컬 상태만 안전하게 유지
+    }
   }
 
   void removeRoomEvent(String roomId, String eventId) {

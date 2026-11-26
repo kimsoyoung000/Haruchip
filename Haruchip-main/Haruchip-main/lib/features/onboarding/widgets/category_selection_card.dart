@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../models/onboarding_category.dart';
 
 /// 온보딩 카테고리 선택 컴팩트 칩/카드 (수평 10dp / 수직 6dp 슬림 규격, 햅틱 피드백 & 파스텔 하이라이트)
@@ -92,9 +93,9 @@ class CategorySelectionCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                category.emoji,
-                style: const TextStyle(fontSize: 15),
+              HaruChipIconViewer(
+                iconKey: category.emoji,
+                size: 17,
               ),
               const SizedBox(width: 5),
               Flexible(

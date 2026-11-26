@@ -16,7 +16,7 @@ const List<String> kPreset50PastelColors = [
   '#9288F8', '#FFB4B4', '#FFDEB4', '#FFF9CA', '#B5F1CC',
 ];
 
-/// 모임 멤버 모델
+/// 모임 멤버 모델 (방장 / 부방장 / 일반 멤버 + 모임 전용 프로필 & 사진 구분)
 @immutable
 class RoomMember {
   const RoomMember({
@@ -25,6 +25,9 @@ class RoomMember {
     required this.icon,
     this.colorHex = '#DFE7FD',
     this.isHost = false,
+    this.isCoHost = false,
+    this.usesCustomProfile = false,
+    this.customPhotoUrl,
   });
 
   final String uid;
@@ -32,6 +35,11 @@ class RoomMember {
   final String icon;
   final String colorHex;
   final bool isHost;
+  final bool isCoHost;
+  final bool usesCustomProfile;
+  final String? customPhotoUrl;
+
+  bool get canManageRoom => isHost || isCoHost;
 
   RoomMember copyWith({
     String? uid,
@@ -39,6 +47,10 @@ class RoomMember {
     String? icon,
     String? colorHex,
     bool? isHost,
+    bool? isCoHost,
+    bool? usesCustomProfile,
+    String? customPhotoUrl,
+    bool clearCustomPhotoUrl = false,
   }) {
     return RoomMember(
       uid: uid ?? this.uid,
@@ -46,6 +58,11 @@ class RoomMember {
       icon: icon ?? this.icon,
       colorHex: colorHex ?? this.colorHex,
       isHost: isHost ?? this.isHost,
+      isCoHost: isCoHost ?? this.isCoHost,
+      usesCustomProfile: usesCustomProfile ?? this.usesCustomProfile,
+      customPhotoUrl: clearCustomPhotoUrl
+          ? null
+          : (customPhotoUrl ?? this.customPhotoUrl),
     );
   }
 
@@ -55,6 +72,10 @@ class RoomMember {
         'icon': icon,
         'colorHex': colorHex,
         'isHost': isHost,
+        'isCoHost': isCoHost,
+        'usesCustomProfile': usesCustomProfile,
+        if (customPhotoUrl != null && customPhotoUrl!.isNotEmpty)
+          'customPhotoUrl': customPhotoUrl,
       };
 
   factory RoomMember.fromJson(Map<String, dynamic> json) {
@@ -64,8 +85,31 @@ class RoomMember {
       icon: json['icon'] as String? ?? '👤',
       colorHex: json['colorHex'] as String? ?? '#DFE7FD',
       isHost: json['isHost'] as bool? ?? false,
+      isCoHost: json['isCoHost'] as bool? ?? false,
+      usesCustomProfile: json['usesCustomProfile'] as bool? ?? false,
+      customPhotoUrl: json['customPhotoUrl'] as String?,
     );
   }
+}
+
+/// 친구로부터 받은 모임 초대 모델 (텍스트 코드 입력 없는 100% 초대 수락 방식)
+@immutable
+class RoomInvitation {
+  const RoomInvitation({
+    required this.id,
+    required this.roomId,
+    required this.roomName,
+    required this.categoryTag,
+    required this.inviterName,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String roomId;
+  final String roomName;
+  final String categoryTag;
+  final String inviterName;
+  final DateTime createdAt;
 }
 
 /// 모임 공유 캘린더 전용 일정 모델
@@ -77,6 +121,7 @@ class RoomSharedEvent {
     required this.title,
     required this.authorUid,
     required this.date,
+    this.endDate,
     this.time,
     this.isAllDay = false,
     this.location,
@@ -90,6 +135,7 @@ class RoomSharedEvent {
   final String title;
   final String authorUid;
   final DateTime date;
+  final DateTime? endDate;
   final String? time;
   final bool isAllDay;
   final String? location;

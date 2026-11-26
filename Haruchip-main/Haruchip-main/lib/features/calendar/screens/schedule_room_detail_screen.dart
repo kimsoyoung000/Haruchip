@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,19 +8,21 @@ import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../design_system/colors.dart';
 import '../../plan/models/plan_item.dart';
 import '../../plan/providers/plan_provider.dart';
+import '../../shared/widgets/add_event_bottom_sheet.dart';
 import '../../trash/models/trash_item.dart';
 import '../../trash/providers/trash_provider.dart';
 import '../data/calendar_mock_data.dart';
-import '../../friends/models/battle_tag_user.dart';
-import '../../friends/providers/friend_system_provider.dart';
-import '../models/schedule_room.dart';
 import '../data/room_remote.dart';
+import '../models/calendar_event.dart';
+import '../models/schedule_room.dart';
+import '../providers/calendar_display_settings_provider.dart';
 import '../providers/schedule_room_provider.dart';
-import '../widgets/add_room_event_dialog.dart';
 import '../widgets/add_room_notice_dialog.dart';
 import '../widgets/add_room_vote_dialog.dart';
 import '../widgets/member_color_picker_dialog.dart';
+import '../widgets/month_grid.dart';
 import '../widgets/room_availability_month_grid.dart';
+import '../widgets/room_management_drawer.dart';
 import 'settlement_screen.dart';
 
 /// 모임 상세 화면 (공유 캘린더 · 일정 조율 · 공지/투표 · 스마트 정산)
@@ -120,11 +123,12 @@ class _ScheduleRoomDetailScreenState
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0F172A),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.chipYellowBg,
+              foregroundColor: AppColors.chipYellowText,
+              elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('확정하기'),
+            child: const Text('확정하기', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -200,16 +204,6 @@ class _ScheduleRoomDetailScreenState
     }
   }
 
-  void _copyInviteCode(String code) {
-    Clipboard.setData(ClipboardData(text: code));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('📋 모임 초대코드 [$code] 복사 완료!'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   void _handleSend(BuildContext context, String provider, String toName, int amount) {
     final label = provider == 'kakao' ? '카카오페이' : '토스';
     Clipboard.setData(ClipboardData(text: '$toName $amount원'));
@@ -243,7 +237,15 @@ class _ScheduleRoomDetailScreenState
     final pinnedNotices = room.notices.where((n) => n.isPinned).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.protoBackground,
+      backgroundColor: AppColors.cleanCanvasBg,
+      endDrawer: RoomManagementDrawer(
+        room: room,
+        myMember: myMember,
+        onSelectTab: (idx) => _tabController.animateTo(idx),
+        onRoomExited: () {
+          if (mounted) Navigator.of(context).pop();
+        },
+      ),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -251,53 +253,34 @@ class _ScheduleRoomDetailScreenState
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.protoHeading),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Row(
-              children: [
-                // 방 이름이 길면 좁은 폭에서 태그와 함께 넘친다 — 말줄임.
-                Flexible(
-                  child: Text(
-                    room.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
+            Flexible(
+              child: Text(
+                room.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
                 ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    room.categoryTag,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2563EB),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-            InkWell(
-              onTap: () => _copyInviteCode(room.inviteCode),
-              child: Row(
-                children: [
-                  Text(
-                    '코드: ${room.inviteCode}',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.copy_rounded, size: 11, color: Color(0xFF94A3B8)),
-                ],
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.chipYellowBg.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                room.categoryTag,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.chipYellowText,
+                ),
               ),
             ),
           ],
@@ -307,6 +290,14 @@ class _ScheduleRoomDetailScreenState
             icon: const Icon(Icons.person_pin_rounded, color: Color(0xFF0F172A)),
             tooltip: '내 컬러 및 이모지 변경',
             onPressed: () => _editMyProfile(room, myMember),
+          ),
+          Builder(
+            builder: (scaffoldCtx) => IconButton(
+              key: const Key('open_room_drawer_button'),
+              icon: const Icon(Icons.menu_rounded, color: Color(0xFF0F172A)),
+              tooltip: '모임 관리 서랍',
+              onPressed: () => Scaffold.of(scaffoldCtx).openEndDrawer(),
+            ),
           ),
         ],
         bottom: TabBar(
@@ -407,17 +398,21 @@ class _ScheduleRoomDetailScreenState
 
   // 1. 공유 캘린더 탭
   /// 메인 캘린더에서 이 방에 공유(roomLinks)한 내 일정. 모임 확정 시 자동으로
-  /// 만들어지는 개인 사본('plan-room-')은 방 일정과 중복이라 제외한다.
+  /// 만들어지는 개인 사본('plan-room-')이나 이미 room.events에 등록된 동일 일정은 중복 제외한다.
   List<RoomSharedEvent> _linkedMyEvents(ScheduleRoom room, String myUid) {
+    final existingIds = room.events.map((e) => e.id).toSet();
     return [
       for (final p in ref.watch(planListProvider))
-        if (p.roomLinks.contains(room.id) && !p.id.startsWith('plan-room-'))
+        if (p.roomLinks.contains(room.id) &&
+            !p.id.startsWith('plan-room-') &&
+            !existingIds.contains('room-plan-${p.id}'))
           RoomSharedEvent(
             id: 'mycal-${p.id}',
             roomId: room.id,
             title: p.title,
             authorUid: myUid,
             date: p.date,
+            endDate: p.endDate,
             isAllDay: p.isAllDay || p.deadlineTime == null,
             time: p.deadlineTime == null
                 ? null
@@ -426,336 +421,354 @@ class _ScheduleRoomDetailScreenState
     ];
   }
 
+  /// 모임 공유 캘린더 풀스크린 뷰 (상단 '참여 멤버' 카드 영구 삭제 + 칩 캘린더 100% 동일 엔진)
   Widget _buildSharedCalendarTab(ScheduleRoom room, RoomMember myMember) {
     final linked = _linkedMyEvents(room, myMember.uid);
     final linkedIds = {for (final e in linked) e.id};
     final allEvents = [...room.events, ...linked];
     final selectedEvents = allEvents.where((e) {
-      return e.date.year == _selectedCalendarDate.year &&
-          e.date.month == _selectedCalendarDate.month &&
-          e.date.day == _selectedCalendarDate.day;
+      final d = DateTime(
+        _selectedCalendarDate.year,
+        _selectedCalendarDate.month,
+        _selectedCalendarDate.day,
+      );
+      final s = DateTime(e.date.year, e.date.month, e.date.day);
+      final end = e.endDate != null
+          ? DateTime(e.endDate!.year, e.endDate!.month, e.endDate!.day)
+          : s;
+      return !d.isBefore(s) && !d.isAfter(end);
     }).toList();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.fromLTRB(5, 6, 5, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Member avatars row
-          _buildMembersHorizontalList(room),
-          const SizedBox(height: 16),
-
-          // Shared Month Calendar Grid
+          // 풀스크린 공유 캘린더 (상단 참여 멤버 카드 영구 제거 -> 연월 헤더가 곧바로 최상단 배치)
           _buildSharedCalendarMonthGrid(room, allEvents),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // Events on selected date
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  '${_selectedCalendarDate.month}월 ${_selectedCalendarDate.day}일 공유 일정',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+          // 선택 날짜 공유 일정 헤더 + 일정 등록 버튼
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 7),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    '${_selectedCalendarDate.month}월 ${_selectedCalendarDate.day}일 공유 일정',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.protoHeading,
+                    ),
+                  ),
                 ),
-              ),
-              TextButton.icon(
-                onPressed: () async {
-                  final newEvent = await showAddRoomEventDialog(
+                ElevatedButton.icon(
+                  key: const Key('room_calendar_add_event_btn'),
+                  onPressed: () => showAddEventBottomSheet(
                     context,
-                    roomId: room.id,
-                    authorUid: myMember.uid,
+                    categoryKey: 'group',
+                    initialRoomId: room.id,
                     initialDate: _selectedCalendarDate,
-                  );
-                  if (newEvent != null) {
-                    ref.read(scheduleRoomsProvider.notifier).addRoomEvent(room.id, newEvent);
-                  }
-                },
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('일정 등록', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 15),
+                  label: const Text(
+                    '일정 등록',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.chipYellowBg,
+                    foregroundColor: AppColors.chipYellowText,
+                    elevation: 0,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
 
-          if (selectedEvents.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: const Center(
-                child: Text('이 날짜에는 등록된 일정이 없습니다.', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
-              ),
-            )
-          else
-            for (final ev in selectedEvents)
-              _buildEventTile(room, ev, fromMyCalendar: linkedIds.contains(ev.id)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: selectedEvents.isEmpty
+                ? Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '이 날짜에는 등록된 일정이 없습니다.',
+                        style: TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)),
+                      ),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      for (final ev in selectedEvents)
+                        _buildEventTile(
+                          room,
+                          ev,
+                          fromMyCalendar: linkedIds.contains(ev.id),
+                        ),
+                    ],
+                  ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMembersHorizontalList(ScheduleRoom room) {
-    final friendState = ref.watch(friendSystemProvider);
-    final myProfile = ref.watch(currentUserProfileProvider);
+  Future<void> _showYearMonthWheelPicker() async {
+    int pickedYear = _focusedMonth.year;
+    int pickedMonth = _focusedMonth.month;
+    const firstYear = 2020;
+    const lastYear = 2035;
+    final yearCtrl = FixedExtentScrollController(
+      initialItem: (pickedYear - firstYear).clamp(0, lastYear - firstYear),
+    );
+    final monthCtrl = FixedExtentScrollController(
+      initialItem: (pickedMonth - 1).clamp(0, 11),
+    );
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final result = await showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '참여 멤버 (${room.members.length}명)',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-              ),
-              InkWell(
-                onTap: () => _copyInviteCode(room.inviteCode),
-                child: const Row(
-                  children: [
-                    Icon(Icons.person_add_alt_1_rounded, size: 14, color: Color(0xFF2563EB)),
-                    SizedBox(width: 4),
-                    Text('친구 초대', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: room.members.map((m) {
-              final isMe = m.uid == myProfile.uid || m.uid == friendState.myProfile.uid;
-              final isAlreadyFriend = friendState.isFriend(m.uid);
-              final isSent = friendState.hasSentRequest(m.uid);
-
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              Container(
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: _hexToColor(m.colorHex).withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _hexToColor(m.colorHex)),
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    HaruChipIconViewer(iconKey: m.icon, size: 16, circular: true),
-                    const SizedBox(width: 4),
-                    Text(
-                      m.name,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '연 · 월 이동',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.protoHeading,
                     ),
-                    if (m.isHost) ...[
-                      const SizedBox(width: 4),
-                      const Text('👑', style: TextStyle(fontSize: 10)),
-                    ],
-                    if (!isMe && !isAlreadyFriend) ...[
-                      const SizedBox(width: 6),
-                      InkWell(
-                        key: Key('room_member_add_friend_${m.uid}'),
-                        onTap: isSent
-                            ? null
-                            : () async {
-                                await ref
-                                    .read(friendSystemProvider.notifier)
-                                    .sendFriendRequest(
-                                      BattleTagUser(
-                                        uid: m.uid,
-                                        nickname: m.name,
-                                        tag: generateBattleTag(),
-                                        avatarIcon: m.icon,
-                                      ),
-                                    );
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('${m.name}님에게 친구 요청을 보냈습니다.'),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              },
-                        borderRadius: BorderRadius.circular(999),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isSent
-                                ? const Color(0xFFE5E7EB)
-                                : AppColors.chipYellowBg,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx, DateTime(pickedYear, pickedMonth, 1)),
+                    style: TextButton.styleFrom(
+                      backgroundColor: AppColors.chipYellowBg,
+                      foregroundColor: AppColors.chipYellowText,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      '완료',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 160,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: CupertinoPicker.builder(
+                        scrollController: yearCtrl,
+                        itemExtent: 36,
+                        childCount: lastYear - firstYear + 1,
+                        onSelectedItemChanged: (i) => pickedYear = firstYear + i,
+                        itemBuilder: (_, i) => Center(
                           child: Text(
-                            isSent ? '요청됨' : '+ 친구 추가',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: isSent
-                                  ? const Color(0xFF6B7280)
-                                  : AppColors.chipYellowText,
+                            '${firstYear + i}년',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                       ),
-                    ],
+                    ),
+                    Expanded(
+                      child: CupertinoPicker.builder(
+                        scrollController: monthCtrl,
+                        itemExtent: 36,
+                        childCount: 12,
+                        onSelectedItemChanged: (i) => pickedMonth = i + 1,
+                        itemBuilder: (_, i) => Center(
+                          child: Text(
+                            '${i + 1}월',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSharedCalendarMonthGrid(ScheduleRoom room, List<RoomSharedEvent> events) {
-    final year = _focusedMonth.year;
-    final month = _focusedMonth.month;
-    final daysInMonth = DateTime(year, month + 1, 0).day;
-    final firstWeekday = DateTime(year, month, 1).weekday % 7; // 0=Sun
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: _previousMonth,
-                icon: const Icon(Icons.chevron_left_rounded, size: 22),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-              Text(
-                '$year년 $month월',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-              ),
-              IconButton(
-                onPressed: _nextMonth,
-                icon: const Icon(Icons.chevron_right_rounded, size: 22),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: ['일', '월', '화', '수', '목', '금', '토'].map((w) {
-              return Expanded(
-                child: Center(
-                  child: Text(
-                    w,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: w == '일' ? Colors.redAccent : (w == '토' ? Colors.blueAccent : const Color(0xFF94A3B8)),
+        ),
+      ),
+    );
+    yearCtrl.dispose();
+    monthCtrl.dispose();
+    if (result != null && mounted) {
+      setState(() => _focusedMonth = result);
+    }
+  }
+
+  /// 칩 캘린더와 100% 동일한 MonthGrid 뷰 엔진 (연월 휠 피커 · 다일 연속 바 · #FFE699 선택 셀)
+  Widget _buildSharedCalendarMonthGrid(
+    ScheduleRoom room,
+    List<RoomSharedEvent> events,
+  ) {
+    final displaySettings = ref.watch(calendarDisplaySettingsProvider);
+    final mappedEvents = events.map((ev) {
+      final author = room.members.firstWhere(
+        (m) => m.uid == ev.authorUid,
+        orElse: () => const RoomMember(
+          uid: '',
+          name: '멤버',
+          icon: '👤',
+          colorHex: '#FFE699',
+        ),
+      );
+      return CalendarEvent(
+        id: ev.id,
+        title: ev.title,
+        date: DateTime(ev.date.year, ev.date.month, ev.date.day),
+        endDate: ev.endDate != null
+            ? DateTime(ev.endDate!.year, ev.endDate!.month, ev.endDate!.day)
+            : null,
+        time: ev.isAllDay ? null : ev.time,
+        source: 'group',
+        categoryKey: 'group_${room.id}',
+        colorHex: author.colorHex,
+        fillLabelBackground: true,
+      );
+    }).toList();
+
+    List<CalendarEvent> eventsOnDate(DateTime date) {
+      final d = DateTime(date.year, date.month, date.day);
+      return mappedEvents.where((e) {
+        final s = DateTime(e.date.year, e.date.month, e.date.day);
+        final end = e.endDate != null
+            ? DateTime(e.endDate!.year, e.endDate!.month, e.endDate!.day)
+            : s;
+        return !d.isBefore(s) && !d.isAfter(end);
+      }).toList();
+    }
+
+    final gridHeight =
+        (MediaQuery.sizeOf(context).height * 0.52).clamp(380.0, 480.0);
+
+    return Container(
+      key: const Key('room_fullscreen_calendar_container'),
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: _previousMonth,
+                  icon: const Icon(Icons.chevron_left_rounded, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                InkWell(
+                  key: const Key('room_calendar_year_month_button'),
+                  onTap: _showYearMonthWheelPicker,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${_focusedMonth.year}년 ${_focusedMonth.month}월',
+                          style: const TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.protoHeading,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 8),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 42,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
-              // 정사각형(폭 비례)이면 넓은 화면에서 칸이 거대해진다 — 일정 조율 달력과 같은 고정 높이.
-              mainAxisExtent: kRoomGridCellHeight,
-            ),
-            itemBuilder: (context, index) {
-              final dayNum = index - firstWeekday + 1;
-              if (dayNum < 1 || dayNum > daysInMonth) {
-                return const SizedBox.shrink();
-              }
-
-              final cellDate = DateTime(year, month, dayNum);
-              final isSelected = cellDate.year == _selectedCalendarDate.year &&
-                  cellDate.month == _selectedCalendarDate.month &&
-                  cellDate.day == _selectedCalendarDate.day;
-
-              final dateEvents = events
-                  .where((e) =>
-                      e.date.year == cellDate.year &&
-                      e.date.month == cellDate.month &&
-                      e.date.day == cellDate.day)
-                  .toList();
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _selectedCalendarDate = cellDate);
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF0F172A) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    border: isSelected ? Border.all(color: const Color(0xFF0F172A), width: 1.5) : null,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '$dayNum',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                          color: isSelected
-                              ? Colors.white
-                              : (cellDate.weekday == 7 ? Colors.redAccent : (cellDate.weekday == 6 ? Colors.blueAccent : const Color(0xFF334155))),
-                        ),
-                      ),
-                      if (dateEvents.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: dateEvents.take(3).map((ev) {
-                              final author = room.members.firstWhere(
-                                (m) => m.uid == ev.authorUid,
-                                orElse: () => const RoomMember(uid: '', name: '', icon: '', colorHex: '#38BDF8'),
-                              );
-                              return Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 1),
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: isSelected ? Colors.white : _hexToColor(author.colorHex),
-                                  shape: BoxShape.circle,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                    ],
-                  ),
+                IconButton(
+                  onPressed: _nextMonth,
+                  icon: const Icon(Icons.chevron_right_rounded, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-              );
-            },
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: gridHeight,
+            child: MonthGrid(
+              focusedMonth: _focusedMonth,
+              selectedDate: _selectedCalendarDate,
+              hasEventOnDate: (d) => eventsOnDate(d).isNotEmpty,
+              getEventsOnDate: eventsOnDate,
+              allEvents: mappedEvents,
+              onDateSelected: (d) => setState(() => _selectedCalendarDate = d),
+              onPreviousMonth: _previousMonth,
+              onNextMonth: _nextMonth,
+              displaySettings: displaySettings,
+            ),
           ),
         ],
       ),
@@ -1230,10 +1243,10 @@ class _ScheduleRoomDetailScreenState
                   }
                 },
                 icon: const Icon(Icons.edit_note_rounded, size: 16),
-                label: const Text('공지 작성', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                label: const Text('공지 작성', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F172A),
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.chipYellowBg,
+                  foregroundColor: AppColors.chipYellowText,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   elevation: 0,
@@ -1281,10 +1294,10 @@ class _ScheduleRoomDetailScreenState
                   }
                 },
                 icon: const Icon(Icons.how_to_vote_rounded, size: 16),
-                label: const Text('투표 만들기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                label: const Text('투표 만들기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F172A),
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.chipYellowBg,
+                  foregroundColor: AppColors.chipYellowText,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   elevation: 0,
@@ -1857,10 +1870,10 @@ class _ScheduleRoomDetailScreenState
                       );
                     },
                     icon: const Icon(Icons.calculate_outlined, size: 18),
-                    label: const Text('+ 새 정산 계산 및 영수증 발행', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text('+ 새 정산 계산 및 영수증 발행', style: TextStyle(fontWeight: FontWeight.w800)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F172A),
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppColors.chipYellowBg,
+                      foregroundColor: AppColors.chipYellowText,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 0,

@@ -2,19 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design_system/colors.dart';
+import '../../shared/widgets/haru_calendar_picker.dart';
 import '../models/wedding_budget_item.dart';
 import '../providers/wedding_budget_provider.dart';
 
-/// 결혼 예산 항목 추가/수정 바텀시트 모달
-/// 세부 입력 필드 8종:
-/// 1) 구분 카테고리 (8대 카테고리)
-/// 2) 항목명
-/// 3) 예상 예산
-/// 4) 계약금(예약금)
-/// 5) 잔금
-/// 6) 신랑/신부/공동 부담 선택
-/// 7) 진행 상황(미정/예약완료/완납)
-/// 8) 상세 메모
+/// 스마트 지출 상세 관리 바텀시트 (모바일 엑셀 데이터 엔트리)
+///
+/// 1) 기본 정보: 항목명, 8대 분류 선택
+/// 2) 금액 분할 입력: [총 견적 금액] + [계약금] -> [남은 잔금] 실시간 자동 계산 + [잔금 결제 예정일](캘린더/D-Day 연동)
+/// 3) 결제 수단 및 혜택 관리: [신용카드/체크카드/계좌이체/현금], 할부(일시불/3/6/12개월), 현금영수증 토글
+/// 4) 정산 주체([공동/신랑/신부]) + 진행 상황([미정/예약완료/완납]) + 상세 메모
 class WeddingBudgetEditModal extends ConsumerStatefulWidget {
   const WeddingBudgetEditModal({super.key, this.item});
 
@@ -30,10 +27,16 @@ class WeddingBudgetEditModal extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<WeddingBudgetEditModal> createState() => _WeddingBudgetEditModalState();
+  ConsumerState<WeddingBudgetEditModal> createState() =>
+      _WeddingBudgetEditModalState();
 }
 
-class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal> {
+class _WeddingBudgetEditModalState
+    extends ConsumerState<WeddingBudgetEditModal> {
+  static const Color _butterYellow = AppColors.chipYellowBg; // #FFE699
+  static const Color _deepBrown = AppColors.chipYellowText; // #3A2E1A
+  static const Color _softGray = Color(0xFFF8F9FA);
+
   late final TextEditingController _titleController;
   late final TextEditingController _estimatedController;
   late final TextEditingController _depositController;
@@ -41,8 +44,15 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
   late final TextEditingController _memoController;
 
   late WeddingBudgetCategory _selectedCategory;
+  late WeddingExpensePhase _selectedPhase;
   late ExpensePayer _selectedPayer;
   late BudgetPaymentStatus _selectedStatus;
+  late WeddingPaymentMethod _paymentMethod;
+  late int _installmentMonths;
+  late bool _cashReceiptIssued;
+  DateTime? _balanceDueDate;
+
+  bool _balanceManuallyEdited = false;
 
   @override
   void initState() {
@@ -50,7 +60,9 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
     final item = widget.item;
     _titleController = TextEditingController(text: item?.title ?? '');
     _estimatedController = TextEditingController(
-      text: item != null && item.estimatedBudget > 0 ? item.estimatedBudget.toString() : '',
+      text: item != null && item.estimatedBudget > 0
+          ? item.estimatedBudget.toString()
+          : '',
     );
     _depositController = TextEditingController(
       text: item != null && item.deposit > 0 ? item.deposit.toString() : '',
@@ -61,8 +73,13 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
     _memoController = TextEditingController(text: item?.memo ?? '');
 
     _selectedCategory = item?.category ?? WeddingBudgetCategory.hallAndMeal;
+    _selectedPhase = item?.phase ?? WeddingExpensePhase.preWedding;
     _selectedPayer = item?.payer ?? ExpensePayer.joint;
-    _selectedStatus = item?.status ?? BudgetPaymentStatus.pending;
+    _selectedStatus = item?.status ?? BudgetPaymentStatus.contracted;
+    _paymentMethod = item?.paymentMethod ?? WeddingPaymentMethod.creditCard;
+    _installmentMonths = item?.installmentMonths ?? 0;
+    _cashReceiptIssued = item?.cashReceiptIssued ?? false;
+    _balanceDueDate = item?.balanceDueDate;
   }
 
   @override
@@ -75,18 +92,49 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
     super.dispose();
   }
 
+  int _parseAmount(String raw) =>
+      int.tryParse(raw.replaceAll(',', '').trim()) ?? 0;
+
+  /// 총 견적 또는 계약금 변경 시 남은 잔금(총액 - 계약금) 자동 계산
+  void _recalculateBalance() {
+    if (_balanceManuallyEdited) return;
+    final total = _parseAmount(_estimatedController.text);
+    final deposit = _parseAmount(_depositController.text);
+    final autoBalance = (total - deposit).clamp(0, 9999999999);
+    _balanceController.text = autoBalance > 0 ? autoBalance.toString() : '0';
+    setState(() {});
+  }
+
+  String _fmtDate(DateTime d) =>
+      '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickBalanceDueDate() async {
+    final picked = await showHaruDatePicker(
+      context,
+      initialDate: _balanceDueDate ?? DateTime.now().add(const Duration(days: 30)),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2040),
+    );
+    if (picked != null && mounted) {
+      setState(() => _balanceDueDate = picked);
+    }
+  }
+
   void _save() {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('항목명을 입력해주세요.'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text('항목명을 입력해주세요.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
-    final estimated = int.tryParse(_estimatedController.text.replaceAll(',', '').trim()) ?? 0;
-    final deposit = int.tryParse(_depositController.text.replaceAll(',', '').trim()) ?? 0;
-    final balance = int.tryParse(_balanceController.text.replaceAll(',', '').trim()) ?? 0;
+    final estimated = _parseAmount(_estimatedController.text);
+    final deposit = _parseAmount(_depositController.text);
+    final balance = _parseAmount(_balanceController.text);
 
     final isDepositPaid = _selectedStatus == BudgetPaymentStatus.contracted ||
         _selectedStatus == BudgetPaymentStatus.fullyPaid;
@@ -96,6 +144,7 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
       final updated = widget.item!.copyWith(
         title: title,
         category: _selectedCategory,
+        phase: _selectedPhase,
         estimatedBudget: estimated,
         deposit: deposit,
         balance: balance,
@@ -104,6 +153,11 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
         isDepositPaid: isDepositPaid,
         isBalancePaid: isBalancePaid,
         memo: _memoController.text.trim(),
+        balanceDueDate: _balanceDueDate,
+        clearBalanceDueDate: _balanceDueDate == null,
+        paymentMethod: _paymentMethod,
+        installmentMonths: _installmentMonths,
+        cashReceiptIssued: _cashReceiptIssued,
       );
       ref.read(weddingBudgetListProvider.notifier).updateItem(updated);
     } else {
@@ -111,6 +165,7 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
         id: 'budget-custom-${DateTime.now().microsecondsSinceEpoch}',
         title: title,
         category: _selectedCategory,
+        phase: _selectedPhase,
         estimatedBudget: estimated,
         deposit: deposit,
         balance: balance,
@@ -119,6 +174,10 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
         isDepositPaid: isDepositPaid,
         isBalancePaid: isBalancePaid,
         memo: _memoController.text.trim(),
+        balanceDueDate: _balanceDueDate,
+        paymentMethod: _paymentMethod,
+        installmentMonths: _installmentMonths,
+        cashReceiptIssued: _cashReceiptIssued,
       );
       ref.read(weddingBudgetListProvider.notifier).addItem(newItem);
     }
@@ -127,7 +186,9 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(widget.item != null ? '예산 항목이 수정되었습니다.' : '새 예산 항목이 추가되었습니다.'),
+        content: Text(
+          widget.item != null ? '지출 항목이 수정되었습니다.' : '새 지출 항목이 추가되었습니다.',
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -138,7 +199,10 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
     ref.read(weddingBudgetListProvider.notifier).removeItem(widget.item!.id);
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('예산 항목이 삭제되었습니다.'), behavior: SnackBarBehavior.floating),
+      const SnackBar(
+        content: Text('지출 항목이 삭제되었습니다.'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -147,28 +211,26 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
     final isEditing = widget.item != null;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.90,
+      height: MediaQuery.of(context).size.height * 0.88,
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Column(
         children: [
-          // 드래그 바 및 상단 헤더
+          // 컴팩트 헤더
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 20, 12),
+            padding: const EdgeInsets.fromLTRB(18, 10, 14, 8),
             child: Column(
               children: [
                 Center(
                   child: Container(
-                    width: 36,
+                    width: 34,
                     height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(bottom: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
+                      color: const Color(0xFFE5E7EB),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -177,37 +239,82 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      isEditing ? '예산 항목 수정' : '예산 항목 직접 추가',
+                      isEditing ? '지출 상세 수정' : '새 지출 상세 입력',
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.protoHeading,
+                        color: _deepBrown,
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: Color(0xFF9CA3AF),
+                      ),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          const Divider(height: 1, color: Color(0xFFF1F1EE)),
 
-          // 폼 입력 본문
+          // 본문 폼
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. 구분 카테고리
-                  const Text(
-                    '1. 구분 카테고리',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                  // 0. 지출 시점 (본식 전 준비 지출 / 본식 당일·사후 정산)
+                  _buildLabel('지출 시점'),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      for (final ph in WeddingExpensePhase.values) ...[
+                        Expanded(
+                          child: InkWell(
+                            key: Key('wedding_budget_edit_phase_${ph.name}'),
+                            onTap: () => setState(() => _selectedPhase = ph),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _selectedPhase == ph
+                                    ? _butterYellow
+                                    : _softGray,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                ph.labelKo,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: _selectedPhase == ph
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: _selectedPhase == ph
+                                      ? _deepBrown
+                                      : const Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (ph != WeddingExpensePhase.values.last)
+                          const SizedBox(width: 6),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 11),
+
+                  // 1. 기본 정보: 분류 + 항목명
+                  _buildLabel('분류'),
+                  const SizedBox(height: 6),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
@@ -216,124 +323,114 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
                         for (final cat in WeddingBudgetCategory.values)
                           Padding(
                             padding: const EdgeInsets.only(right: 6),
-                            child: ChoiceChip(
-                              label: Text('${cat.emoji} ${cat.labelKo}'),
-                              selected: _selectedCategory == cat,
-                              selectedColor: const Color(0xFFE53E3E),
-                              labelStyle: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: _selectedCategory == cat ? Colors.white : const Color(0xFF475569),
+                            child: InkWell(
+                              onTap: () => setState(() => _selectedCategory = cat),
+                              borderRadius: BorderRadius.circular(999),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _selectedCategory == cat
+                                      ? _butterYellow
+                                      : _softGray,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  cat.labelKo,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: _selectedCategory == cat
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    color: _selectedCategory == cat
+                                        ? _deepBrown
+                                        : const Color(0xFF6B7280),
+                                  ),
+                                ),
                               ),
-                              showCheckmark: false,
-                              onSelected: (val) {
-                                if (val) setState(() => _selectedCategory = cat);
-                              },
                             ),
                           ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 11),
 
-                  // 2. 항목명
-                  const Text(
-                    '2. 항목명',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                  ),
-                  const SizedBox(height: 8),
+                  _buildLabel('항목명'),
+                  const SizedBox(height: 4),
                   TextField(
+                    key: const Key('wedding_budget_title_input'),
                     controller: _titleController,
-                    decoration: InputDecoration(
-                      hintText: '예: 본식 스냅 & 원판 촬영',
-                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE53E3E), width: 1.5)),
-                    ),
+                    style: const TextStyle(fontSize: 13.5, color: _deepBrown),
+                    decoration: _inputDecoration('예: 웨딩홀 대관료, 스튜디오 잔금'),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
 
-                  // 3. 예상 예산
-                  const Text(
-                    '3. 예상 예산 (원)',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                  ),
-                  const SizedBox(height: 8),
+                  // 2. 금액 분할 입력: 총 견적 + 계약금 -> 남은 잔금 자동 계산
+                  _buildLabel('총 견적 금액'),
+                  const SizedBox(height: 4),
                   TextField(
+                    key: const Key('wedding_budget_total_input'),
                     controller: _estimatedController,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: '예: 25000000',
-                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      prefixIcon: const Icon(Icons.calculate_outlined, size: 20, color: Color(0xFF94A3B8)),
-                      suffixText: '원',
-                      filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE53E3E), width: 1.5)),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: _deepBrown,
                     ),
+                    onChanged: (_) => _recalculateBalance(),
+                    decoration: _inputDecoration('예: 25000000', suffixText: '원'),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 9),
 
-                  // 4 & 5. 계약금(예약금) 및 잔금
                   Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              '4. 계약금(예약금)',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                            ),
-                            const SizedBox(height: 8),
+                            _buildLabel('계약금 (이미 낸 돈)'),
+                            const SizedBox(height: 4),
                             TextField(
+                              key: const Key('wedding_budget_deposit_input'),
                               controller: _depositController,
                               keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                hintText: '예: 3000000',
-                                hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: _deepBrown,
+                              ),
+                              onChanged: (_) => _recalculateBalance(),
+                              decoration: _inputDecoration(
+                                '예: 3000000',
                                 suffixText: '원',
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE53E3E), width: 1.5)),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              '5. 잔금',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                            ),
-                            const SizedBox(height: 8),
+                            _buildLabel('남은 잔금 (자동 계산)'),
+                            const SizedBox(height: 4),
                             TextField(
+                              key: const Key('wedding_budget_balance_input'),
                               controller: _balanceController,
                               keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                hintText: '예: 22000000',
-                                hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: _deepBrown,
+                              ),
+                              onChanged: (_) => _balanceManuallyEdited = true,
+                              decoration: _inputDecoration(
+                                '자동 계산',
                                 suffixText: '원',
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE53E3E), width: 1.5)),
+                                fillColor: const Color(0xFFFFFBF0),
                               ),
                             ),
                           ],
@@ -341,141 +438,325 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 9),
 
-                  // 6. 신랑/신부/공동 부담 선택
-                  const Text(
-                    '6. 부담 구분',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                  // 잔금 결제 예정일 (캘린더/D-Day 자동 연동)
+                  _buildLabel('잔금 결제 예정일 (캘린더 · D-Day 자동 등록)'),
+                  const SizedBox(height: 4),
+                  InkWell(
+                    key: const Key('wedding_budget_due_date_picker'),
+                    onTap: _pickBalanceDueDate,
+                    borderRadius: BorderRadius.circular(11),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _softGray,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_rounded,
+                            size: 15,
+                            color: Color(0xFF8C7E6A),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _balanceDueDate != null
+                                  ? _fmtDate(_balanceDueDate!)
+                                  : '예정일 선택 안 함',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: _balanceDueDate != null
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: _balanceDueDate != null
+                                    ? _deepBrown
+                                    : const Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ),
+                          if (_balanceDueDate != null)
+                            GestureDetector(
+                              onTap: () => setState(() => _balanceDueDate = null),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
+
+                  // 3. 결제 수단 및 혜택 관리
+                  _buildLabel('결제 수단'),
+                  const SizedBox(height: 5),
                   Row(
                     children: [
-                      for (final p in ExpensePayer.values) ...[
+                      for (final m in WeddingPaymentMethod.values) ...[
                         Expanded(
                           child: InkWell(
-                            onTap: () => setState(() => _selectedPayer = p),
-                            borderRadius: BorderRadius.circular(12),
+                            key: Key('wedding_payment_method_${m.name}'),
+                            onTap: () => setState(() {
+                              _paymentMethod = m;
+                              if (m != WeddingPaymentMethod.creditCard) {
+                                _installmentMonths = 0;
+                              }
+                            }),
+                            borderRadius: BorderRadius.circular(10),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: _selectedPayer == p ? p.bgColor : const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: _selectedPayer == p ? p.color : const Color(0xFFE2E8F0),
-                                  width: _selectedPayer == p ? 1.5 : 1.0,
+                                color: _paymentMethod == m
+                                    ? _butterYellow
+                                    : _softGray,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                m.labelKo,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: _paymentMethod == m
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: _paymentMethod == m
+                                      ? _deepBrown
+                                      : const Color(0xFF6B7280),
                                 ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (m != WeddingPaymentMethod.values.last)
+                          const SizedBox(width: 5),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+
+                  // 할부 정보
+                  _buildLabel('할부 정보'),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      for (final months in const [0, 3, 6, 12]) ...[
+                        Expanded(
+                          child: InkWell(
+                            key: Key('wedding_installment_$months'),
+                            onTap: () =>
+                                setState(() => _installmentMonths = months),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 7.5),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _installmentMonths == months
+                                    ? _butterYellow
+                                    : _softGray,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                months == 0 ? '일시불' : '$months개월',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: _installmentMonths == months
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: _installmentMonths == months
+                                      ? _deepBrown
+                                      : const Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (months != 12) const SizedBox(width: 5),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+
+                  // 현금영수증 발행 여부 토글
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _softGray,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '현금영수증 발행 여부',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: _deepBrown,
+                          ),
+                        ),
+                        Switch.adaptive(
+                          key: const Key('wedding_cash_receipt_switch'),
+                          value: _cashReceiptIssued,
+                          activeTrackColor: _butterYellow,
+                          activeThumbColor: _deepBrown,
+                          onChanged: (v) =>
+                              setState(() => _cashReceiptIssued = v),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 4. 정산 주체 ([공동] / [신랑] / [신부])
+                  _buildLabel('정산 주체'),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      for (final p in const [
+                        ExpensePayer.joint,
+                        ExpensePayer.groom,
+                        ExpensePayer.bride,
+                      ]) ...[
+                        Expanded(
+                          child: InkWell(
+                            key: Key('wedding_payer_${p.name}'),
+                            onTap: () => setState(() => _selectedPayer = p),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8.5),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _selectedPayer == p
+                                    ? _butterYellow
+                                    : _softGray,
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
                                 p.label,
                                 style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: _selectedPayer == p ? p.color : const Color(0xFF64748B),
+                                  fontSize: 12.5,
+                                  fontWeight: _selectedPayer == p
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: _selectedPayer == p
+                                      ? _deepBrown
+                                      : const Color(0xFF6B7280),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        if (p != ExpensePayer.values.last) const SizedBox(width: 8),
+                        if (p != ExpensePayer.bride) const SizedBox(width: 6),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
 
-                  // 7. 진행 상황 (미정 / 예약완료 / 완납)
-                  const Text(
-                    '7. 진행 상황',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                  ),
-                  const SizedBox(height: 8),
+                  // 진행 상황 (미정 / 예약완료 / 완납)
+                  _buildLabel('진행 상황'),
+                  const SizedBox(height: 5),
                   Row(
                     children: [
                       for (final st in BudgetPaymentStatus.values) ...[
                         Expanded(
                           child: InkWell(
                             onTap: () => setState(() => _selectedStatus = st),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: _selectedStatus == st ? st.bgColor : const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: _selectedStatus == st ? st.color : const Color(0xFFE2E8F0),
-                                  width: _selectedStatus == st ? 1.5 : 1.0,
-                                ),
+                                color: _selectedStatus == st
+                                    ? _butterYellow
+                                    : _softGray,
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
                                 st.label,
                                 style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: _selectedStatus == st ? st.color : const Color(0xFF64748B),
+                                  fontSize: 12,
+                                  fontWeight: _selectedStatus == st
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: _selectedStatus == st
+                                      ? _deepBrown
+                                      : const Color(0xFF6B7280),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        if (st != BudgetPaymentStatus.values.last) const SizedBox(width: 8),
+                        if (st != BudgetPaymentStatus.values.last)
+                          const SizedBox(width: 6),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
 
-                  // 8. 상세 메모
-                  const Text(
-                    '8. 상세 메모',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                  ),
-                  const SizedBox(height: 8),
+                  // 상세 메모
+                  _buildLabel('상세 메모'),
+                  const SizedBox(height: 4),
                   TextField(
                     controller: _memoController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: '계약 조건, 특약 사항, 현금 영수증 여부 등 상세 메모',
-                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE53E3E), width: 1.5)),
-                    ),
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 13, color: _deepBrown),
+                    decoration: _inputDecoration('계약 조건, 특약 사항, 담당자 메모'),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
-                  // 하단 저장 및 삭제 버튼
+                  // 하단 저장 / 삭제 버튼
                   Row(
                     children: [
                       if (isEditing) ...[
-                        OutlinedButton(
+                        TextButton(
                           onPressed: _delete,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFFE53E3E),
-                            side: const BorderSide(color: Color(0xFFFECDD3)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF9CA3AF),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
                           ),
-                          child: const Text('삭제', style: TextStyle(fontWeight: FontWeight.bold)),
+                          child: const Text(
+                            '삭제',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 6),
                       ],
                       Expanded(
-                        child: ElevatedButton(
-                          onPressed: _save,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE53E3E),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          child: Text(
-                            isEditing ? '수정 내용 저장' : '예산표에 추가하기',
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        child: SizedBox(
+                          height: 46,
+                          child: ElevatedButton(
+                            key: const Key('wedding_budget_save_btn'),
+                            onPressed: _save,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _butterYellow,
+                              foregroundColor: _deepBrown,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: Text(
+                              isEditing ? '수정 내용 저장' : '지출표에 추가하기',
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -486,6 +767,42 @@ class _WeddingBudgetEditModalState extends ConsumerState<WeddingBudgetEditModal>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF8C7E6A),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(
+    String hint, {
+    String? suffixText,
+    Color fillColor = _softGray,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+      suffixText: suffixText,
+      suffixStyle: const TextStyle(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF8C7E6A),
+      ),
+      filled: true,
+      fillColor: fillColor,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(11),
+        borderSide: BorderSide.none,
       ),
     );
   }

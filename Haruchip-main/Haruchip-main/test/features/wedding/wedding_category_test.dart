@@ -229,7 +229,7 @@ void main() {
   });
 
   group('Wedding Widgets Rendering', () {
-    testWidgets('WeddingCategoryView renders checklist header, + 일정 추가 button, cards and budget section', (tester) async {
+    testWidgets('WeddingCategoryView renders slim checklist accordion, smart picker button, and executive budget summary', (tester) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
@@ -242,24 +242,22 @@ void main() {
         ),
       );
 
-      // Checklist header and add button
-      expect(find.textContaining('준비 항목 체크리스트'), findsOneWidget);
-      expect(find.text('항목/일정 추가'), findsOneWidget);
+      // Checklist header and smart picker add button
+      expect(find.text('웨딩 체크리스트'), findsOneWidget);
+      expect(find.byKey(const Key('wedding_open_smart_picker_btn')), findsOneWidget);
 
-      // Card items: #순번 태그 제거 확인 및 항목명/일시/장소 확인
+      // 1-line slim tile items
       expect(find.text('#01'), findsNothing);
       expect(find.text('양가 부모님 인사드리기 (신부 쪽)'), findsOneWidget);
-      expect(find.textContaining('📅 '), findsWidgets);
-      expect(find.textContaining('📍 '), findsWidgets);
 
-      // Budget section
-      expect(find.textContaining('결혼 예산 & 지출 정리표'), findsOneWidget);
-      expect(find.text('총 예상 예산'), findsOneWidget);
-      expect(find.text('총 실제 지출액'), findsOneWidget);
-      expect(find.text('남은 잔금 총액'), findsOneWidget);
+      // Executive budget summary section
+      expect(find.text('웨딩 예산 · 지출표'), findsOneWidget);
+      expect(find.text('목표 예산'), findsOneWidget);
+      expect(find.text('실제 확정액'), findsOneWidget);
+      expect(find.textContaining('남은 잔금'), findsWidgets);
     });
 
-    testWidgets('WeddingTemplateManagerModal renders 57 master templates and custom input', (tester) async {
+    testWidgets('WeddingTemplateManagerModal renders 57 master library smart picker with 5 domain tabs and custom input', (tester) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
@@ -270,11 +268,14 @@ void main() {
         ),
       );
 
-      expect(find.text('결혼 준비 항목'), findsOneWidget);
-      expect(find.text('원하는 일정을 담거나 직접 추가해보세요'), findsOneWidget);
-      expect(find.text('직접 추가'), findsOneWidget);
-      expect(find.text('소속 카테고리: '), findsOneWidget);
-      expect(find.text('선택한 5개 일정 추가/반영하기'), findsOneWidget);
+      expect(find.text('결혼 준비 항목 라이브러리'), findsOneWidget);
+      expect(find.byKey(const Key('wedding_picker_custom_input')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_picker_search_input')), findsOneWidget);
+      expect(find.text('웨딩홀 & 본식'), findsOneWidget);
+      expect(find.text('스드메 & 촬영'), findsOneWidget);
+      expect(find.text('D-1년 전'), findsNothing);
+      expect(find.text('1. 웨딩홀 & 본식'), findsNothing);
+      expect(find.text('선택한 5개 추가하기'), findsOneWidget);
     });
 
     testWidgets('WeddingCoupleShareModal renders invite code and partner connection input', (tester) async {
@@ -295,7 +296,7 @@ void main() {
       expect(find.text('연결하기'), findsOneWidget);
     });
 
-    testWidgets('CategoryDetailScreen for wedding renders scheduler and couple share buttons in AppBar without giant profile card', (tester) async {
+    testWidgets('CategoryDetailScreen for wedding removes sparkle & duplicate + and keeps only [👥][🎨][⚙️]', (tester) async {
       final category = Category(
         id: 'cat-wedding',
         categoryKey: 'wedding',
@@ -313,16 +314,23 @@ void main() {
         ),
       );
 
-      // AppBar buttons
-      expect(find.text('스케줄러'), findsOneWidget);
-      expect(find.byIcon(Icons.person_add_alt_1_rounded), findsOneWidget);
+      // 반짝이(✨) 및 상단 중복 [+] 아이콘 완전 제거 확인
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+      expect(find.byKey(const Key('category_add_item_button')), findsNothing);
 
-      // Giant profile card should NOT be in wedding view
-      expect(find.text('예식일 설정하기'), findsNothing);
-      expect(find.text('스케줄러 설정'), findsNothing);
+      // 우측 공통 규격 3종([👥], [🎨], [⚙️])만 깔끔하게 유지
+      expect(
+        find.byKey(const Key('partner_share_dropdown_button_wedding')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('category_decorate_button')), findsOneWidget);
+      expect(
+        find.byKey(const Key('category_section_manage_button')),
+        findsOneWidget,
+      );
 
       // Category body should have the refined WeddingCategoryView
-      expect(find.textContaining('준비 항목 체크리스트'), findsOneWidget);
+      expect(find.text('웨딩 체크리스트'), findsOneWidget);
     });
   });
 
@@ -421,8 +429,8 @@ void main() {
     });
   });
 
-  group('One-Touch Accordion Memo & Details Toggle Tests', () {
-    testWidgets('Tapping card body toggles accordion and displays memo, location, and tip', (tester) async {
+  group('Slim Checklist Tile & Edit Sheet Tests', () {
+    testWidgets('Tapping slim checklist tile opens 3-second WeddingItemEditModal with memo & location', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
@@ -454,23 +462,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 초기에는 아코디언 상세 메모가 닫혀있음 (오프스크린/미노출)
+      // 1줄 슬림 타일 표시 확인
       expect(find.text('스튜디오 촬영 드레스 셀렉'), findsOneWidget);
+      expect(find.text('· 📍로브드K 청담'), findsOneWidget);
 
-      // 카드 본문 탭 -> 아코디언 펼침
-      await tester.tap(find.text('스튜디오 촬영 드레스 셀렉'));
-      await tester.pumpAndSettle();
+      // 타일 탭 -> 일정 수정 바텀시트 오픈
+      await tester.tap(find.byKey(const Key('wedding_slim_tile_accordion-test-1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
-      // 인라인으로 메모, 장소, 팁 노출 확인
-      expect(find.text('작성된 메모'), findsOneWidget);
+      expect(find.text('일정 수정'), findsOneWidget);
       expect(find.text('비즈 풍성 드레스 및 실크 슬림 드레스 셀렉 예정'), findsOneWidget);
-      expect(find.textContaining('수~금요일 방문'), findsOneWidget);
-      expect(find.text('일정 / 장소 / 메모 수정하기'), findsOneWidget);
-
-      // 다시 한 번 탭 -> 아코디언 닫힘
-      await tester.tap(find.text('스튜디오 촬영 드레스 셀렉'));
-      await tester.pumpAndSettle();
-      expect(find.text('작성된 메모'), findsNothing);
     });
   });
 }

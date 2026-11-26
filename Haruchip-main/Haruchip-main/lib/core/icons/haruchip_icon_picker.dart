@@ -60,6 +60,7 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
   late final TabController _tabController;
   late HaruChipIconStyle _style;
   late String _selectedKey;
+  String _selectedGroupFilter = '전체';
   bool _isPickingPhoto = false;
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -277,12 +278,18 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
   Widget _buildIconsTab() {
     final catalog = HaruChipIconRegistry.groupedCatalog(style: _style);
     final normalizedSelected = HaruChipIconRegistry.normalizeKey(_selectedKey);
+    final filterOptions = <String>['전체', ...HaruChipIconRegistry.groups];
+    final visibleGroups = _selectedGroupFilter == '전체'
+        ? HaruChipIconRegistry.groups
+        : HaruChipIconRegistry.groups
+            .where((g) => g == _selectedGroupFilter)
+            .toList(growable: false);
 
     return Column(
       children: [
-        // 심플(파스텔) vs 라인(2px) 스타일 전환 필
+        // 1. 심플(파스텔) vs 라인(2px) 스타일 전환 필
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: Row(
             children: [
               _buildStylePill(
@@ -300,17 +307,65 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
           ),
         ),
 
-        // 4대 그룹별 아이콘 그리드
+        // 2. 카테고리별 테마 빠른 필터 칩 바 (전체, 군대, 아기, 반려동물, 덕질/엔터 등)
+        SizedBox(
+          height: 36,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: filterOptions.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (context, index) {
+              final label = filterOptions[index];
+              final isActive = _selectedGroupFilter == label;
+              return InkWell(
+                key: Key('icon_picker_filter_$label'),
+                onTap: () => setState(() => _selectedGroupFilter = label),
+                borderRadius: BorderRadius.circular(999),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? AppColors.chipYellowBg
+                        : AppColors.surfaceMuted.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: isActive
+                          ? AppColors.chipGoldOutline
+                          : Colors.transparent,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                      color: isActive
+                          ? AppColors.chipYellowText
+                          : AppColors.protoCardText,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // 3. 테마별 아이콘 그리드 (투명도 적용 소프트 라운드 컨테이너 + 균일 26dp 규격)
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-            itemCount: HaruChipIconRegistry.groups.length,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            itemCount: visibleGroups.length,
             itemBuilder: (context, groupIndex) {
-              final groupName = HaruChipIconRegistry.groups[groupIndex];
+              final groupName = visibleGroups[groupIndex];
               final items = catalog[groupName] ?? const <HaruChipIconItem>[];
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 18),
+                padding: const EdgeInsets.only(bottom: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -329,8 +384,8 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 5,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 9,
+                        mainAxisSpacing: 9,
                         childAspectRatio: 1,
                       ),
                       itemCount: items.length,
@@ -341,6 +396,7 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
                         return Tooltip(
                           message: item.labelKo,
                           child: InkWell(
+                            key: Key('icon_picker_item_${item.key}'),
                             onTap: () => Navigator.of(context).pop(item.key),
                             borderRadius: BorderRadius.circular(14),
                             child: AnimatedContainer(
@@ -349,18 +405,18 @@ class _HaruChipIconPickerState extends State<HaruChipIconPicker>
                               decoration: BoxDecoration(
                                 color: isSelected
                                     ? AppColors.protoCardSelectedBg
-                                    : AppColors.surfaceMuted,
+                                    : AppColors.surfaceMuted.withValues(alpha: 0.62),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
                                   color: isSelected
                                       ? AppColors.protoCardSelectedBorder
                                       : Colors.transparent,
-                                  width: isSelected ? 2 : 1,
+                                  width: isSelected ? 1.8 : 1,
                                 ),
                               ),
                               child: HaruChipIconViewer(
                                 iconKey: item.key,
-                                size: 28,
+                                size: 26,
                               ),
                             ),
                           ),

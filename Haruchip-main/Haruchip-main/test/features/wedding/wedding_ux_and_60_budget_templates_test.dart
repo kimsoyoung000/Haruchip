@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:haruchip/features/plan/providers/plan_provider.dart';
 import 'package:haruchip/features/wedding/data/wedding_budget_master_items.dart';
+import 'package:haruchip/features/wedding/data/wedding_standard_items.dart';
 import 'package:haruchip/features/wedding/models/wedding_budget_item.dart';
 import 'package:haruchip/features/wedding/models/wedding_item.dart';
+import 'package:haruchip/features/wedding/providers/wedding_budget_provider.dart';
 import 'package:haruchip/features/wedding/providers/wedding_provider.dart';
 import 'package:haruchip/features/wedding/widgets/wedding_budget_edit_modal.dart';
 import 'package:haruchip/features/wedding/widgets/wedding_budget_section_widget.dart';
@@ -12,7 +15,7 @@ import 'package:haruchip/features/wedding/widgets/wedding_category_view.dart';
 import 'package:haruchip/features/wedding/widgets/wedding_template_manager_modal.dart';
 
 void main() {
-  group('1. 일정 등록 시 D-Day 실시간 자동 정렬 (Auto-Sort by Closeness)', () {
+  group('1. 일정 등록 시 D-Day 실시간 자동 정렬 및 57종 라이브러리 보존', () {
     test('D-Day가 가까운 순서(임박순)로 정렬되며, 미지정 항목은 하단에 배치된다', () {
       final now = DateTime(2026, 6, 1);
 
@@ -52,54 +55,106 @@ void main() {
       final list = [itemA, itemB, itemC, itemD];
       list.sort((a, b) => compareWeddingItemsByCloseness(a, b, now));
 
-      // 1등: D-1 (내일)
       expect(list[0].id, 'imminent-1');
-      // 2등: D-5
       expect(list[1].id, 'imminent-5');
-      // 3등: D-30
       expect(list[2].id, 'future-30');
-      // 4등(하단 배치): 날짜 미지정
       expect(list[3].id, 'undated-1');
     });
 
-    test('updateItem으로 날짜가 부여되면 즉시 임박순 정렬 위치로 이동한다', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+    test('57종 표준 추천 항목 보존 및 초성/키워드 검색 동작 검증', () {
+      final masters = createDefaultWeddingMasterItems();
+      expect(masters.length, greaterThanOrEqualTo(57));
 
-      final notifier = container.read(weddingListProvider.notifier);
-      final current = container.read(weddingListProvider);
-      final firstItem = current.first;
-
-      // 처음에는 날짜가 먼 미래로 설정된 항목을 내일로 변경
-      final updated = firstItem.copyWith(
-        targetDate: DateTime.now().add(const Duration(days: 1)),
-      );
-      notifier.updateItem(updated);
-
-      final reordered = container.read(weddingListProvider);
-      // 가장 임박하므로 맨 앞에 위치해야 함
-      expect(reordered.first.id, firstItem.id);
-      expect(reordered.first.targetDate, isNotNull);
+      expect(matchesKoreanQuery('본식 스냅 계약', '스냅'), isTrue);
+      expect(matchesKoreanQuery('본식 스냅 계약', 'ㅅㄴ'), isTrue);
+      expect(matchesKoreanQuery('혼주 한복 대여', 'ㅎㅂ'), isTrue);
+      expect(matchesKoreanQuery('혼주 한복 대여', '드레스'), isFalse);
     });
   });
 
-  group('2. 원터치 아코디언 메모/상세 토글 (Inline Expand/Collapse)', () {
-    testWidgets('카드 탭 시 부드럽게 아코디언이 펼쳐져 인라인 메모/장소/팁이 노출되고 다시 탭하면 닫힌다', (tester) async {
+  group('2. 57종 스마트 추천 피커 모달 (직접입력 + 초성검색 + 5대 도메인 탭 칩)', () {
+    testWidgets('직접 입력 추가, 초성 검색(ㅅㄴ), 5대 도메인 탭 및 칩 토글 검증', (tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: WeddingTemplateManagerModal(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 강제 시기별/번호 폴더 탭 폐기 & 5대 도메인 탭 확인
+      expect(find.text('D-1년 전'), findsNothing);
+      expect(find.text('1. 웨딩홀 & 본식'), findsNothing);
+      expect(find.text('웨딩홀 & 본식'), findsOneWidget);
+      expect(find.text('스드메 & 촬영'), findsOneWidget);
+      expect(find.text('예물 & 예복'), findsOneWidget);
+      expect(find.text('신혼여행 & 신혼집'), findsOneWidget);
+      expect(find.text('뷰티 & 케어'), findsOneWidget);
+
+      // 초성 검색('ㅅㄴ') -> 본식 스냅 계약 매칭 확인
+      await tester.enterText(
+        find.byKey(const Key('wedding_picker_search_input')),
+        'ㅅㄴ',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('본식 스냅 계약'), findsOneWidget);
+
+      // 직접 입력 추가 (미완료·날짜 미정 상태로 추가됨)
+      await tester.enterText(
+        find.byKey(const Key('wedding_picker_custom_input')),
+        '아이폰 스냅 예약',
+      );
+      await tester.tap(find.byKey(const Key('wedding_picker_custom_add_btn')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('wedding_picker_search_input')),
+        '',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('아이폰 스냅 예약'), findsOneWidget);
+    });
+  });
+
+  group('3. 단일 D-Day 임박순 정렬, 날짜 미정 접기/펼치기, 청모 임박순 & 사후정산 예산 통합', () {
+    testWidgets('인위적 그룹핑 폐기, D-Day 오름차순 정렬, 미정 접기/펼치기, 청모 정렬, 예산표 사후정산 탭 검증', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      final testItem = WeddingItem(
-        id: 'accordion-custom',
+      final now = DateTime.now();
+      final itemFar = WeddingItem(
+        id: 'chrono-far',
         orderIndex: 1,
-        title: '양가 부모님 한복 맞춤',
-        standardOffsetDays: 90,
-        stage: WeddingStage.invitationAndGuest,
-        targetDate: DateTime.now().add(const Duration(days: 15)),
-        location: '종로 비단금침',
-        memo: '양가 어머님 배색 취향 사전 확인 필수 (푸른색/붉은색 계열)',
-        weekdayNotice: '평일 오후 2시 방문 시 프라이빗 상담 가능',
+        title: '본식 예식',
+        standardOffsetDays: 0,
+        stage: WeddingStage.finalCheckAndCeremony,
+        targetDate: now.add(const Duration(days: 170)),
       );
-      container.read(weddingListProvider.notifier).addItem(testItem);
+      final itemSoon = WeddingItem(
+        id: 'chrono-soon',
+        orderIndex: 2,
+        title: '드레스 투어',
+        standardOffsetDays: 90,
+        stage: WeddingStage.studimeAndRing,
+        targetDate: now.add(const Duration(days: 2)),
+        location: '로브드K',
+      );
+      final itemMid = WeddingItem(
+        id: 'chrono-mid',
+        orderIndex: 3,
+        title: '스튜디오 촬영',
+        standardOffsetDays: 60,
+        stage: WeddingStage.studioShoot,
+        targetDate: now.add(const Duration(days: 16)),
+      );
+
+      final notifier = container.read(weddingListProvider.notifier);
+      notifier.addItem(itemFar);
+      notifier.addItem(itemSoon);
+      notifier.addItem(itemMid);
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -115,86 +170,71 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 초기 상태: 아코디언 닫힘 (상세 메모 미노출)
-      expect(find.text('양가 부모님 한복 맞춤'), findsOneWidget);
-      expect(find.text('양가 어머님 배색 취향 사전 확인 필수 (푸른색/붉은색 계열)'), findsNothing);
+      // 1) 인위적 번호 폴더 완전 폐기 확인
+      expect(find.text('1. 웨딩홀 & 본식'), findsNothing);
+      expect(find.text('2. 스드메 & 촬영'), findsNothing);
+      expect(find.byKey(const Key('wedding_chronological_list')), findsOneWidget);
 
-      // 1회 탭 -> 아코디언 펼침
-      await tester.tap(find.text('양가 부모님 한복 맞춤'));
+      // 2) 엄격한 D-Day 오름차순(D-2 -> D-16 -> D-170) 수직 배치 확인
+      final ySoon = tester.getTopLeft(find.byKey(const Key('wedding_slim_tile_chrono-soon'))).dy;
+      final yMid = tester.getTopLeft(find.byKey(const Key('wedding_slim_tile_chrono-mid'))).dy;
+      final yFar = tester.getTopLeft(find.byKey(const Key('wedding_slim_tile_chrono-far'))).dy;
+      expect(ySoon, lessThan(yMid));
+      expect(yMid, lessThan(yFar));
+
+      // 3) 날짜 미정 항목은 최하단 [날짜 미정 항목 (N개)]에 기본 접힘 -> 탭하면 펼침
+      expect(find.byKey(const Key('wedding_undated_section_header')), findsOneWidget);
+      expect(find.text('양가 부모님 인사드리기 (신부 쪽)'), findsNothing);
+      await tester.tap(find.byKey(const Key('wedding_undated_section_header')));
       await tester.pumpAndSettle();
+      expect(find.text('양가 부모님 인사드리기 (신부 쪽)'), findsOneWidget);
 
-      // 인라인 메모, 상세 장소, 팁, 수정 버튼 노출 확인
-      expect(find.text('작성된 메모'), findsOneWidget);
-      expect(find.text('양가 어머님 배색 취향 사전 확인 필수 (푸른색/붉은색 계열)'), findsOneWidget);
-      expect(find.textContaining('종로 비단금침'), findsOneWidget);
-      expect(find.textContaining('평일 오후 2시 방문'), findsOneWidget);
-      expect(find.text('일정 / 장소 / 메모 수정하기'), findsOneWidget);
+      // 4) 독립 사후정산 섹션 폐기 & 웨딩 예산·지출표 3단 탭(전체/본식 전/본식 당일·사후 정산) 확인
+      expect(find.byKey(const Key('wedding_after_wedding_section')), findsNothing);
+      expect(find.byKey(const Key('wedding_budget_phase_all')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_budget_phase_preWedding')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_budget_phase_postWedding')), findsOneWidget);
 
-      // 다시 탭 -> 아코디언 닫힘
-      await tester.tap(find.text('양가 부모님 한복 맞춤'));
-      await tester.pumpAndSettle();
-      expect(find.text('작성된 메모'), findsNothing);
-    });
-  });
-
-  group('3. 항목 추가 팝업 및 타이틀 정돈 & 소속 카테고리 태깅', () {
-    testWidgets('타이틀이 결혼 준비 항목으로 표시되고 T-360일 추천 문구가 없으며 카테고리 태깅이 연동된다', (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(
-              body: WeddingTemplateManagerModal(),
-            ),
-          ),
-        ),
+      // [본식 당일/사후 정산] 탭 선택 -> 사후 정산 항목만 노출
+      await tester.ensureVisible(
+        find.byKey(const Key('wedding_budget_phase_postWedding')),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('wedding_budget_phase_postWedding')));
+      await tester.pumpAndSettle();
+      expect(find.text('사회자 · 축가 · 헬퍼 이모님 수고비'), findsOneWidget);
+      expect(find.text('지방 하객 차비(교통비) 정산'), findsOneWidget);
+      expect(find.text('직장 · 지인 답례품 전달'), findsOneWidget);
+      expect(find.text('웨딩홀 대관료 & 식대'), findsNothing);
 
-      // 명칭 수정 확인
-      expect(find.text('결혼 준비 항목'), findsOneWidget);
-      expect(find.text('원하는 일정을 담거나 직접 추가해보세요'), findsOneWidget);
-
-      // 기계적인 T-360일 추천 등 문구 완전 제거 확인
-      expect(find.textContaining('T-360일 추천'), findsNothing);
-      expect(find.textContaining('T-'), findsNothing);
-
-      // 소속 카테고리 선택 칩 노출 확인
-      expect(find.text('소속 카테고리: '), findsOneWidget);
-      expect(find.textContaining('상견례 및 웨딩홀/플래너'), findsWidgets);
-      expect(find.textContaining('스드메 및 웨딩밴드'), findsWidgets);
-
-      // 직접 추가 폼 필드
-      expect(find.text('직접 추가'), findsOneWidget);
+      // 5) 청첩장 모임 D-Day 임박순 정렬 확인
+      expect(find.byKey(const Key('wedding_invitation_meetings_section')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_meetings_sorted_list')), findsOneWidget);
     });
   });
 
-  group('4. 60개 마스터 템플릿 기반 결혼 예산 관리표', () {
+  group('4. 목표 예산 집계 요약 대시보드 & 스마트 지출 상세 관리 엔진', () {
     test('60개 마스터 템플릿이 8대 대분류에 정확한 수량으로 존재한다', () {
       final templates = create60WeddingBudgetMasterTemplates();
       expect(templates.length, 60);
-
-      // 1. 상견례 & 양가 인사 (6개)
       expect(templates.where((t) => t.category == WeddingBudgetCategory.greeting).length, 6);
-      // 2. 웨딩홀 & 식대 (8개)
       expect(templates.where((t) => t.category == WeddingBudgetCategory.hallAndMeal).length, 8);
-      // 3. 스튜디오 & 스냅 촬영 (10개)
       expect(templates.where((t) => t.category == WeddingBudgetCategory.studioShoot).length, 10);
-      // 4. 드레스 & 턱시도 & 예복 (8개)
       expect(templates.where((t) => t.category == WeddingBudgetCategory.dressAndSuit).length, 8);
-      // 5. 헤어 & 메이크업 & 케어 (6개)
       expect(templates.where((t) => t.category == WeddingBudgetCategory.hairAndBeauty).length, 6);
-      // 6. 본식 스냅 & DVD & 부대 연출 (7개)
       expect(templates.where((t) => t.category == WeddingBudgetCategory.ceremonyDirecting).length, 7);
-      // 7. 혼수 & 가전 & 가구 (6개)
       expect(templates.where((t) => t.category == WeddingBudgetCategory.homeAndAppliances).length, 6);
-      // 8. 예물 & 예단 & 답례 (9개)
       expect(templates.where((t) => t.category == WeddingBudgetCategory.giftsAndFavors).length, 9);
     });
 
-    testWidgets('상단 예산 대시보드 3단 KPI 및 분담 요약 칩이 정확히 렌더링된다', (tester) async {
+    testWidgets('Executive Summary Card: 목표 예산 대비 초과/절약 뱃지, 듀얼 바, 부담 주체별 소계 검증', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
             home: Scaffold(
               body: SingleChildScrollView(
                 child: WeddingBudgetSectionWidget(),
@@ -205,15 +245,90 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 3단 KPI 카드
-      expect(find.text('총 예상 예산'), findsOneWidget);
-      expect(find.text('총 실제 지출액'), findsOneWidget);
-      expect(find.text('남은 잔금 총액'), findsOneWidget);
+      // 기본 목표 4,000만 원 vs 초기 확정액 4,635만 원 -> 초과 뱃지
+      expect(find.text('목표 예산'), findsOneWidget);
+      expect(find.text('실제 확정액'), findsOneWidget);
+      expect(find.textContaining('초과'), findsOneWidget);
+      expect(find.textContaining('기지불 완료'), findsOneWidget);
+      expect(find.textContaining('남은 잔금'), findsWidgets);
+      expect(find.textContaining('신랑 부담'), findsOneWidget);
+      expect(find.textContaining('신부 부담'), findsOneWidget);
+      expect(find.textContaining('공동 부담'), findsOneWidget);
 
-      // 분담 요약 칩
-      expect(find.text('👦 신랑 총 부담금'), findsOneWidget);
-      expect(find.text('👧 신부 총 부담금'), findsOneWidget);
-      expect(find.text('🤝 공동 부담금'), findsOneWidget);
+      // 목표 예산을 5,000만 원으로 올리면 -> '절약 중' 뱃지로 즉시 전환
+      container
+          .read(weddingTargetBudgetProvider.notifier)
+          .setTargetBudget(50000000);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('절약 중'), findsOneWidget);
+    });
+
+    testWidgets('WeddingBudgetEditModal: 총액-계약금 자동 잔금 계산 및 결제수단/할부/현금영수증 검증', (tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: WeddingBudgetEditModal(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 총 견적 1000만원, 계약금 250만원 입력 -> 남은 잔금 750만원 자동 계산
+      await tester.enterText(
+        find.byKey(const Key('wedding_budget_total_input')),
+        '10000000',
+      );
+      await tester.enterText(
+        find.byKey(const Key('wedding_budget_deposit_input')),
+        '2500000',
+      );
+      await tester.pumpAndSettle();
+
+      final balanceField = tester.widget<TextField>(
+        find.byKey(const Key('wedding_budget_balance_input')),
+      );
+      expect(balanceField.controller?.text, '7500000');
+
+      // 결제 수단 4종 + 할부 4종 + 현금영수증 토글 존재 확인
+      expect(find.byKey(const Key('wedding_payment_method_creditCard')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_payment_method_debitCard')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_payment_method_bankTransfer')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_payment_method_cash')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_installment_0')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_installment_3')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_installment_6')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_installment_12')), findsOneWidget);
+      expect(find.byKey(const Key('wedding_cash_receipt_switch')), findsOneWidget);
+    });
+
+    test('잔금 결제 예정일 설정 시 칩 캘린더(planListProvider)에 자동 등록된다', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final dueDate = DateTime(2026, 12, 20);
+      container.read(weddingBudgetListProvider.notifier).addItem(
+            WeddingBudgetItem(
+              id: 'bal-sync-1',
+              title: '스튜디오 잔금',
+              estimatedBudget: 3000000,
+              deposit: 500000,
+              balance: 2500000,
+              status: BudgetPaymentStatus.contracted,
+              balanceDueDate: dueDate,
+              paymentMethod: WeddingPaymentMethod.bankTransfer,
+              cashReceiptIssued: true,
+            ),
+          );
+
+      final plans = container.read(planListProvider);
+      final synced = plans.firstWhere(
+        (p) => p.id == 'plan-wedding-balance-bal-sync-1',
+      );
+      expect(synced.categoryKey, 'wedding');
+      expect(synced.date, dueDate);
+      expect(synced.title, contains('스튜디오 잔금'));
     });
 
     testWidgets('WeddingBudgetTemplateModal 60개 템플릿 검색 및 담기 동작 검증', (tester) async {
@@ -229,35 +344,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('결혼 예산 항목'), findsOneWidget);
-      expect(find.text('60개 표준 템플릿에서 담거나 직접 추가해보세요'), findsOneWidget);
       expect(find.text('직접 입력'), findsOneWidget);
 
-      // 검색 필터 테스트
       await tester.enterText(find.byType(TextField), '웨딩홀 대관료');
       await tester.pumpAndSettle();
       expect(find.text('웨딩홀 대관료 (생화 장식, 연출료 포함)'), findsOneWidget);
-    });
-
-    testWidgets('WeddingBudgetEditModal 8개 세부 입력 필드 지원 검증', (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(
-              body: WeddingBudgetEditModal(),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('1. 구분 카테고리'), findsOneWidget);
-      expect(find.text('2. 항목명'), findsOneWidget);
-      expect(find.text('3. 예상 예산 (원)'), findsOneWidget);
-      expect(find.text('4. 계약금(예약금)'), findsOneWidget);
-      expect(find.text('5. 잔금'), findsOneWidget);
-      expect(find.text('6. 부담 구분'), findsOneWidget);
-      expect(find.text('7. 진행 상황'), findsOneWidget);
-      expect(find.text('8. 상세 메모'), findsOneWidget);
     });
   });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design_system/colors.dart';
+import '../../../design_system/layout_tokens.dart';
 import '../../../design_system/typography.dart';
 import '../../calendar/providers/calendar_display_settings_provider.dart';
 import '../../calendar/screens/calendar_screen.dart';
@@ -10,6 +11,7 @@ import '../../calendar/widgets/calendar_display_settings_sheet.dart';
 import '../../settings/screens/profile_settings_screen.dart';
 import '../providers/dashboard_filter_provider.dart';
 import '../providers/main_tab_provider.dart';
+import '../widgets/add_category_dashboard_modal.dart';
 import '../widgets/dashboard_category_filter_sheet.dart';
 import '../widgets/notification_center_modal.dart';
 import 'dashboard_screen.dart';
@@ -45,20 +47,27 @@ class MainShellScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tabIndex = ref.watch(mainTabIndexProvider);
 
+    final isCalendarTab = tabIndex == 1;
+
     return Scaffold(
-      backgroundColor: AppColors.protoBackground,
+      backgroundColor:
+          isCalendarTab ? AppColors.cleanWhiteBg : AppColors.protoBackground,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+            constraints: BoxConstraints(
+              maxWidth: isCalendarTab ? double.infinity : 480,
+            ),
             child: Column(
               children: [
-                // 알림 센터(종 아이콘) + 카테고리 필터 아이콘은 1번째 탭인 [칩 데이(메인 대시보드)]에만 단독 노출
+                // [+ 새 카테고리 추가] + [카테고리 필터 📅] + [알림 센터 🔔]은 1번째 탭(칩 데이)에만 단독 노출
                 if (tabIndex == 0)
                   _TopAppBar(
                     hasActiveFilter: ref
                         .watch(dashboardCategoryFilterProvider)
                         .isNotEmpty,
+                    onAddCategoryTap: () =>
+                        showAddCategoryDashboardModal(context),
                     onFilterTap: () =>
                         showDashboardCategoryFilterSheet(context),
                     onNotificationTap: () =>
@@ -119,24 +128,54 @@ class _TabSpec {
 class _TopAppBar extends StatelessWidget {
   const _TopAppBar({
     required this.hasActiveFilter,
+    required this.onAddCategoryTap,
     required this.onFilterTap,
     required this.onNotificationTap,
   });
 
   final bool hasActiveFilter;
+  final VoidCallback onAddCategoryTap;
   final VoidCallback onFilterTap;
   final VoidCallback onNotificationTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+      padding: const EdgeInsets.fromLTRB(
+        AppLayoutTokens.screenHorizontalMargin,
+        6,
+        AppLayoutTokens.screenHorizontalMargin,
+        4,
+      ),
       decoration: const BoxDecoration(
         color: AppColors.protoBackground,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          // 새 카테고리 추가 미니멀 [+] 아이콘 (캘린더 필터 및 알림 좌측 배치)
+          Tooltip(
+            message: '새 카테고리 추가',
+            child: InkWell(
+              key: const Key('dashboard_add_category_button'),
+              onTap: onAddCategoryTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: AppLayoutTokens.luxuryCardShadow,
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  size: 19,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           // 카테고리 필터 아이콘 (칩 캘린더와 동일한 에셋)
           InkWell(
             key: const Key('dashboard_category_filter_button'),
@@ -147,7 +186,7 @@ class _TopAppBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                boxShadow: AppLayoutTokens.luxuryCardShadow,
               ),
               child: Stack(
                 clipBehavior: Clip.none,
@@ -240,17 +279,16 @@ class _BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      key: const Key('main_bottom_nav_bar'),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.cleanWhiteBg,
-        border: const Border(
-          top: BorderSide(color: Color(0xFFF1F5F9), width: 1),
-        ),
+        border: AppLayoutTokens.navBarTopDivider,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 8,
+            offset: const Offset(0, -1),
           ),
         ],
       ),

@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/haruchip_icon_picker.dart';
 import '../../../core/icons/haruchip_icon_viewer.dart';
+import '../../../core/security/input_sanitizer.dart';
 import '../../../design_system/colors.dart';
 import '../../../design_system/typography.dart';
+import '../../friends/providers/friend_system_provider.dart';
 import '../models/schedule_room.dart';
 import '../providers/schedule_room_provider.dart';
 
@@ -33,16 +35,17 @@ class _CreateRoomDialogState extends ConsumerState<_CreateRoomDialog> {
   String _selectedColor = kPreset50PastelColors[0];
   String _selectedCategory = '동창/동문';
   bool _isCustomCategory = false;
+  bool _useCustomRoomProfile = false; // false: 기본 하루칩 프로필, true: 이 모임 전용 프로필
 
   static const List<String> _categories = [
     '동창/동문',
     '스터디',
     '프로젝트',
-    '운동/스포츠',
-    '취미/소모임',
+    '운동',
+    '취미',
     '가족',
     '여행',
-    '친목/정기모임',
+    '친목',
   ];
 
   @override
@@ -58,7 +61,7 @@ class _CreateRoomDialogState extends ConsumerState<_CreateRoomDialog> {
 
   Future<void> _handleCreate() async {
     if (_submitting) return;
-    final name = _nameController.text.trim();
+    final name = HaruInputSanitizer.sanitizeText(_nameController.text);
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('⚠️ 모임 방 이름을 입력해주세요.')),
@@ -67,22 +70,29 @@ class _CreateRoomDialogState extends ConsumerState<_CreateRoomDialog> {
     }
 
     final resolvedCategory = _isCustomCategory
-        ? (_customCategoryController.text.trim().isNotEmpty
-            ? _customCategoryController.text.trim()
+        ? (HaruInputSanitizer.sanitizeText(_customCategoryController.text)
+                .isNotEmpty
+            ? HaruInputSanitizer.sanitizeText(_customCategoryController.text)
             : '기타 모임')
         : _selectedCategory;
 
-    final nickname = _nicknameController.text.trim().isEmpty
-        ? '나'
-        : _nicknameController.text.trim();
+    final myBattleProfile = ref.read(friendSystemProvider).myProfile;
+    final nickname = _useCustomRoomProfile
+        ? (HaruInputSanitizer.sanitizeText(_nicknameController.text).isEmpty
+            ? myBattleProfile.nickname
+            : HaruInputSanitizer.sanitizeText(_nicknameController.text))
+        : myBattleProfile.nickname;
+    final profileIcon =
+        _useCustomRoomProfile ? _selectedEmoji : myBattleProfile.avatarIcon;
 
     // 멤버 구분은 계정 uid로 (닉네임은 표시용 이름일 뿐)
     final host = RoomMember(
       uid: ref.read(currentUserProfileProvider).uid,
       name: nickname,
-      icon: _selectedEmoji,
+      icon: profileIcon,
       colorHex: _selectedColor,
       isHost: true,
+      usesCustomProfile: _useCustomRoomProfile,
     );
 
     setState(() => _submitting = true);
@@ -160,6 +170,7 @@ class _CreateRoomDialogState extends ConsumerState<_CreateRoomDialog> {
             const SizedBox(height: 6),
             TextField(
               controller: _nameController,
+              inputFormatters: [HaruInputSanitizer.safeTextInputFormatter],
               decoration: InputDecoration(
                 hintText: '모임명을 입력해 주세요',
                 hintStyle: const TextStyle(
@@ -215,7 +226,7 @@ class _CreateRoomDialogState extends ConsumerState<_CreateRoomDialog> {
                     }),
                   ),
                 _buildCategoryChip(
-                  label: '+ 직접 입력',
+                  label: '목적 직접선택',
                   selected: _isCustomCategory,
                   onTap: () => setState(() {
                     _isCustomCategory = true;
@@ -227,6 +238,7 @@ class _CreateRoomDialogState extends ConsumerState<_CreateRoomDialog> {
               const SizedBox(height: 8),
               TextField(
                 controller: _customCategoryController,
+                inputFormatters: [HaruInputSanitizer.safeTextInputFormatter],
                 autofocus: true,
                 decoration: InputDecoration(
                   hintText: '원하는 모임 분류명을 입력해 주세요 (예: 북클럽, 러닝크루)',
@@ -264,9 +276,9 @@ class _CreateRoomDialogState extends ConsumerState<_CreateRoomDialog> {
             ],
             const SizedBox(height: 14),
 
-            // 3. 내 프로필 설정 (아이콘 + 닉네임 + 고유 색상)
+            // 3. 내 프로필 설정 (기본 하루칩 프로필 vs 이 모임 전용 프로필 멀티 프로필)
             const Text(
-              '내 모임 프로필 & 식별 컬러',
+              '내 모임 프로필 설정',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -274,6 +286,27 @@ class _CreateRoomDialogState extends ConsumerState<_CreateRoomDialog> {
               ),
             ),
             const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildCategoryChip(
+                    label: '기본 하루칩 프로필 사용',
+                    selected: !_useCustomRoomProfile,
+                    onTap: () => setState(() => _useCustomRoomProfile = false),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildCategoryChip(
+                    label: '이 모임 전용 프로필 만들기',
+                    selected: _useCustomRoomProfile,
+                    onTap: () => setState(() => _useCustomRoomProfile = true),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_useCustomRoomProfile)
             Row(
               children: [
                 InkWell(

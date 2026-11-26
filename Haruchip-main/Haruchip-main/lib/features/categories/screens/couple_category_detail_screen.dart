@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/icons/haruchip_icon_viewer.dart';
 import '../../../core/utils/safe_image_widget.dart';
 import '../../../design_system/colors.dart';
+import '../../../design_system/layout_tokens.dart';
 import '../../../design_system/typography.dart';
 import '../../couple/models/couple_relationship.dart';
 import '../../couple/providers/couple_provider.dart';
@@ -388,51 +389,46 @@ class _CoupleCategoryDetailScreenState
               onPressed: _saveTitle,
             )
           else ...[
-            PartnerSoftDropdownButton(
-              categoryKey: 'couple',
-              categoryName: _category.name,
-            ),
-            TextButton.icon(
-              key: const Key('category_decorate_button'),
-              onPressed: _openEditModal,
-              icon: const Icon(
-                Icons.palette_outlined,
-                size: 18,
-                color: AppColors.protoHeading,
-              ),
-              label: Text(
-                '꾸미기',
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.protoHeading,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            TextButton.icon(
+            IconButton(
+              key: const Key('category_add_item_button'),
               onPressed: () => showAddEventBottomSheet(
                 context,
                 categoryKey: _category.categoryKey,
               ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              visualDensity: VisualDensity.compact,
               icon: const Icon(
                 Icons.add_rounded,
-                size: 18,
-                color: AppColors.chipYellowText,
+                size: 22,
+                color: AppColors.protoHeading,
               ),
-              label: const Text(
-                '항목 추가',
-                style: TextStyle(
-                  color: AppColors.chipYellowText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13.5,
-                ),
-              ),
+              tooltip: '일정 추가',
             ),
+            PartnerSoftDropdownButton(
+              categoryKey: 'couple',
+              categoryName: _category.name,
+            ),
+            IconButton(
+              key: const Key('category_decorate_button'),
+              onPressed: _openEditModal,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.palette_outlined,
+                size: 20,
+                color: AppColors.protoHeading,
+              ),
+              tooltip: '꾸미기',
+            ),
+            const SizedBox(width: 4),
           ],
         ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+          padding: AppLayoutTokens.detailScreenPadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -444,7 +440,7 @@ class _CoupleCategoryDetailScreenState
                 imageUrl: bgConfig.imageUrl,
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: AppLayoutTokens.cardVerticalGap),
 
               // 2. 하단 단일 리스트: '세부 D-Day 리스트' (중복 'N일째 리스트' 완전 제거)
               Row(
@@ -465,7 +461,7 @@ class _CoupleCategoryDetailScreenState
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: AppLayoutTokens.cardVerticalGap),
               ..._buildCountDownItems(countDownItems, anniversaries),
             ],
           ),
@@ -531,18 +527,12 @@ class _CoupleCategoryDetailScreenState
           }
         },
         child: Container(
-          margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          margin: const EdgeInsets.only(bottom: AppLayoutTokens.cardVerticalGap),
+          padding: AppLayoutTokens.cardInternalPadding,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 4,
-                offset: const Offset(0, 1.5),
-              ),
-            ],
+            boxShadow: AppLayoutTokens.luxuryCardShadow,
           ),
           child: Row(
             children: [
