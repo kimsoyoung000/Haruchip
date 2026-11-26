@@ -83,7 +83,7 @@ class _OnboardingCompleteScreenState extends State<OnboardingCompleteScreen>
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -94,16 +94,16 @@ class _OnboardingCompleteScreenState extends State<OnboardingCompleteScreen>
                 ScaleTransition(
                   scale: _scaleAnimation,
                   child: Container(
-                    width: 90,
-                    height: 90,
+                    width: 84,
+                    height: 84,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3182F6),
+                      color: const Color(0xFFFFE699),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF3182F6).withValues(alpha: 0.35),
-                          blurRadius: 24,
-                          offset: const Offset(0, 10),
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
@@ -112,46 +112,59 @@ class _OnboardingCompleteScreenState extends State<OnboardingCompleteScreen>
                         animation: _checkProgress,
                         builder: (context, child) {
                           return CustomPaint(
-                            size: const Size(40, 40),
-                            painter: _CheckmarkPainter(progress: _checkProgress.value),
+                            size: const Size(38, 38),
+                            painter: _CheckmarkPainter(
+                              progress: _checkProgress.value,
+                            ),
                           );
                         },
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 const Text(
-                  '설정이 완료되었어요!',
+                  '준비가 모두 끝났어요',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF191F28),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF3A2E1A),
                     letterSpacing: -0.5,
                   ),
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  '소중한 날들을 더 빛나게,\n하루칩과 함께 시작해요 ✨',
+                  '당신의 특별한 하루를 단정하게 담아낼게요.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF8B95A1),
+                    color: Color(0xFF6B7280),
                     height: 1.45,
                     letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 40),
-                TextButton(
+                const SizedBox(height: 36),
+                ElevatedButton(
                   onPressed: _handleFinish,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFE699),
+                    foregroundColor: const Color(0xFF3A2E1A),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
                   child: const Text(
-                    '지금 바로 시작하기',
+                    '하루칩 시작하기',
                     style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF3182F6),
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -173,7 +186,7 @@ class _CheckmarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white
+      ..color = const Color(0xFF3A2E1A)
       ..strokeWidth = 4.2
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;

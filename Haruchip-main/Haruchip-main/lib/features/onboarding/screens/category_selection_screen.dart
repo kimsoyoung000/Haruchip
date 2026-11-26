@@ -6,7 +6,7 @@ import '../data/onboarding_categories.dart';
 import '../providers/category_selection_provider.dart';
 import '../widgets/category_selection_card.dart';
 import '../widgets/toss_funnel_components.dart';
-import 'dashboard_view_mode_screen.dart';
+import 'onboarding_complete_screen.dart';
 
 /// 토스(Toss) 스타일 온보딩 퍼널 [Step 2: 관심 카테고리 다중 선택]
 /// 아이폰 SE/미니(높이 667dp 이하) 기종에서도 무스크롤(Zero-Scroll)로 하단 [다음] 버튼까지 완벽히 들어오는 반응형 핏
@@ -37,18 +37,19 @@ class CategorySelectionScreen extends ConsumerWidget {
         onNext!();
         return;
       }
+      // 온보딩 3단계(대시보드 스타일 선택) 영구 삭제 -> 즉시 완료 화면 및 메인 대시보드 진입
       Navigator.of(context).push(
-        SlideFadePageRoute(page: const DashboardViewModeScreen()),
+        SlideFadePageRoute(page: const OnboardingCompleteScreen()),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
         child: Column(
           children: [
             TossStepIndicator(
-              currentStep: 2,
+              currentStep: 3,
               totalSteps: 3,
               onBack: () => Navigator.maybePop(context),
             ),
@@ -116,7 +117,7 @@ class CategorySelectionScreen extends ConsumerWidget {
               ),
             ),
             GlassFloatingButton(
-              label: canProceed ? '다음으로' : '카테고리를 1개 이상 선택해주세요',
+              label: canProceed ? '하루칩 시작하기' : '관심 카테고리를 1개 이상 골라주세요',
               enabled: canProceed,
               onPressed: handleNext,
             ),

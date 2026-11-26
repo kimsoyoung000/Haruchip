@@ -17,30 +17,30 @@ class PermissionItemInfo {
   final bool isRequired;
 }
 
-/// 정보통신망법 규정에 맞춘 권한 항목 리스트
+/// 기기 OS 접근 권한 항목 리스트 (법적 약관/마케팅 수신 동의와 엄격 분리)
 const List<PermissionItemInfo> kAppPermissionItems = [
   PermissionItemInfo(
     key: 'notification',
     title: '알림',
-    description: 'D-Day 당일 및 시간 잔여 카운트다운 알림 수신',
+    description: 'D-Day 당일 및 시간 잔여 카운트다운 시스템 알림 수신',
     icon: Icons.notifications_active_outlined,
   ),
   PermissionItemInfo(
     key: 'photos',
     title: '갤러리/사진',
-    description: '프로필 사진 변경 및 D-Day 공유 카드 저장',
+    description: '프로필 사진 설정 및 D-Day 공유 카드 저장 (iOS 제한 접근 지원)',
     icon: Icons.photo_library_outlined,
   ),
   PermissionItemInfo(
     key: 'camera',
     title: '카메라',
-    description: '즉시 프로필 촬영 등록',
+    description: '프로필 사진 직접 촬영 등록',
     icon: Icons.camera_alt_outlined,
   ),
   PermissionItemInfo(
     key: 'calendar',
     title: '캘린더',
-    description: '구글/네이버 등 기기 기본 캘린더와 일정 자동 동기화',
+    description: '기기 기본 캘린더(iCloud / Android)와 하루칩 일정 로컬 동기화',
     icon: Icons.calendar_month_outlined,
   ),
   PermissionItemInfo(
@@ -49,12 +49,6 @@ const List<PermissionItemInfo> kAppPermissionItems = [
     description: '카카오페이/토스 앱 바로가기 딥링크 활용',
     icon: Icons.payments_outlined,
   ),
-  PermissionItemInfo(
-    key: 'marketing',
-    title: '혜택 및 마케팅 알림',
-    description: '이벤트 및 맞춤 혜택 수신 (야간 수신 제외)',
-    icon: Icons.card_giftcard_outlined,
-  ),
 ];
 
 /// 앱 권한 설정 상태 모델
@@ -62,6 +56,7 @@ class AppPermissionsState {
   const AppPermissionsState({
     this.notification = false,
     this.photos = false,
+    this.photosLimited = false,
     this.camera = false,
     this.calendar = false,
     this.settlement = false,
@@ -70,13 +65,16 @@ class AppPermissionsState {
 
   final bool notification;
   final bool photos;
+
+  /// iOS 14+ 사진 라이브러리 '제한된 접근(선택 사진 허용)' 상태 여부
+  final bool photosLimited;
   final bool camera;
   final bool calendar;
   final bool settlement;
   final bool marketing;
 
   bool get allAgreed =>
-      notification && photos && camera && calendar && settlement && marketing;
+      notification && photos && camera && calendar && settlement;
 
   bool isEnabled(String key) {
     switch (key) {
@@ -100,6 +98,7 @@ class AppPermissionsState {
   AppPermissionsState copyWith({
     bool? notification,
     bool? photos,
+    bool? photosLimited,
     bool? camera,
     bool? calendar,
     bool? settlement,
@@ -108,6 +107,7 @@ class AppPermissionsState {
     return AppPermissionsState(
       notification: notification ?? this.notification,
       photos: photos ?? this.photos,
+      photosLimited: photosLimited ?? this.photosLimited,
       camera: camera ?? this.camera,
       calendar: calendar ?? this.calendar,
       settlement: settlement ?? this.settlement,

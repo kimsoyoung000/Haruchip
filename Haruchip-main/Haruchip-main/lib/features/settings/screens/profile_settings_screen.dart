@@ -1137,9 +1137,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                           Row(
                             children: [
                               Expanded(
+                                key: const Key('settings_view_mode_vertical'),
                                 child: _buildSegmentOptionButton(
-                                  title: '타임라인 뷰',
-                                  subtitle: '세로 스크롤형',
+                                  title: '세로 스크롤 박스형',
+                                  subtitle: '기본 카드형',
                                   icon: Icons.view_agenda_outlined,
                                   isSelected: selectedViewMode == 'vertical',
                                   onTap: () => ref
@@ -1149,6 +1150,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                               ),
                               const SizedBox(width: 10),
                               Expanded(
+                                key: const Key('settings_view_mode_grid'),
                                 child: _buildSegmentOptionButton(
                                   title: '칩 모아보기 뷰',
                                   subtitle: '2열 박스형',

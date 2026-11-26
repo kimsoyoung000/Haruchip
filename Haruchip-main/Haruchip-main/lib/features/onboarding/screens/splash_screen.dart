@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../home/screens/main_shell_screen.dart';
 import '../../../services/storage/user_session.dart';
-import 'app_permission_screen.dart';
+import 'legal_consent_screen.dart';
 
 /// 앱 시작 스플래시 화면 (자동 전환)
 ///
@@ -115,7 +115,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     final Widget targetScreen = loggedIn
         ? const MainShellScreen()
-        : const AppPermissionScreen();
+        : const LegalConsentScreen();
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
@@ -131,99 +131,71 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFDF9),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFFBEB), Color(0xFFFFFDF9)],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: AnimatedBuilder(
-              animation: _animController,
-              builder: (context, child) {
-                return Opacity(
-                  opacity: _fadeAnimation.value.clamp(0.0, 1.0),
-                  child: Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: child,
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: SafeArea(
+        child: Center(
+          child: AnimatedBuilder(
+            animation: _animController,
+            builder: (context, child) {
+              return Opacity(
+                opacity: _fadeAnimation.value.clamp(0.0, 1.0),
+                child: Transform.scale(
+                  scale: _scaleAnimation.value,
+                  child: child,
+                ),
+              );
+            },
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 미니멀 버터 옐로우(#FFE699) 소프트 칩 포인트
+                Container(
+                  width: 44,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFE699),
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                );
-              },
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // 상단: 하루칩 로고 (미니멀 소프트 섀도우)
-                  Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFD97706).withValues(alpha: 0.16),
-                          blurRadius: 28,
-                          offset: const Offset(0, 12),
-                          spreadRadius: 2,
-                        ),
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: Image.asset(
-                        'assets/images/app_logo.png',
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          // 에셋 로딩 예외 시 미니멀 폴백 아이콘 노출
-                          return Container(
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFFDF00), Color(0xFFFFB300)],
-                              ),
-                              borderRadius: BorderRadius.circular(28),
-                            ),
-                            child: const Text('🗓️', style: TextStyle(fontSize: 48)),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
+                ),
+                const SizedBox(height: 18),
 
-                  // 중앙 타이틀: HaruChip
-                  const Text(
-                    'HaruChip',
-                    style: TextStyle(
-                      fontFamily: 'Pretendard',
-                      fontSize: 32,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF1E293B),
-                      letterSpacing: -0.6,
-                    ),
+                // 영문 미니멀 서브타이틀: HARUCHIP
+                const Text(
+                  'HARUCHIP',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF7A6A52),
+                    letterSpacing: 3.2,
                   ),
-                  const SizedBox(height: 10),
+                ),
+                const SizedBox(height: 8),
 
-                  // 서브 텍스트: "하루의 소중한 조각들을 담아봐요"
-                  const Text(
-                    '하루의 소중한 조각들을 담아봐요',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF64748B),
-                      letterSpacing: -0.2,
-                    ),
+                // 한글 볼드 메인 로고 타이포: 하루칩 (#3A2E1A, 자간 -0.5)
+                const Text(
+                  '하루칩',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF3A2E1A),
+                    letterSpacing: -0.5,
+                    height: 1.15,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 14),
+
+                // 감성 미니멀 서브카피
+                const Text(
+                  '매일의 디데이, 일상의 조각을 맞추다',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF6B7280),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

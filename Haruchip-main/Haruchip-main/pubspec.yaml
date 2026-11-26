@@ -48,6 +48,8 @@ dependencies:
   flutter_svg: ^2.5.0
   path_provider: ^2.1.6
   path: ^1.9.1
+  permission_handler: ^13.0.2
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

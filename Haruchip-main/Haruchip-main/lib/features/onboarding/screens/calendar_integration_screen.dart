@@ -1,40 +1,110 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/permissions/native_permission_service.dart';
 import '../../../design_system/colors.dart';
+import '../../../design_system/layout_tokens.dart';
 import '../../../design_system/typography.dart';
+import '../../calendar/services/calendar_oauth_sync_service.dart';
 import '../data/calendar_integration_options.dart';
+import '../providers/app_permissions_provider.dart';
 import '../providers/calendar_integration_provider.dart';
 import '../widgets/calendar_integration_card.dart';
 
-/// "캘린더 연동 설정" 화면.
+/// "캘린더 연동 설정" 화면 (기기 로컬 캘린더 권한 vs 구글/네이버 OAuth 2.0 아키텍처 분리)
 ///
-/// (2부 갱신) 원래는 온보딩 플로우의 5번째 단계였지만, 온보딩 재배선을
-/// 맡은 1부 담당자가 이 단계를 온보딩 흐름에서 제외했다. 이번 2부에서는
-/// 이 화면을 **캘린더 탭 안에서 열리는 연동 설정 화면**으로 용도를
-/// 바꿨다 — [CalendarScreen]의 "연동 설정" 버튼(haruchip_app.html
-/// 481~485줄)을 누르면 이 화면이 push된다. 하루칩 자체 캘린더는 항상
-/// 켜져 있으므로(§7-4) 토글을 만들지 않고, 여기서는 구글/네이버 등
-/// *외부* 캘린더 연동 의사만 고른다. 온보딩 단계가 아니게 되면서
-/// "다음으로" 개념이 사라졌으므로 [onNext] 콜백과 관련 로직을 모두
-/// 제거하고, 상단에 뒤로가기 가능한 [AppBar]를 추가했다 — 하단 CTA는
-/// 선택 상태를 저장하고 화면을 닫는 "확인" 버튼으로 바뀐다(선택은
-/// `calendarIntegrationProvider`에 이미 실시간 반영되므로 "확인"은 그냥
-/// pop만 하면 된다).
-///
-/// NOTE(§5/§6): haruchip_app.html에는 이 화면과 정확히 같은 마크업이
-/// 없다(온보딩 완료 화면 안내 문구 한 줄일 뿐). 그래서 "정확한 마크업
-/// 재현"이 아니라 같은 색상 토큰·컴포넌트 톤만 맞춘 것이다.
+/// 1) [기기 로컬 캘린더 동기화]: OS 캘린더 권한(`Permission.calendarFullAccess`)만으로
+///    iCloud / Android 기본 캘린더 앱에 하루칩 일정을 직접 기록한다.
+/// 2) [클라우드 계정 연동 (OAuth 2.0)]: 단순 기기 권한만으로는 구글/네이버 클라우드와
+///    연동되지 않으므로, 토글 ON 시 각 서비스의 OAuth 2.0 로그인 브라우저를 띄워
+///    Access Token을 획득한 뒤 REST API를 호출하는 구조로 명확히 분리한다.
 class CalendarIntegrationScreen extends ConsumerWidget {
   const CalendarIntegrationScreen({super.key});
+
+  Future<void> _handleDeviceLocalCalendarToggle(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final permNotifier = ref.read(appPermissionsProvider.notifier);
+    final calNotifier = ref.read(calendarIntegrationProvider.notifier);
+    final selected = ref.read(calendarIntegrationProvider);
+
+    if (selected.contains('device_local')) {
+      calNotifier.toggle('device_local');
+      return;
+    }
+
+    final syncService = ref.read(calendarOAuthSyncServiceProvider);
+    final outcome = await syncService.requestDeviceLocalCalendarSync();
+    if (!context.mounted) return;
+
+    if (outcome.isUsable) {
+      permNotifier.setPermission('calendar', true);
+      calNotifier.toggle('device_local');
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('기기 기본 캘린더(iCloud/Android) 로컬 동기화가 활성화되었습니다.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } else if (outcome == NativePermissionOutcome.permanentlyDenied) {
+      await showPermanentlyDeniedSettingsDialog(
+        context,
+        permissionTitle: '캘린더',
+        onOpenSettings: permNotifier.openDeviceAppSettings,
+      );
+    } else {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('기기 캘린더 접근 권한이 허용되어야 로컬 동기화를 사용할 수 있습니다.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+  }
+
+  Future<void> _handleCloudOAuthToggle(
+    BuildContext context,
+    WidgetRef ref,
+    String providerKey,
+  ) async {
+    final calNotifier = ref.read(calendarIntegrationProvider.notifier);
+    final selected = ref.read(calendarIntegrationProvider);
+
+    // 이미 연동된 상태에서 OFF 전환 시 즉시 해제
+    if (selected.contains(providerKey)) {
+      calNotifier.toggle(providerKey);
+      return;
+    }
+
+    // ON 전환 시 OAuth 2.0 로그인 브라우저 실행 (Access Token 획득 플로우)
+    final syncService = ref.read(calendarOAuthSyncServiceProvider);
+    final result = await syncService.startCloudOAuthFlow(providerKey);
+    if (!context.mounted) return;
+
+    if (result.launched) {
+      calNotifier.toggle(providerKey);
+    }
+    if (result.message != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(result.message!),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedKeys = ref.watch(calendarIntegrationProvider);
-
-    void handleToggle(String key) {
-      ref.read(calendarIntegrationProvider.notifier).toggle(key);
-    }
+    final isDeviceLocalOn = selectedKeys.contains('device_local');
 
     return Scaffold(
       backgroundColor: AppColors.protoBackground,
@@ -52,34 +122,138 @@ class CalendarIntegrationScreen extends ConsumerWidget {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                padding: AppLayoutTokens.detailScreenPadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '연동할 캘린더가\n있나요?',
+                      '연동할 캘린더를\n선택해 주세요',
                       style: AppTypography.heading1.copyWith(
                         color: AppColors.protoHeading,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '구글/네이버 캘린더 일정을 하루칩에서 함께 볼 수 있어요. '
-                      '나중에 이 화면에서 언제든 바꿀 수 있어요.',
+                      '기기 기본 캘린더는 OS 권한으로 바로 동기화되며, '
+                      '구글·네이버 클라우드 캘린더는 각 계정 OAuth 2.0 로그인 후 연동됩니다.',
                       style: AppTypography.bodyMuted.copyWith(
                         color: AppColors.protoSubtitle,
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     const _AlwaysOnNotice(),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
+
+                    // 섹션 1: 기기 로컬 캘린더 동기화 (OS 캘린더 권한 기반)
+                    const Text(
+                      '기기 로컬 캘린더 동기화 (OS 권한)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.protoHeading,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      key: const Key('calendar_device_local_toggle'),
+                      onTap: () =>
+                          _handleDeviceLocalCalendarToggle(context, ref),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: AppLayoutTokens.cardInternalPadding,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDeviceLocalOn
+                                ? AppColors.chipGoldOutline
+                                : const Color(0xFFE5E7EB),
+                            width: isDeviceLocalOn ? 1.6 : 1,
+                          ),
+                          boxShadow: AppLayoutTokens.luxuryCardShadow,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isDeviceLocalOn
+                                    ? AppColors.chipYellowBg
+                                    : const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.phone_iphone_rounded,
+                                size: 20,
+                                color: isDeviceLocalOn
+                                    ? AppColors.chipYellowText
+                                    : const Color(0xFF6B7280),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '스마트폰 기본 캘린더 (iCloud / Android)',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.protoHeading,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    '기기 캘린더 접근 권한만으로 일정을 바로 기록해요',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: AppColors.protoSubtitle,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch.adaptive(
+                              value: isDeviceLocalOn,
+                              activeTrackColor: AppColors.chipGoldOutline,
+                              onChanged: (_) =>
+                                  _handleDeviceLocalCalendarToggle(context, ref),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // 섹션 2: 클라우드 계정 연동 (OAuth 2.0 로그인 브라우저 필수)
+                    const Text(
+                      '클라우드 계정 연동 (OAuth 2.0 로그인)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.protoHeading,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      '토글을 켜면 각 서비스의 OAuth 2.0 로그인 창이 열리며 Access Token 인증 후 API로 연동됩니다.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.protoSubtitle,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     for (final option in kCalendarIntegrationOptions) ...[
                       CalendarIntegrationCard(
+                        key: Key('calendar_oauth_card_${option.key}'),
                         option: option,
                         selected: selectedKeys.contains(option.key),
-                        onTap: () => handleToggle(option.key),
+                        onTap: () =>
+                            _handleCloudOAuthToggle(context, ref, option.key),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                     ],
                   ],
                 ),
@@ -103,7 +277,7 @@ class _AlwaysOnNotice extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.protoCardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.protoCardBorder, width: 2),
+        border: Border.all(color: AppColors.protoCardBorder, width: 1.5),
       ),
       child: Row(
         children: [
@@ -135,19 +309,18 @@ class _BottomCta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
       child: SafeArea(
         top: false,
         child: SizedBox(
           width: double.infinity,
-          height: 56,
+          height: 54,
           child: ElevatedButton(
             onPressed: onPressed,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.protoButtonBg,
               foregroundColor: AppColors.protoButtonText,
-              elevation: 6,
-              shadowColor: Colors.black.withValues(alpha: 0.25),
+              elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),

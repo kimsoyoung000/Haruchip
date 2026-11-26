@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/permissions/native_permission_service.dart';
 import '../../../design_system/colors.dart';
 import '../models/app_permissions.dart';
 import '../providers/app_permissions_provider.dart';
@@ -19,6 +20,53 @@ class AppPermissionScreen extends ConsumerWidget {
 
   final VoidCallback? onNext;
   final bool isSettingsMode;
+
+  Future<void> _handlePermissionTap(
+    BuildContext context,
+    AppPermissionsNotifier notifier,
+    PermissionItemInfo item,
+  ) async {
+    final outcome = await notifier.requestNativePermission(item.key);
+    if (!context.mounted) return;
+    if (outcome == NativePermissionOutcome.permanentlyDenied) {
+      await showPermanentlyDeniedSettingsDialog(
+        context,
+        permissionTitle: item.title,
+        onOpenSettings: notifier.openDeviceAppSettings,
+      );
+    } else if (outcome == NativePermissionOutcome.limited &&
+        item.key == 'photos') {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('선택한 사진만 접근(제한된 접근)으로 허용되었습니다.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+    }
+  }
+
+  Future<void> _handleToggleAll(
+    BuildContext context,
+    AppPermissionsNotifier notifier,
+  ) async {
+    final permanentlyDenied = await notifier.requestAllNativePermissions();
+    if (!context.mounted) return;
+    if (permanentlyDenied.isNotEmpty) {
+      final firstKey = permanentlyDenied.first;
+      final item = kAppPermissionItems.firstWhere(
+        (e) => e.key == firstKey,
+        orElse: () => kAppPermissionItems.first,
+      );
+      await showPermanentlyDeniedSettingsDialog(
+        context,
+        permissionTitle: item.title,
+        onOpenSettings: notifier.openDeviceAppSettings,
+      );
+    }
+  }
 
   void _handleContinue(BuildContext context) {
     if (onNext != null) {
@@ -46,7 +94,7 @@ class AppPermissionScreen extends ConsumerWidget {
           children: [
             if (!isSettingsMode)
               TossStepIndicator(
-                currentStep: 1,
+                currentStep: 2,
                 totalSteps: 3,
                 onBack: () => Navigator.maybePop(context),
               )
@@ -112,9 +160,10 @@ class AppPermissionScreen extends ConsumerWidget {
                         ),
                         SizedBox(height: isCompact ? 8 : 12),
 
-                        // 2. 전체 동의하기 카드
+                        // 2. 전체 허용하기 카드 (실기기 OS 권한 순차 요청)
                         InkWell(
-                          onTap: () => notifier.toggleAll(),
+                          key: const Key('app_permission_toggle_all'),
+                          onTap: () => _handleToggleAll(context, notifier),
                           borderRadius: BorderRadius.circular(14),
                           child: Container(
                             padding: EdgeInsets.symmetric(
@@ -209,7 +258,13 @@ class AppPermissionScreen extends ConsumerWidget {
                               return _buildPermissionRow(
                                 item: item,
                                 isEnabled: permissions.isEnabled(item.key),
-                                onToggle: () => notifier.toggle(item.key),
+                                isLimitedPhotos: item.key == 'photos' &&
+                                    permissions.photosLimited,
+                                onToggle: () => _handlePermissionTap(
+                                  context,
+                                  notifier,
+                                  item,
+                                ),
                                 isCompact: isCompact,
                               );
                             },
@@ -261,10 +316,12 @@ class AppPermissionScreen extends ConsumerWidget {
   Widget _buildPermissionRow({
     required PermissionItemInfo item,
     required bool isEnabled,
+    bool isLimitedPhotos = false,
     required VoidCallback onToggle,
     required bool isCompact,
   }) {
     return InkWell(
+      key: Key('app_permission_row_${item.key}'),
       onTap: onToggle,
       borderRadius: BorderRadius.circular(13),
       child: Container(
@@ -348,6 +405,26 @@ class AppPermissionScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
+                      if (isLimitedPhotos)
+                        Container(
+                          margin: const EdgeInsets.only(left: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.chipYellowBg,
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: const Text(
+                            '제한된 접근',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.chipYellowText,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 2),

@@ -58,9 +58,14 @@
 			</array>
 		</dict>
 	</array>
-	<!-- image_picker(카테고리 배경/아기·반려동물 프로필 사진, 카테고리&디데이
-	     핸드오프 문서 §6)가 갤러리 접근 시 띄우는 권한 안내 문구. -->
+	<!-- 사진/갤러리, 카메라, 캘린더 네이티브 OS 접근 권한 필수 설명문 (App Store 심사 대응) -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>사진첩에서 카테고리 배경/프로필 사진을 선택하기 위해 접근합니다.</string>
+	<string>프로필 사진 설정 및 D-Day 공유 카드 이미지를 저장하기 위해 사진 라이브러리 접근 권한이 필요합니다.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>프로필 사진을 직접 촬영하여 등록하기 위해 카메라 권한이 필요합니다.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>기기 기본 캘린더에 하루칩 기념일 및 모임 일정을 동기화하기 위해 캘린더 권한이 필요합니다.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>기기 기본 캘린더에 하루칩 기념일 및 모임 일정을 동기화하기 위해 캘린더 권한이 필요합니다.</string>
 </dict>
 </plist>
